@@ -41,12 +41,12 @@ func reportProjectStore(cmd *cobra.Command, store string, github *models.GitHubS
 			Store                    string                    `json:"store"`
 			GitHub                   *models.GitHubStoreConfig `json:"github,omitempty"`
 			IssueOperationsSupported bool                      `json:"issue_operations_supported"`
-		}{store, github, store == config.StoreSQLite})
+		}{store, github, true})
 	}
 	cmd.Printf("Project store: %s\n", store)
 	if github != nil {
 		cmd.Printf("GitHub repository: %s (remote: %s)\n", github.Repo, github.Remote)
-		cmd.Println("GitHub issue operations are not implemented yet. Existing data has not been migrated.")
+		cmd.Println("Supported issue commands: create, list, show, update, close, reopen. Existing data has not been migrated.")
 	}
 	return nil
 }
@@ -70,7 +70,7 @@ var configSetupCmd = &cobra.Command{
 		reader := bufio.NewReader(cmd.InOrStdin())
 		cmd.Println("Select project issue store:")
 		cmd.Println("  1. SQLite — local database")
-		cmd.Println("  2. GitHub Issues — requires a GitHub remote (issue operations not implemented yet)")
+		cmd.Println("  2. GitHub Issues — requires a GitHub remote")
 		selection, err := readStoreChoice(cmd, reader, "Store", current)
 		if err != nil {
 			return err

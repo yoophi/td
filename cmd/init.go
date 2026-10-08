@@ -19,7 +19,7 @@ import (
 var initCmd = &cobra.Command{
 	Use:     "init",
 	Short:   "Initialize a new td project",
-	Long:    `Initialize project storage. SQLite is the default. GitHub Issues configuration requires a GitHub remote; GitHub issue operations are not implemented yet.`,
+	Long:    `Initialize project storage. SQLite is the default. GitHub Issues storage requires gh authentication and a GitHub remote with Issues enabled.`,
 	GroupID: "system",
 	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

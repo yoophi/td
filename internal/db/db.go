@@ -88,7 +88,7 @@ func Open(baseDir string) (*DB, error) {
 		return nil, unavailable(err)
 	}
 	if store == config.StoreGitHub {
-		return nil, unavailable(fmt.Errorf("gh-issue operations are not implemented yet; use 'td config set store sqlite' to access local issues"))
+		return nil, unavailable(fmt.Errorf("this command requires SQLite and is not supported by gh-issue; supported issue commands: create, list, show, update, close, reopen"))
 	}
 	dbPath := filepath.Join(baseDir, dbFile)
 

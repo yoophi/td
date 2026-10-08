@@ -166,10 +166,10 @@ and td project/worktree resolution. Existing projects default to `sqlite`.
 The existing `sync.*` settings remain global and require the `sync_cli` feature.
 Use space-separated keys and values (`set store sqlite`, not `set store=sqlite`).
 
-**Current implementation: configuration and validation only. GitHub issue
-read/write operations are not implemented yet.** Selecting `gh-issue` blocks
-SQLite issue commands with an explicit error instead of silently using local data.
-Switch back with `td config set store sqlite` to access existing local issues.
+GitHub storage supports `create`, `list`, `show`, `update`, `close`, and `reopen`,
+including their command aliases. Other issue commands return an explicit error
+instead of silently using local data. Switch back with `td config set store sqlite`
+to access existing local issues.
 Changing the setting does not migrate, delete or synchronize issues. If a project
 has only configuration and no SQLite database, run `td init --store sqlite`.
 
@@ -186,6 +186,57 @@ selected Git remote. GitHub Enterprise hosts are not supported in this version.
 `config set/get/list` support `--json`. Interactive setup requires a completed
 input line; EOF cancels without saving. Configuration commands are always visible
 in `td --help`, independently of sync feature flags.
+
+### Working with GitHub Issues
+
+```bash
+td create "Fix login redirect" --type bug --priority P1 --points 3
+td show gh-123 --json                     # Also accepts 123 or '#123'
+td list --type bug --priority P1 --labels bug
+td update gh-123 --description-file details.md --acceptance "Redirect succeeds"
+td close gh-123 --reason "Duplicate issue"
+td reopen gh-123 --reason "Revisit this issue"
+```
+
+Each operation validates the configured Git remote and accesses its pinned
+repository explicitly through `gh api`. A changed remote is an error until the
+store is reconfigured. No SQLite issue database is created or used in this mode.
+
+GitHub owns issue numbers, titles, labels, timestamps and open/closed state.
+td-specific type, priority, points and acceptance criteria are stored in a
+versioned HTML comment at the end of the issue body. The visible body is the
+description. Preserve this comment when editing through GitHub; unknown or
+malformed metadata produces an error instead of being overwritten. Native GitHub
+issues without metadata can also be read and edited (default type `task`,
+priority `P2`, points `0`). Pull requests are excluded and cannot be edited as
+issues. Native GitHub open/closed changes take effect without a synchronization step.
+
+Supported flags:
+
+| Command | GitHub storage options |
+| --- | --- |
+| `create` | title, type, priority, points, labels and aliases, description and aliases/file/stdin, acceptance/file/stdin |
+| `list` | all, open, status (`open`, `closed`, `all`), type, priority, labels, id, search, sort, reverse, limit, short/long, format, json |
+| `show` | one or more issue IDs, short/long, format, json |
+| `update` | one or more IDs, title, type, priority, points, labels, description/file/stdin, acceptance/file/stdin, append, status (`open`, `closed`) |
+| `close`, `reopen` | one or more IDs, reason (`close` also accepts existing reason aliases) |
+
+Unsupported flags are errors, not ignored options. Session claims, handoffs,
+review approval policies, dependencies, boards, TDQ, undo and offline operations
+remain SQLite-only. GitHub `close`/`reopen` change native issue state and store the
+latest supplied reason in metadata; they do not claim a td review took place.
+`--json` works for all supported commands; multi-issue mutations emit one result
+per line and stop with a nonzero exit code on failure (earlier successes remain).
+
+Lists follow every API page before filtering, sorting and applying the limit;
+the default limit is 50 and `--limit 0` is unlimited. API calls have a 60-second
+timeout. Writes are not automatically retried. A timeout can leave an uncertain
+result, so inspect GitHub before retrying a create. Body/metadata edits are
+read-modify-write operations without cross-client locking; avoid concurrent edits
+to the same body. Title-only and state-only changes do not rewrite its body.
+
+API behavior follows the [GitHub issue REST endpoints](https://docs.github.com/en/rest/issues/issues)
+and [gh api](https://cli.github.com/manual/gh_api).
 
 ## Claude Code / OpenAI Codex Skill
 
