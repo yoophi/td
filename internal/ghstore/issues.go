@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/marcus/td/internal/auditlog"
 	"os"
 	"os/exec"
 	"slices"
@@ -19,6 +20,7 @@ import (
 
 // Client uses only the gh executable; it never opens the local issue database.
 type Client struct {
+	audit       func(auditlog.SecurityEvent) error
 	stateLabels map[string]bool
 	dir, repo   string
 	run         func(context.Context, string, []byte, ...string) ([]byte, error)
@@ -37,7 +39,7 @@ func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Clie
 	if !strings.EqualFold(resolved.Repo, cfg.Repo) {
 		return nil, fmt.Errorf("git remote %q now resolves to %s, but the configured store is %s; run 'td config set store gh-issue --remote %s' to select it explicitly", cfg.Remote, resolved.Repo, cfg.Repo, cfg.Remote)
 	}
-	return &Client{dir: dir, repo: resolved.Repo, run: runAPI}, nil
+	return &Client{dir: dir, repo: resolved.Repo, run: runAPI, audit: func(event auditlog.SecurityEvent) error { return auditlog.LogSecurityEvent(dir, event) }}, nil
 }
 
 func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {

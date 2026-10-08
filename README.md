@@ -331,6 +331,18 @@ authorization: mutations revalidate policy and observed state independently.
 When GitHub's listing lags a newly created issue, detail/cascade reads retain
 its successful direct GET instead of treating list omission as deletion.
 Relationship discovery can still lag and is not an atomic snapshot.
+GitHub self-review, attributed involved-session review, creator approval
+exceptions, and explicit close overrides also append a device-local JSONL audit
+at `.todos/security_events.jsonl`. Each exceptional write records `attempted`
+then `confirmed` or `uncertain`, correlated by repository, issue, actual actor,
+and transition operation ID. An intent audit failure aborts before the issue
+write; an outcome audit failure after a verified save reports the saved state.
+`td security` and `td stats security` read that local file (`--json` emits JSONL,
+including zero lines for an empty result); `--clear` deletes only local records
+and preserves GitHub review evidence. Malformed JSONL and file failures are
+explicit errors. These files and shared issue metadata are editable, not an
+immutable audit trail. Native/external GitHub edits are not automatically logged
+locally, and uncertain remote writes must be inspected before retrying.
 A failure to read availability after a write explicitly reports that the issue
 was already saved, so clients must inspect its current state before retrying.
 Sessions report device-local liveness; focus belongs to the stable web session,

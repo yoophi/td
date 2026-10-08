@@ -37,6 +37,7 @@ func workflowStateError(format string, args ...any) error {
 }
 
 type TransitionOptions struct {
+	AgentType                                             string
 	expectedRevision                                      *[32]byte
 	skipReviewHandoff                                     bool
 	Mode                                                  reviewpolicy.Mode

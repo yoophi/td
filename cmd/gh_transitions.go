@@ -119,6 +119,7 @@ func init() {
 				return err
 			}
 			options.SessionID = state.Session.ID
+			options.AgentType = state.Session.AgentType
 			if sweep {
 				return runGitHubClaimSweep(cmd, client, scope, state, options)
 			}

@@ -124,6 +124,7 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 			return err
 		}
 		options.SessionID = local.Session.ID
+		options.AgentType = local.Session.AgentType
 	}
 	if change.Status != nil {
 		options.Mode, err = resolveReviewPolicyMode(getBaseDir())

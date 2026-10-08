@@ -319,6 +319,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 	target := from
 	now := time.Now().UTC()
 	checkedEvents := ""
+	auditReason := ""
 	if action == "approve" || action == "close" {
 		if from == models.StatusClosed {
 			if action == "approve" && (observed.ReviewerSession == "" || observed.ReviewedAt == nil) {
@@ -401,6 +402,19 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 			if verdict == "" {
 				verdict = reviewpolicy.DecisionApproved
 			}
+			if verdict == reviewpolicy.DecisionApproved {
+				if decision.SelfReview {
+					auditReason = "self_review: " + o.Reason
+					if decision.AttributedTo != "" {
+						auditReason = "attributed_review by " + decision.AttributedTo + ": " + o.Reason
+					}
+				} else if decision.CreatorException {
+					auditReason = "creator_approval_exception: " + o.Reason
+				}
+				if auditReason != "" && o.RecordOnly {
+					auditReason = "record_only " + auditReason
+				}
+			}
 			supersedeReviews(&d, now)
 			d.Reviews = append(d.Reviews, models.IssueReview{ID: "rv-" + rand.Text(), IssueID: observed.ID, ReviewerSession: o.SessionID, Decision: verdict, Summary: o.Reason, RequestedBySession: d.ReviewRequestedBySession, CreatedAt: now, SelfReview: decision.SelfReview, ReviewedBy: decision.AttributedTo})
 			if verdict == reviewpolicy.DecisionApproved {
@@ -432,6 +446,15 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		d.Reviews = append(d.Reviews, models.IssueReview{ID: "rv-" + rand.Text(), IssueID: observed.ID, ReviewerSession: o.SessionID, Decision: reviewpolicy.DecisionChangesRequested, Summary: o.Reason, CreatedAt: now})
 		history(o.SessionID, models.ActionSessionReviewChangesRequested)
 	case "close":
+		if o.AdminReason != "" {
+			auditReason = "admin_close: " + o.AdminReason
+		}
+		if o.SelfCloseException != "" {
+			if auditReason != "" {
+				auditReason += "; "
+			}
+			auditReason += "self_close_exception: " + o.SelfCloseException
+		}
 		if active := activeApproval(&d); from == models.StatusInReview && active != nil && (o.Mode == reviewpolicy.ModeTrusted || o.Mode == reviewpolicy.ModeDelegated) {
 			if err := validateRecordedClose(active, o); err != nil {
 				return nil, false, err
@@ -489,7 +512,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		}
 	}
 	native := nativeStatus(target)
-	result, err := c.UpdateObserved(ctx, observed, Changes{Details: &d, Status: &native, Reason: &o.Reason})
+	result, err := c.auditedUpdate(ctx, observed, Changes{Details: &d, Status: &native, Reason: &o.Reason}, o, operation, auditReason)
 	if err != nil {
 		return nil, false, fmt.Errorf("%s %s (operation %s): %w", action, id, operation, err)
 	}

@@ -79,7 +79,7 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 		githubWriteError(w, err)
 		return
 	}
-	options := ghstore.TransitionOptions{SessionID: s.sessionID, Mode: mode, Reason: body.Reason, ReviewedBy: body.ReviewedBy, SelfReview: body.SelfReview, Decision: body.Decision, RecordOnly: body.RecordOnly, Minor: body.Minor, Force: body.Force, AdminReason: body.Admin, SelfCloseException: body.SelfCloseException}
+	options := ghstore.TransitionOptions{SessionID: s.sessionID, AgentType: "web", Mode: mode, Reason: body.Reason, ReviewedBy: body.ReviewedBy, SelfReview: body.SelfReview, Decision: body.Decision, RecordOnly: body.RecordOnly, Minor: body.Minor, Force: body.Force, AdminReason: body.Admin, SelfCloseException: body.SelfCloseException}
 	if err := ghstore.ValidateReviewOptions(action, options); err != nil {
 		WriteError(w, ErrValidation, err.Error(), 400)
 		return
