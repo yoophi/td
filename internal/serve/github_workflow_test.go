@@ -77,12 +77,8 @@ func TestGitHubHTTPWorkflowPolicyWiringAndCascadeBoundary(t *testing.T) {
 	f.failure = &ghstore.ConflictError{ID: "gh-1"}
 	request("review", `{}`, "", 409)
 	f.failure = nil
-	before = f.calls
 	f.record.ParentID = "gh-9"
-	request("review", `{}`, "", 501)
-	if f.calls != before {
-		t.Fatal("unsupported parent cascade changed root")
-	}
+	request("review", `{}`, "", 200)
 	f.record.ParentID = ""
 	f.records = []ghstore.Record{{Issue: models.Issue{ID: "gh-2", ParentID: "gh-1"}}}
 	request("review", `{}`, "", 200)

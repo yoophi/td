@@ -115,9 +115,9 @@ func TestReviewCascadeDetectsMembershipAndStaleRoot(t *testing.T) {
 	base := c.run
 	lists := 0
 	c.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
-		if strings.Contains(args[5], "?state=") {
+		if strings.Contains(args[5], "?state=") && *writes > before {
 			lists++
-			if lists == 2 {
+			if lists == 1 {
 				body, e := encodeBody("New child", metadata{Type: models.TypeTask, Priority: models.PriorityP2, Details: &IssueDetails{ParentID: "gh-1"}})
 				if e != nil {
 					return nil, e

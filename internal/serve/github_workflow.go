@@ -2,7 +2,6 @@ package serve
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -38,32 +37,6 @@ func (s *Server) EnableGitHubWorkflow(store *GitHubWriteStore) {
 	}
 }
 
-// Until the shared cascade implementation is connected, fail before changing
-// related issues rather than silently omitting required parent/dependent work.
-func standaloneWorkflow(ctx context.Context, client githubWorkflowClient, root *ghstore.Record, action string, o ghstore.TransitionOptions) error {
-	if action != "review" && action != "close" && action != "approve" {
-		return nil
-	}
-	if action == "approve" && o.RecordOnly {
-		return nil
-	}
-	if root.ParentID != "" {
-		return fmt.Errorf("workflow cascades for parent-linked issues are not yet supported by HTTP")
-	}
-	records, err := client.List(ctx, true)
-	if err != nil {
-		return err
-	}
-	seen := map[string]bool{}
-	for _, record := range records {
-		if seen[record.ID] {
-			return fmt.Errorf("GitHub listing repeated %s; retry the read", record.ID)
-		}
-		seen[record.ID] = true
-
-	}
-	return nil
-}
 func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, endpoint string) {
 	if r.Body == nil || r.ContentLength == 0 {
 		r.Body = io.NopCloser(strings.NewReader("{}"))
@@ -127,32 +100,22 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 	if !checkIssueRevision(w, r, &observed.Issue) {
 		return
 	}
-	if err := standaloneWorkflow(r.Context(), client, observed, action, options); err != nil {
-		if strings.Contains(err.Error(), "not yet supported by HTTP") {
-			WriteError(w, "unsupported_operation", err.Error()+"; no transition write attempted", 501)
-		} else {
-			githubWriteError(w, err)
-		}
-		return
-	}
 	result, noop, err := client.TransitionObservedWithCascades(r.Context(), observed, action, options)
 	if err != nil {
 		githubWriteError(w, err)
-		return
-	}
-	// Relationship membership can change while the individual issue is saved.
-	// Report that partial result rather than suggesting the root was unchanged.
-	if err := standaloneWorkflow(r.Context(), client, result, action, options); err != nil {
-		WriteError(w, ErrConflict, fmt.Sprintf("%s transitioned to %s, but cascade verification failed; inspect current state before retrying: %v", result.ID, result.Status, err), 409)
 		return
 	}
 	reviewed := []IssueDTO{}
 	for _, child := range result.CascadedReviews {
 		reviewed = append(reviewed, IssueToDTO(&child.Issue))
 	}
+	parents := []IssueDTO{}
+	for _, parent := range result.ParentStatusUpdates {
+		parents = append(parents, IssueToDTO(&parent.Issue))
+	}
 	unblocked := []IssueDTO{}
 	for _, dependent := range result.AutoUnblocked {
 		unblocked = append(unblocked, IssueToDTO(&dependent.Issue))
 	}
-	WriteSuccess(w, map[string]any{"reviewed_descendants": reviewed, "issue": IssueToDTO(&result.Issue), "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: []IssueDTO{}, AutoUnblocked: unblocked}}, 200)
+	WriteSuccess(w, map[string]any{"reviewed_descendants": reviewed, "issue": IssueToDTO(&result.Issue), "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: parents, AutoUnblocked: unblocked}}, 200)
 }

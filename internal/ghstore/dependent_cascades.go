@@ -88,6 +88,13 @@ func (c *Client) transitionWithDependents(ctx context.Context, id, action string
 	if result.Status != models.StatusClosed {
 		return result, noop, nil
 	}
+	return c.unblockDependents(ctx, result, noop, action, o, graph, dependents)
+}
+
+// Used for both ordinary closures and automatic epic closures. The dependency
+// observation must precede the closure write; never refresh it after the write.
+func (c *Client) unblockDependents(ctx context.Context, result *Record, noop bool, action string, o TransitionOptions, graph map[string]Record, dependents []string) (*Record, bool, error) {
+	rootID := result.ID
 	graph[rootID] = *result
 	completed := []string{rootID}
 	fail := func(err error) (*Record, bool, error) {

@@ -122,9 +122,9 @@ func TestCloseCascadeRejectsStaleRootAndChangedDependency(t *testing.T) {
 	base := c.run
 	lists := 0
 	c.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
-		if strings.Contains(args[5], "?state=") {
+		if strings.Contains(args[5], "?state=") && *writes > before {
 			lists++
-			if lists == 2 {
+			if lists == 1 {
 				issues[2]["title"] = "Concurrent dependent fixture"
 			}
 		}
@@ -180,12 +180,13 @@ func TestCloseCascadeDetectsNewDependentAndReopenedDependency(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			before := *writes
 			base := c.run
 			lists := 0
 			c.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
-				if strings.Contains(args[5], "?state=") {
+				if strings.Contains(args[5], "?state=") && *writes > before {
 					lists++
-					if lists == 2 {
+					if lists == 1 {
 						if newDependent {
 							body, err := encodeBody("Fixture newly dependent issue", metadata{Type: models.TypeTask, Priority: models.PriorityP2, Details: &IssueDetails{Status: models.StatusBlocked, Dependencies: []string{"gh-1"}}})
 							if err != nil {
@@ -199,7 +200,6 @@ func TestCloseCascadeDetectsNewDependentAndReopenedDependency(t *testing.T) {
 				}
 				return base(ctx, dir, payload, args...)
 			}
-			before := *writes
 			_, _, err := c.TransitionWithCascades(context.Background(), "1", "close", fixtureCloseOptions())
 			var conflict *ConflictError
 			if !errors.As(err, &conflict) || !conflict.AfterWrite || *writes != before+1 || !strings.Contains(err.Error(), "saved for gh-1") {

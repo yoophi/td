@@ -22,6 +22,13 @@ func (c *Client) TransitionObservedWithCascades(ctx context.Context, observed *R
 // TransitionWithCascades is the command-level transition entry point. Individual
 // writes remain optimistic: GitHub provides no transaction over a hierarchy.
 func (c *Client) TransitionWithCascades(ctx context.Context, id, action string, o TransitionOptions) (*Record, bool, error) {
+	if action == "review" || action == "close" || (action == "approve" && !o.RecordOnly) {
+		return c.transitionWithParents(ctx, id, action, o)
+	}
+	return c.transitionWithLocalCascades(ctx, id, action, o)
+}
+
+func (c *Client) transitionWithLocalCascades(ctx context.Context, id, action string, o TransitionOptions) (*Record, bool, error) {
 	if action == "close" || (action == "approve" && !o.RecordOnly) {
 		return c.transitionWithDependents(ctx, id, action, o)
 	}

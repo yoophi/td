@@ -300,8 +300,8 @@ existing field contract, validate the current repository and web identity,
 and check `If-Match` plus observed GitHub revisions before an update.
 Conflict checks are best-effort; uncertain writes are never retried automatically. Issue reads
 support filters, pagination, TDQ and shared activity. GitHub issue listings and
-comments are separate reads, not an atomic snapshot. Workflow HTTP endpoints are connected to the shared CLI policy for standalone
-issues, including record-only and acknowledged self-review. In trusted/delegated
+comments are separate reads, not an atomic snapshot. Workflow HTTP endpoints are connected to the shared CLI policy,
+including record-only and acknowledged self-review. In trusted/delegated
 mode, `close` can consume an existing valid recorded approval without replacing
 the reviewer; another closing session must supply a reason. Changed issue
 content, handoff, or native close/reopen history invalidates that approval. Review submits open/in_progress descendants and reports the changed children.
@@ -313,10 +313,15 @@ dependency is closed, and releases their implementer claims. Root, dependent
 membership and all dependency revisions are checked after each write. Missing
 dependencies keep the issue blocked. Already changed IDs are reported on failure;
 GitHub does not provide an atomic transaction or lock across these reads/writes.
-Requests requiring upward parent cascades currently fail explicitly
-with 501 before changing the issue; a newly observed relationship after a write
-is reported as a partial-result conflict. Cascade support and read-side
-transition availability remain pending in #35/#32.
+Review/close/approve also recursively updates epic parents when all direct
+children have reached the target state (in_review accepts closed children).
+Non-epic parents and parents already at/beyond the target stop the cascade.
+Automatic epic closure unblocks its dependents and records the actual initiating
+session and aggregate transition reason; it does not fabricate a reviewer or
+approval. Ancestor/sibling membership and revisions are checked before and after
+each parent write. These checks cannot guarantee an atomic snapshot: partial
+failures preserve earlier changes and explicitly report applied IDs. Read-side
+transition availability remains pending in #35/#32.
 Sessions report device-local liveness; focus belongs to the stable web session,
 separate from CLI focus. Session APIs revalidate the configured repository and
 authentication on each request and reject changed web identities. Other operations explicitly return

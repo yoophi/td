@@ -185,6 +185,9 @@ func init() {
 					for _, dependent := range record.AutoUnblocked {
 						cmd.Printf("unblock %s [open] (dependency %s closed)\n", dependent.ID, record.ID)
 					}
+					for _, parent := range record.ParentStatusUpdates {
+						cmd.Printf("%s [%s] (all children complete)\n", parent.ID, parent.Status)
+					}
 				}
 				completed = append(completed, record.ID)
 			}
