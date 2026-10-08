@@ -34,20 +34,22 @@ type githubSessionStore struct {
 }
 
 func NewGitHubSessionStore(dir string, selected models.GitHubStoreConfig, scope ghcontext.Scope, sessionID string) SessionStore {
-	return &githubSessionStore{scope: scope, sessionID: sessionID, open: func(ctx context.Context) (githubIssueGetter, error) {
-		cfg, err := config.Load(dir)
-		if err != nil {
-			return nil, err
-		}
-		kind, err := config.Store(cfg)
-		if err != nil {
-			return nil, err
-		}
-		if kind != config.StoreGitHub || cfg.GitHub == nil || *cfg.GitHub != selected {
-			return nil, fmt.Errorf("configured store changed; restart td serve")
-		}
-		return ghstore.Open(ctx, dir, &selected)
-	}}
+	return &githubSessionStore{scope: scope, sessionID: sessionID, open: func(ctx context.Context) (githubIssueGetter, error) { return openSelectedGitHub(ctx, dir, selected) }}
+}
+
+func openSelectedGitHub(ctx context.Context, dir string, selected models.GitHubStoreConfig) (*ghstore.Client, error) {
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	kind, err := config.Store(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if kind != config.StoreGitHub || cfg.GitHub == nil || *cfg.GitHub != selected {
+		return nil, fmt.Errorf("configured store changed; restart td serve")
+	}
+	return ghstore.Open(ctx, dir, &selected)
 }
 
 var errWebSessionChanged = errors.New("web session changed; restart td serve")

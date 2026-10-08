@@ -25,14 +25,15 @@ type ServeConfig struct {
 
 // Server is the td serve HTTP server.
 type Server struct {
-	db         *db.DB
-	sessionID  string
-	worktreeID string
-	baseDir    string
-	config     ServeConfig
-	mux        *http.ServeMux
-	sseHub     *SSEHub
-	http       *http.Server
+	githubEndpoints []string
+	db              *db.DB
+	sessionID       string
+	worktreeID      string
+	baseDir         string
+	config          ServeConfig
+	mux             *http.ServeMux
+	sseHub          *SSEHub
+	http            *http.Server
 }
 
 // NewServer creates a new Server, registers all routes, and sets up the
