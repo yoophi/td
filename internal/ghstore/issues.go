@@ -57,6 +57,9 @@ func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]
 }
 
 func (c *Client) request(ctx context.Context, method, endpoint string, payload any, paginate bool) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	args := []string{"api", "--hostname", "github.com", "--method", method, "repos/" + c.repo + endpoint,
@@ -87,11 +90,13 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload a
 // Record exposes td-compatible fields plus the GitHub number and URL.
 type Record struct {
 	models.Issue
-	Number   int    `json:"number"`
-	URL      string `json:"url"`
-	meta     metadata
-	managed  bool
-	revision [32]byte
+	Number     int    `json:"number"`
+	URL        string `json:"url"`
+	meta       metadata
+	managed    bool
+	revision   [32]byte
+	repository string
+	Details    *IssueDetails `json:"details,omitempty"`
 }
 
 type apiIssue struct {
@@ -136,12 +141,16 @@ func (item apiIssue) record() (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Record{Issue: models.Issue{
+	record := &Record{Issue: models.Issue{
 		ID: fmt.Sprintf("gh-%d", item.Number), Title: item.Title, Description: description,
 		Status: models.Status(item.State), Type: meta.Type, Priority: meta.Priority,
 		Points: meta.Points, Acceptance: meta.Acceptance, Labels: labels,
 		CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, ClosedAt: item.ClosedAt,
-	}, Number: item.Number, URL: item.URL, meta: meta, managed: managed, revision: sha256.Sum256(snapshot)}, nil
+	}, Number: item.Number, URL: item.URL, meta: meta, managed: managed, revision: sha256.Sum256(snapshot), Details: meta.Details}
+	if meta.Details != nil {
+		meta.Details.apply(&record.Issue)
+	}
+	return record, nil
 }
 
 // Number accepts only repository-local issue numbers, never URLs or td IDs.
@@ -165,6 +174,18 @@ func Number(id string) (int, error) {
 }
 
 func (c *Client) Get(ctx context.Context, id string) (*Record, error) {
+	record, err := c.GetIncludingDeleted(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if record.DeletedAt != nil {
+		return nil, fmt.Errorf("issue %s is deleted; restore it before use", record.ID)
+	}
+	return record, nil
+}
+
+// GetIncludingDeleted is reserved for restore, history and migration flows.
+func (c *Client) GetIncludingDeleted(ctx context.Context, id string) (*Record, error) {
 	n, err := Number(id)
 	if err != nil {
 		return nil, err
@@ -180,12 +201,24 @@ func (c *Client) Get(ctx context.Context, id string) (*Record, error) {
 	if record.Number != n {
 		return nil, fmt.Errorf("gh returned issue #%d when #%d was requested", record.Number, n)
 	}
+	if record.meta.EntityKind != "" && record.meta.EntityKind != "issue" {
+		return nil, fmt.Errorf("%s is a td %s entity, not an issue", record.ID, record.meta.EntityKind)
+	}
+	record.repository = c.repo
 	return record, nil
 }
 
 // List follows all pages and removes pull requests before decoding td metadata.
 // Filtering and limits are applied by the CLI after this complete read.
 func (c *Client) List(ctx context.Context, all bool) ([]Record, error) {
+	return c.list(ctx, all, false)
+}
+
+func (c *Client) ListIncludingDeleted(ctx context.Context, all bool) ([]Record, error) {
+	return c.list(ctx, all, true)
+}
+
+func (c *Client) list(ctx context.Context, all, includeDeleted bool) ([]Record, error) {
 	state := "open"
 	if all {
 		state = "all"
@@ -208,6 +241,13 @@ func (c *Client) List(ctx context.Context, all bool) ([]Record, error) {
 			if err != nil {
 				return nil, err
 			}
+			if record.meta.EntityKind != "" && record.meta.EntityKind != "issue" {
+				continue
+			}
+			if record.DeletedAt != nil && !includeDeleted {
+				continue
+			}
+			record.repository = c.repo
 			results = append(results, *record)
 		}
 	}
@@ -215,11 +255,25 @@ func (c *Client) List(ctx context.Context, all bool) ([]Record, error) {
 }
 
 func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, error) {
+	if issue == nil {
+		return nil, fmt.Errorf("issue is required")
+	}
+	if issue.Status != "" && issue.Status != models.StatusOpen {
+		return nil, fmt.Errorf("create requires open status; transition after creation")
+	}
 	if err := validateIssue(issue); err != nil {
 		return nil, err
 	}
 	operationID := "td-op-" + rand.Text()
-	body, err := encodeBody(issue.Description, metadata{OperationID: operationID, Type: issue.Type, Priority: issue.Priority, Points: issue.Points, Acceptance: issue.Acceptance})
+	meta := metadata{OperationID: operationID, Type: issue.Type, Priority: issue.Priority, Points: issue.Points, Acceptance: issue.Acceptance}
+	details := detailsFromIssue(issue)
+	baseline := IssueDetails{Status: issue.Status}
+	detailJSON, _ := json.Marshal(details)
+	baselineJSON, _ := json.Marshal(baseline)
+	if !bytes.Equal(detailJSON, baselineJSON) || (issue.Status != "" && issue.Status != models.StatusOpen) {
+		meta.Details = &details
+	}
+	body, err := encodeBody(issue.Description, meta)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +289,14 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	if err != nil {
 		return nil, fmt.Errorf("create response unreadable; inspect GitHub for operation %s before retrying: %w", operationID, err)
 	}
+	record.repository = c.repo
+	var returned apiIssue
+	if err := json.Unmarshal(data, &returned); err != nil {
+		return nil, err
+	}
+	if returned.Title != issue.Title || returned.Body != body || returned.State != "open" {
+		return nil, fmt.Errorf("%s was created, but returned fields differ from operation %s; inspect %s before retrying", record.ID, operationID, record.URL)
+	}
 	if err := checkLabels(record, issue.Labels, "created"); err != nil {
 		return nil, err
 	}
@@ -243,6 +305,9 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 
 // Changes uses pointers so omitted fields, empty strings and cleared labels differ.
 type Changes struct {
+	Details                        *IssueDetails
+	Minor                          *bool
+	Sprint                         *string
 	Title, Description, Acceptance *string
 	Type                           *models.Type
 	Priority                       *models.Priority
@@ -257,6 +322,31 @@ func (c *Client) Update(ctx context.Context, id string, change Changes) (*Record
 	record, err := c.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	return c.UpdateObserved(ctx, record, change)
+}
+
+// UpdateObserved checks the same revision the caller used to validate policy.
+// It cannot make GitHub PATCH atomic, but never refreshes away a known stale
+// policy decision. Callers must not edit observed before passing it back.
+func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Changes) (*Record, error) {
+	if observed == nil || observed.repository != c.repo || observed.revision == ([32]byte{}) {
+		return nil, fmt.Errorf("an observed issue from this repository is required")
+	}
+	if n, err := Number(observed.ID); err != nil || n != observed.Number {
+		return nil, fmt.Errorf("observed issue identity is inconsistent")
+	}
+	copy := *observed
+	record := &copy
+	id := record.ID
+	var err error
+	if change.Details != nil {
+		if change.Minor != nil || change.Sprint != nil {
+			return nil, fmt.Errorf("specify full details or individual detail fields, not both")
+		}
+		if err := change.Details.validate(); err != nil {
+			return nil, err
+		}
 	}
 	payload := make(map[string]any)
 	if change.Title != nil {
@@ -299,11 +389,27 @@ func (c *Client) Update(ctx context.Context, id string, change Changes) (*Record
 	if err := validateIssue(&record.Issue); err != nil {
 		return nil, err
 	}
-	metadataChanged := change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Reason != nil
+	metadataChanged := change.Details != nil || change.Minor != nil || change.Sprint != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Reason != nil
 	if change.Description != nil || metadataChanged {
 		body := record.Description
 		if record.managed || metadataChanged {
 			meta := record.meta
+			if change.Details != nil {
+				meta.Details = change.Details
+			}
+			if change.Minor != nil || change.Sprint != nil {
+				details := detailsFromIssue(&record.Issue)
+				if meta.Details != nil {
+					details = *meta.Details
+				}
+				if change.Minor != nil {
+					details.Minor = *change.Minor
+				}
+				if change.Sprint != nil {
+					details.Sprint = *change.Sprint
+				}
+				meta.Details = &details
+			}
 			meta.Type, meta.Priority, meta.Points, meta.Acceptance = record.Type, record.Priority, record.Points, record.Acceptance
 			if change.Reason != nil {
 				meta.LastStateReason = *change.Reason
@@ -321,7 +427,7 @@ func (c *Client) Update(ctx context.Context, id string, change Changes) (*Record
 		return nil, fmt.Errorf("no issue changes specified")
 	}
 	// This is best-effort detection, not conditional PATCH or a distributed lock.
-	latest, err := c.Get(ctx, id)
+	latest, err := c.GetIncludingDeleted(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("verify %s before update (no write attempted): %w", record.ID, err)
 	}
@@ -356,13 +462,14 @@ func (c *Client) Update(ctx context.Context, id string, change Changes) (*Record
 			return nil, err
 		}
 	}
-	observed, err := c.Get(ctx, id)
+	verified, err := c.GetIncludingDeleted(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("%s update was accepted, but verification failed; inspect GitHub before retrying: %w", record.ID, err)
 	}
-	if observed.revision != updated.revision {
+	if verified.revision != updated.revision {
 		return nil, &ConflictError{ID: record.ID, AfterWrite: true}
 	}
+	updated.repository = c.repo
 	return updated, nil
 }
 

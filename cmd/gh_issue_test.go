@@ -17,7 +17,7 @@ import (
 
 func githubTestCommand(original *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: original.Use, RunE: original.RunE, SilenceErrors: true, SilenceUsage: true}
-	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "comment", "note"} {
+	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "comment", "note", "sprint"} {
 		if original == listCmd && (name == "type" || name == "status") {
 			continue
 		}
@@ -30,7 +30,7 @@ func githubTestCommand(original *cobra.Command) *cobra.Command {
 		cmd.Flags().StringArray("type", nil, "")
 		cmd.Flags().StringArray("status", nil, "")
 	}
-	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append"} {
+	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append", "minor"} {
 		cmd.Flags().Bool(name, false, "")
 	}
 	cmd.Flags().Int("points", 0, "")
@@ -228,6 +228,27 @@ func TestGitHubInlineCommentValidatesBeforeMutation(t *testing.T) {
 		_, err := executeGitHubTest(githubTestCommand(updateCmd), args...)
 		if err == nil || strings.Contains(err.Error(), "CLI not found") {
 			t.Fatalf("validation ran after network: %v", err)
+		}
+	}
+}
+
+func TestGitHubMinorAndSprintInputs(t *testing.T) {
+	create := githubTestCommand(createCmd)
+	if err := create.ParseFlags([]string{"--minor"}); err != nil {
+		t.Fatal(err)
+	}
+	issue, err := newGitHubIssue(create, []string{"Small task"})
+	if err != nil || !issue.Minor {
+		t.Fatalf("%+v %v", issue, err)
+	}
+	for _, value := range []string{"sprint-2", ""} {
+		update := githubTestCommand(updateCmd)
+		if err := update.ParseFlags([]string{"--sprint", value}); err != nil {
+			t.Fatal(err)
+		}
+		changes, err := gitHubChanges(update, false)
+		if err != nil || changes.Sprint == nil || *changes.Sprint != value || !hasGitHubChanges(changes) {
+			t.Fatalf("%+v %v", changes, err)
 		}
 	}
 }

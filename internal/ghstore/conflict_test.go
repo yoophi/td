@@ -105,3 +105,51 @@ func TestCreateUncertainResultIncludesOperationIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestObservedUpdateRetainsPolicyReadRevision(t *testing.T) {
+	state := map[string]any{"number": 1, "state": "open", "title": "Original"}
+	writes := 0
+	client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+		if slices.Contains(args, "PATCH") {
+			writes++
+			var fields map[string]any
+			if err := json.Unmarshal(payload, &fields); err != nil {
+				t.Fatal(err)
+			}
+			for key, value := range fields {
+				state[key] = value
+			}
+		}
+		return json.Marshal(state)
+	}}
+	observed, err := client.Get(context.Background(), "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state["title"] = "Concurrent edit after policy read"
+	title := "Replacement"
+	_, err = client.UpdateObserved(context.Background(), observed, Changes{Title: &title})
+	var conflict *ConflictError
+	if !errors.As(err, &conflict) || writes != 0 || observed.Title != "Original" {
+		t.Fatalf("writes=%d observed=%+v err=%v", writes, observed, err)
+	}
+	current, err := client.Get(context.Background(), "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	details := IssueDetails{Minor: true, Sprint: "current"}
+	updated, err := client.UpdateObserved(context.Background(), current, Changes{Details: &details})
+	if err != nil || writes != 1 || !updated.Minor || updated.Sprint != "current" || current.Minor {
+		t.Fatalf("writes=%d updated=%+v err=%v", writes, updated, err)
+	}
+	foreign := *current
+	foreign.repository = "other/repo"
+	if _, err := client.UpdateObserved(context.Background(), &foreign, Changes{Title: &title}); err == nil || writes != 1 {
+		t.Fatal("foreign observation accepted")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := client.UpdateObserved(ctx, updated, Changes{Title: &title}); !errors.Is(err, context.Canceled) || writes != 1 {
+		t.Fatalf("cancelled update: %v", err)
+	}
+}

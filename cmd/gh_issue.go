@@ -42,9 +42,9 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 	allowed := " json work-dir help "
 	switch operation {
 	case "create":
-		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file "
+		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file minor "
 	case "update":
-		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note "
+		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint "
 	case "list":
 		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager "
 	case "show":
@@ -212,6 +212,7 @@ func emitGitHubMutation(cmd *cobra.Command, action string, record *ghstore.Recor
 
 func newGitHubIssue(cmd *cobra.Command, args []string) (*models.Issue, error) {
 	issue := &models.Issue{Type: models.TypeTask, Priority: models.PriorityP2, Status: models.StatusOpen}
+	issue.Minor, _ = cmd.Flags().GetBool("minor")
 	// Preserve the existing `td new task "Title"` shorthand.
 	if len(args) == 2 && models.IsValidType(models.NormalizeType(args[0])) {
 		issue.Type = models.NormalizeType(args[0])
@@ -266,6 +267,10 @@ func newGitHubIssue(cmd *cobra.Command, args []string) (*models.Issue, error) {
 
 func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 	change := ghstore.Changes{}
+	if !create && cmd.Flags().Changed("sprint") {
+		value, _ := cmd.Flags().GetString("sprint")
+		change.Sprint = &value
+	}
 	if cmd.Flags().Changed("title") {
 		value, _ := cmd.Flags().GetString("title")
 		if !create && strings.TrimSpace(value) == "" {
@@ -349,7 +354,7 @@ func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 }
 
 func hasGitHubChanges(change ghstore.Changes) bool {
-	return change.Title != nil || change.Description != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Labels != nil || change.Status != nil
+	return change.Title != nil || change.Description != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Labels != nil || change.Status != nil || change.Details != nil || change.Minor != nil || change.Sprint != nil
 }
 
 func gitHubUpdateComment(cmd *cobra.Command) (string, error) {

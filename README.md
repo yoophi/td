@@ -219,14 +219,18 @@ issues without metadata can also be read and edited (default type `task`,
 priority `P2`, points `0`). Pull requests are excluded and cannot be edited as
 issues. Native GitHub open/closed changes take effect without a synchronization step.
 
+Extended fields and observed-write guarantees are documented in
+[GitHub metadata](docs/storage/github-metadata.md). Older clients reject unfamiliar
+metadata rather than discarding it; upgrade collaborators before using new fields.
+
 Supported flags:
 
 | Command | GitHub storage options |
 | --- | --- |
-| `create` | title, type, priority, points, labels and aliases, description and aliases/file/stdin, acceptance/file/stdin |
+| `create` | title, type, priority, points, labels and aliases, description and aliases/file/stdin, acceptance/file/stdin, minor |
 | `list` | all, open, status (`open`, `closed`, `all`), type, priority, labels, id, search, sort, reverse, limit, short/long, format, json |
 | `show` | one or more issue IDs, short/long, format, json |
-| `update` | one or more IDs, title, type, priority, points, labels, description/file/stdin, acceptance/file/stdin, append, status (`open`, `closed`), comment/note |
+| `update` | one or more IDs, title, type, priority, points, labels, description/file/stdin, acceptance/file/stdin, append, status (`open`, `closed`), comment/note, sprint (empty clears) |
 | `close`, `reopen` | one or more IDs, reason (`close` also accepts existing reason aliases) |
 
 `task` and `epic` create/list shortcuts use the same storage routing and flags

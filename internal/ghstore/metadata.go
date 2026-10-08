@@ -15,6 +15,8 @@ const markerStart = markerPrefix + "v1\n"
 const markerEnd = "\n-->"
 
 type metadata struct {
+	EntityKind      string          `json:"entity_kind,omitempty"`
+	Details         *IssueDetails   `json:"details,omitempty"`
 	OperationID     string          `json:"operation_id,omitempty"`
 	Type            models.Type     `json:"type"`
 	Priority        models.Priority `json:"priority"`
@@ -26,6 +28,9 @@ type metadata struct {
 func encodeBody(description string, meta metadata) (string, error) {
 	if strings.Contains(description, markerPrefix) {
 		return "", fmt.Errorf("description contains reserved td metadata marker")
+	}
+	if err := validateMetadata(meta); err != nil {
+		return "", err
 	}
 	data, err := json.Marshal(meta)
 	if err != nil {
@@ -56,8 +61,23 @@ func decodeBody(body string) (string, metadata, bool, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return "", meta, false, fmt.Errorf("invalid trailing td issue metadata")
 	}
-	if !models.IsValidType(meta.Type) || !models.IsValidPriority(meta.Priority) || (meta.Points != 0 && !models.IsValidPoints(meta.Points)) {
-		return "", meta, false, fmt.Errorf("invalid td issue metadata fields")
+	if err := validateMetadata(meta); err != nil {
+		return "", meta, false, err
 	}
 	return strings.TrimSuffix(body[:i], "\n\n"), meta, true, nil
+}
+
+func validateMetadata(meta metadata) error {
+	if !models.IsValidType(meta.Type) || !models.IsValidPriority(meta.Priority) || (meta.Points != 0 && !models.IsValidPoints(meta.Points)) {
+		return fmt.Errorf("invalid td issue metadata fields")
+	}
+	switch meta.EntityKind {
+	case "", "issue", "board", "note":
+	default:
+		return fmt.Errorf("unknown td entity kind %q", meta.EntityKind)
+	}
+	if meta.Details != nil {
+		return meta.Details.validate()
+	}
+	return nil
 }
