@@ -294,14 +294,18 @@ issue database. It validates the configured GitHub remote and authentication
 before listening, retains the existing port/address/token/CORS settings, and
 uses a persistent web session separate from CLI sessions. The current HTTP
 support includes `/health`, `/v1/project`, `/v1/sessions`, `PUT /v1/focus`,
-and issue list/detail (`GET /v1/issues`, `GET /v1/issues/{id}`). Issue reads
+and issue list/detail/create/update (`GET /v1/issues`, `GET /v1/issues/{id}`,
+`POST /v1/issues`, `PATCH /v1/issues/{id}`). HTTP create/update preserve the
+existing field contract, validate the current repository and web identity,
+and check `If-Match` plus observed GitHub revisions before an update.
+Conflict checks are best-effort; uncertain writes are never retried automatically. Issue reads
 support filters, pagination, TDQ and shared activity. GitHub issue listings and
 comments are separate reads, not an atomic snapshot. Workflow HTTP operations
 remain pending, so read responses do not advertise transition actions yet.
 Sessions report device-local liveness; focus belongs to the stable web session,
 separate from CLI focus. Session APIs revalidate the configured repository and
 authentication on each request and reject changed web identities. Other operations explicitly return
-`501 unsupported_operation`. Issue write endpoints and SSE are being connected in
+`501 unsupported_operation`. Remaining write endpoints and SSE are being connected in
 #13; this bootstrap alone is not a complete GitHub HTTP API. The project
 response advertises the currently supported endpoints.
 

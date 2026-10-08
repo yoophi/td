@@ -92,6 +92,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		storageDescription = "gh-issue: " + cfg.GitHub.Repo
 		srv = serve.NewGitHubServer(dir, sessionID, cfg.GitHub.Repo, serverConfig, serve.NewGitHubSessionStore(dir, *cfg.GitHub, scope, sessionID))
 		srv.EnableGitHubReads(serve.NewGitHubReadStore(dir, *cfg.GitHub))
+		srv.EnableGitHubWrites(serve.NewGitHubWriteStore(dir, *cfg.GitHub, scope, sessionID))
 		go func() {
 			ticker := time.NewTicker(time.Minute)
 			defer ticker.Stop()

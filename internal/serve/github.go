@@ -10,6 +10,7 @@ import (
 // adapters become available; unsupported operations must never reach a DB.
 func NewGitHubServer(baseDir, sessionID, repo string, config ServeConfig, sessions ...SessionStore) *Server {
 	s := &Server{baseDir: baseDir, sessionID: sessionID, config: config, mux: http.NewServeMux()}
+	s.githubCapabilities = []string{}
 	s.githubEndpoints = []string{"GET /health", "GET /v1/project"}
 	if len(sessions) > 0 && sessions[0] != nil {
 		s.registerSessionStore(sessions[0])
@@ -20,7 +21,7 @@ func NewGitHubServer(baseDir, sessionID, repo string, config ServeConfig, sessio
 	})
 	s.mux.HandleFunc("GET /v1/project", func(w http.ResponseWriter, r *http.Request) {
 		min, max := titleLengthLimitsFor(HandlerContext{BaseDir: baseDir})
-		WriteSuccess(w, map[string]any{"name": filepath.Base(baseDir), "path": baseDir, "session_id": sessionID, "title_min_length": min, "title_max_length": max, "store": "gh-issue", "repository": repo, "capabilities": []string{}, "supported_endpoints": s.githubEndpoints}, http.StatusOK)
+		WriteSuccess(w, map[string]any{"name": filepath.Base(baseDir), "path": baseDir, "session_id": sessionID, "title_min_length": min, "title_max_length": max, "store": "gh-issue", "repository": repo, "capabilities": s.githubCapabilities, "supported_endpoints": s.githubEndpoints}, http.StatusOK)
 	})
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, "unsupported_operation", "This HTTP operation is not yet supported by the gh-issue store; no GitHub or SQLite write was attempted.", http.StatusNotImplemented)
