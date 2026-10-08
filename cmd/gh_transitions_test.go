@@ -52,7 +52,7 @@ func TestGitHubTransitionRoutingAndFocus(t *testing.T) {
 if [ "$1" = auth ]; then exit 0; fi
 if [ "$4" = repos/owner/repo ]; then
  printf '%s' '{"full_name":"owner/repo","has_issues":true}'
-elif [ "$6" = "repos/owner/repo/issues?state=open&per_page=100" ]; then
+elif [ "$6" = "repos/owner/repo/issues?state=open&per_page=100" ] || [ "$6" = "repos/owner/repo/issues?state=all&per_page=100" ]; then
  printf '[['
  cat "$TD_TEST_ISSUE"
  printf ']]'
@@ -156,11 +156,35 @@ fi
 	if _, err := executeGitHubTest(claimTestCommand(approveCmd), "--all", "gh-1"); err == nil || !strings.Contains(err.Error(), "not both") {
 		t.Fatalf("ambiguous bulk args: %v", err)
 	}
+	started, err := executeGitHubTest(claimTestCommand(startCmd), "gh-1", "--json")
+	var startedResult struct {
+		Issue models.Issue `json:"issue"`
+	}
+	if err != nil || json.Unmarshal([]byte(started), &startedResult) != nil {
+		t.Fatalf("%s %v", started, err)
+	}
+	for index, forced := range []bool{false, true, true} {
+		args := []string{"--session", startedResult.Issue.ImplementerSession, "--json"}
+		if forced {
+			args = append(args, "--force")
+		}
+		out, err := executeGitHubTest(claimTestCommand(unstartCmd), args...)
+		var report struct {
+			Count  int  `json:"count"`
+			Forced bool `json:"forced"`
+		}
+		if err != nil || json.Unmarshal([]byte(out), &report) != nil || report.Forced != forced {
+			t.Fatalf("%s %v", out, err)
+		}
+		if report.Count != []int{1, 1, 0}[index] {
+			t.Fatalf("unexpected release/preview count: %d", report.Count)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("created SQLite DB")
 	}
 	out, err := executeGitHubTest(claimTestCommand(unstartCmd), "--session", "someone", "--json")
-	if err == nil || !strings.Contains(err.Error(), "does not yet support --session") {
+	if err == nil || !strings.Contains(err.Error(), "no known local/shared identity") {
 		t.Fatalf("%s %v", out, err)
 	}
 }

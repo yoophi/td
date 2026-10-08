@@ -34,6 +34,16 @@ func init() {
 			if command == startCmd {
 				allowed = append(allowed, "force")
 			}
+			sweep := false
+			if command == unstartCmd {
+				allowed = append(allowed, "session", "stale", "force")
+				if err := validateGitHubSweepFlags(cmd); err != nil {
+					return err
+				}
+				holder, _ := cmd.Flags().GetString("session")
+				stale, _ := cmd.Flags().GetString("stale")
+				sweep = holder != "" || stale != ""
+			}
 			reviewAction := command == reviewCmd || command == approveCmd || command == rejectCmd || command == closeCmd || command == reopenCmd
 			if reviewAction {
 				allowed = append(allowed, "message", "comment", "note", "notes")
@@ -84,7 +94,7 @@ func init() {
 			if all && len(args) > 0 {
 				return fmt.Errorf("specify issue IDs or --all, not both")
 			}
-			if len(args) == 0 && command != approveCmd {
+			if len(args) == 0 && command != approveCmd && !sweep {
 				return fmt.Errorf("requires at least one issue ID")
 			}
 			for _, id := range args {
@@ -109,6 +119,9 @@ func init() {
 				return err
 			}
 			options.SessionID = state.Session.ID
+			if sweep {
+				return runGitHubClaimSweep(cmd, client, scope, state, options)
+			}
 			if command == approveCmd && len(args) == 0 {
 				candidates, err := client.ApprovalCandidates(cmd.Context(), options)
 				if err != nil {

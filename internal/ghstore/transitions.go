@@ -29,6 +29,7 @@ type TransitionRecord struct {
 }
 
 type TransitionOptions struct {
+	expectedRevision                                      *[32]byte
 	Mode                                                  reviewpolicy.Mode
 	Minor, RecordOnly, SelfReview                         bool
 	ReviewedBy, Decision, AdminReason, SelfCloseException string
@@ -65,6 +66,9 @@ func (c *Client) Transition(ctx context.Context, id, action string, options Tran
 	observed, err := c.Get(ctx, id)
 	if err != nil {
 		return nil, false, err
+	}
+	if options.expectedRevision != nil && observed.revision != *options.expectedRevision {
+		return nil, false, &ConflictError{ID: observed.ID}
 	}
 	details, err := observed.CopyDetails()
 	if err != nil {

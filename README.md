@@ -280,14 +280,13 @@ stores status, session attribution, reason and history in one issue PATCH;
 starts also capture the selected worktree's Git snapshot. Release history keeps
 the former holder distinct from the acting session. Bulk commands stop at the
 first error, preserving earlier successful results. Claim conflict detection is
-best-effort and does not provide a distributed lock. `unstart --session/--stale`
-sweeps are not yet implemented.
+best-effort and does not provide a distributed lock. `unstart --session/--stale` sweeps preview by default and require `--force` to release.
 
 `review`, `approve`, `reject`, `close`, and `reopen` use shared session and review
 policy checks. Approval supports `--record-only`, `--self-review`, `--reviewed-by`,
 and `--decision`, with explicit reasons where required. Native close/reopen events
 and changed review content invalidate approval. Full lifecycle parity (including
-descendant cascades and unstart sweeps) remains
+descendant cascades and remaining native-state parity) remains
 tracked in #3.
 
 Unsupported flags are errors, not ignored options. Dependencies, boards, TDQ,
@@ -870,3 +869,19 @@ choice and zero candidates produce an error. Combining IDs with `--all` is an
 error. Candidate selection is read-only and every approval revalidates current
 content, native events, handoff and participation policy. Processing stops at the
 first failure, reporting earlier completed IDs; those writes are not rolled back.
+
+`td unstart --session SESSION` previews all open/in-progress claims held by that
+exact session; `--force` releases them. `--stale DURATION` selects claims by the
+newest available device-local session activity, GitHub issue timestamp or stored
+session/transition history. It accepts the same duration syntax as SQLite,
+including days, and requires a positive explicit threshold. Unmeasurable claims
+and stale caller-lineage claims are reported as unresolved and preserved. A
+blocked or in-review issue is not a releasable claim for these sweeps.
+
+GitHub cannot expose another device's local session heartbeat. Staleness is
+therefore a heuristic over the evidence above, not proof that a remote worker
+has stopped; use an explicit session selector for known stopped workers. Before
+each forced release, local liveness/lineage and the observed GitHub revision are
+checked again. Changed claims are skipped, never replaced by a newly read holder.
+Other failures stop the sweep and report releases already saved. Release history
+records both the former holder and the acting session. No SQLite state is read.
