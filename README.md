@@ -293,7 +293,10 @@ tracked in #3.
 issue database. It validates the configured GitHub remote and authentication
 before listening, retains the existing port/address/token/CORS settings, and
 uses a persistent web session separate from CLI sessions. The current HTTP
-support is `/health` and `/v1/project`; other operations explicitly return
+support is `/health`, `/v1/project`, `/v1/sessions` and `PUT /v1/focus`.
+Sessions report device-local liveness; focus belongs to the stable web session,
+separate from CLI focus. Session APIs revalidate the configured repository and
+authentication on each request and reject changed web identities. Other operations explicitly return
 `501 unsupported_operation`. Issue endpoints and SSE are being connected in
 #13; this bootstrap alone is not a complete GitHub HTTP API. The project
 response advertises the currently supported endpoints.
