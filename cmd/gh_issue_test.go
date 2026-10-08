@@ -17,7 +17,7 @@ import (
 
 func githubTestCommand(original *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: original.Use, RunE: original.RunE, SilenceErrors: true, SilenceUsage: true}
-	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent"} {
+	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "comment", "note"} {
 		if original == listCmd && (name == "type" || name == "status") {
 			continue
 		}
@@ -121,5 +121,113 @@ fi
 	_, err = executeGitHubTest(githubTestCommand(showCmd), "1")
 	if err == nil || !strings.Contains(err.Error(), "now resolves to") {
 		t.Fatalf("changed repo accepted: %v", err)
+	}
+}
+
+func TestGitHubInlineCommentAndPartialFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake gh uses POSIX shell")
+	}
+	for _, tc := range []struct {
+		name, flag   string
+		change, fail bool
+	}{
+		{"comment-only", "comment", false, false},
+		{"note-only", "note", false, false},
+		{"updated-and-commented", "comment", true, false},
+		{"partial-failure", "comment", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := storeTestDir(t)
+			runGit(t, dir, "init")
+			runGit(t, dir, "remote", "add", "origin", "https://github.com/owner/repo.git")
+			if err := config.SetStore(dir, "gh-issue", &models.GitHubStoreConfig{Repo: "owner/repo", Remote: "origin"}); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			bin := t.TempDir()
+			statePath := filepath.Join(bin, "issue.json")
+			requests := filepath.Join(bin, "requests")
+			if err := os.WriteFile(statePath, []byte(`{"number":1,"state":"open","title":"Original"}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("TD_TEST_ISSUE", statePath)
+			t.Setenv("TD_TEST_REQUESTS", requests)
+			if tc.fail {
+				t.Setenv("TD_TEST_COMMENT_FAIL", "yes")
+			} else {
+				t.Setenv("TD_TEST_COMMENT_FAIL", "")
+			}
+			script := `#!/bin/sh
+if [ "$1" = auth ]; then exit 0; fi
+if [ "$4" = repos/owner/repo ]; then
+ printf '%s' '{"full_name":"owner/repo","has_issues":true}'
+ exit 0
+fi
+printf '%s\n' "$5 $6" >> "$TD_TEST_REQUESTS"
+if [ "$5" = PATCH ]; then
+ input=$(cat)
+ printf '{"number":1,"state":"open",%s' "${input#?}" > "$TD_TEST_ISSUE"
+ cat "$TD_TEST_ISSUE"
+elif [ "$5" = POST ]; then
+ if [ "$TD_TEST_COMMENT_FAIL" = yes ]; then echo forbidden >&2; exit 1; fi
+ input=$(cat)
+ printf '{"id":99,%s' "${input#?}"
+elif [ "$5" = GET ]; then
+ cat "$TD_TEST_ISSUE"
+else
+ exit 1
+fi
+`
+			if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			args := []string{"gh-1", "--" + tc.flag, "Comment 한글 $(literal)", "--json"}
+			if tc.change {
+				args = append(args, "--title", "Changed")
+			}
+			out, err := executeGitHubTest(githubTestCommand(updateCmd), args...)
+			if tc.fail {
+				if err == nil || !strings.Contains(err.Error(), "was updated, but its comment failed") || !strings.Contains(err.Error(), "td-op-") {
+					t.Fatalf("%s %v", out, err)
+				}
+			} else if err != nil {
+				t.Fatalf("%s %v", out, err)
+			}
+			calls, err := os.ReadFile(requests)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantPatch := 0
+			if tc.change {
+				wantPatch = 1
+			}
+			if strings.Count(string(calls), "PATCH ") != wantPatch || strings.Count(string(calls), "POST ") != 1 {
+				t.Fatalf("unexpected calls: %s", calls)
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("created SQLite DB")
+			}
+		})
+	}
+}
+
+func TestGitHubInlineCommentValidatesBeforeMutation(t *testing.T) {
+	dir := storeTestDir(t)
+	if err := config.SetStore(dir, "gh-issue", &models.GitHubStoreConfig{Repo: "owner/repo", Remote: "origin"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	for _, args := range [][]string{
+		{"1", "--title", "Changed", "--comment", " "},
+		{"1", "--comment", "one", "--note", "two"},
+		{"1", "--comment", "<!-- td:activity:v1"},
+	} {
+		_, err := executeGitHubTest(githubTestCommand(updateCmd), args...)
+		if err == nil || strings.Contains(err.Error(), "CLI not found") {
+			t.Fatalf("validation ran after network: %v", err)
+		}
 	}
 }

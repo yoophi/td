@@ -171,7 +171,8 @@ The existing `sync.*` settings remain global and require the `sync_cli` feature.
 Use space-separated keys and values (`set store sqlite`, not `set store=sqlite`).
 
 GitHub storage supports `create`, `list`, `show`, `update`, `close`, and `reopen`,
-including their command aliases. Other issue commands return an explicit error
+including their command aliases. Additional supported workflows are described
+below. Unsupported issue commands return an explicit error
 instead of silently using local data. Switch back with `td config set store sqlite`
 to access existing local issues.
 Changing the setting does not migrate, delete or synchronize issues. If a project
@@ -225,7 +226,7 @@ Supported flags:
 | `create` | title, type, priority, points, labels and aliases, description and aliases/file/stdin, acceptance/file/stdin |
 | `list` | all, open, status (`open`, `closed`, `all`), type, priority, labels, id, search, sort, reverse, limit, short/long, format, json |
 | `show` | one or more issue IDs, short/long, format, json |
-| `update` | one or more IDs, title, type, priority, points, labels, description/file/stdin, acceptance/file/stdin, append, status (`open`, `closed`) |
+| `update` | one or more IDs, title, type, priority, points, labels, description/file/stdin, acceptance/file/stdin, append, status (`open`, `closed`), comment/note |
 | `close`, `reopen` | one or more IDs, reason (`close` also accepts existing reason aliases) |
 
 `task` and `epic` create/list shortcuts use the same storage routing and flags
@@ -244,7 +245,10 @@ claims or review attestations; GitHub remains the issue data store. `status` and
 sessions (`ws`) and `session cleanup` are not yet supported.
 
 GitHub storage supports shared `comment` / `comments add`, `comments`, `log`,
-and `handoff` records. Logs support explicit issue IDs, `--issue` / `--task`,
+and `handoff` records. `update --comment` (alias `--note`) appends a comment,
+with or without other field changes. An update and its comment are separate
+writes: if comment creation fails after fields were saved, the command reports
+partial success as an error and does not retry either operation. Logs support explicit issue IDs, `--issue` / `--task`,
 focused issues, stdin, `--type` and the existing type flags. Handoffs support
 structured flags, `@file` (one item per line), `-` for stdin, simple messages,
 and the existing YAML-like stdin sections. Input errors stop before writing.

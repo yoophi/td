@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/marcus/td/internal/config"
+	"github.com/marcus/td/internal/ghcontext"
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
@@ -43,7 +44,7 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 	case "create":
 		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file "
 	case "update":
-		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status "
+		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note "
 	case "list":
 		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager "
 	case "show":
@@ -79,6 +80,13 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	var change ghstore.Changes
 	var created *models.Issue
 	var err error
+	var comment string
+	if operation == "update" {
+		comment, err = gitHubUpdateComment(cmd)
+		if err != nil {
+			return err
+		}
+	}
 	if operation == "create" {
 		created, err = newGitHubIssue(cmd, args)
 	} else {
@@ -151,10 +159,39 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		return nil
 	}
 	action := map[string]string{"update": "updated", "close": "closed", "reopen": "reopened"}[operation]
+	var activity models.Activity
+	if comment != "" {
+		dir, err := gitHubContextDirectory()
+		if err != nil {
+			return err
+		}
+		scope, err := ghcontext.Resolve(cmd.Context(), dir, cfg.GitHub.Repo)
+		if err != nil {
+			return err
+		}
+		state, err := scope.Update(cmd.Context(), nil)
+		if err != nil {
+			return err
+		}
+		activity = models.Activity{Kind: "comment", SessionID: state.Session.ID, Message: comment}
+	}
 	for _, id := range args {
-		record, err := client.Update(cmd.Context(), id, change)
+		var record *ghstore.Record
+		if hasGitHubChanges(change) {
+			record, err = client.Update(cmd.Context(), id, change)
+		} else {
+			record, err = client.Get(cmd.Context(), id)
+		}
 		if err != nil {
 			return fmt.Errorf("%s %s: %w", operation, id, err)
+		}
+		if comment != "" {
+			if _, err := client.AppendActivity(cmd.Context(), record.ID, activity); err != nil {
+				if hasGitHubChanges(change) {
+					return fmt.Errorf("issue %s was updated, but its comment failed; do not repeat the entire update: %w", record.ID, err)
+				}
+				return fmt.Errorf("comment on %s: %w", record.ID, err)
+			}
 		}
 		if err := emitGitHubMutation(cmd, action, record); err != nil {
 			return err
@@ -304,9 +341,33 @@ func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 			}
 			change.Status = &status
 		}
-		if change.Title == nil && change.Description == nil && change.Acceptance == nil && change.Type == nil && change.Priority == nil && change.Points == nil && change.Labels == nil && change.Status == nil {
+		if !hasGitHubChanges(change) && !cmd.Flags().Changed("comment") && !cmd.Flags().Changed("note") {
 			return change, fmt.Errorf("no issue changes specified")
 		}
 	}
 	return change, nil
+}
+
+func hasGitHubChanges(change ghstore.Changes) bool {
+	return change.Title != nil || change.Description != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Labels != nil || change.Status != nil
+}
+
+func gitHubUpdateComment(cmd *cobra.Command) (string, error) {
+	var text string
+	for _, flag := range []string{"comment", "note"} {
+		if !cmd.Flags().Changed(flag) {
+			continue
+		}
+		if text != "" {
+			return "", fmt.Errorf("specify only one of --comment and --note")
+		}
+		text, _ = cmd.Flags().GetString(flag)
+		if strings.TrimSpace(text) == "" {
+			return "", fmt.Errorf("--%s must not be empty", flag)
+		}
+		if strings.Contains(text, "<!-- td:activity:") {
+			return "", fmt.Errorf("comment contains reserved td metadata marker")
+		}
+	}
+	return text, nil
 }
