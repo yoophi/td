@@ -3,6 +3,8 @@ package ghstore
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -85,10 +87,11 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload a
 // Record exposes td-compatible fields plus the GitHub number and URL.
 type Record struct {
 	models.Issue
-	Number  int    `json:"number"`
-	URL     string `json:"url"`
-	meta    metadata
-	managed bool
+	Number   int    `json:"number"`
+	URL      string `json:"url"`
+	meta     metadata
+	managed  bool
+	revision [32]byte
 }
 
 type apiIssue struct {
@@ -129,12 +132,16 @@ func (item apiIssue) record() (*Record, error) {
 	for _, label := range item.Labels {
 		labels = append(labels, label.Name)
 	}
+	snapshot, err := json.Marshal(item)
+	if err != nil {
+		return nil, err
+	}
 	return &Record{Issue: models.Issue{
 		ID: fmt.Sprintf("gh-%d", item.Number), Title: item.Title, Description: description,
 		Status: models.Status(item.State), Type: meta.Type, Priority: meta.Priority,
 		Points: meta.Points, Acceptance: meta.Acceptance, Labels: labels,
 		CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, ClosedAt: item.ClosedAt,
-	}, Number: item.Number, URL: item.URL, meta: meta, managed: managed}, nil
+	}, Number: item.Number, URL: item.URL, meta: meta, managed: managed, revision: sha256.Sum256(snapshot)}, nil
 }
 
 // Number accepts only repository-local issue numbers, never URLs or td IDs.
@@ -211,7 +218,8 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	if err := validateIssue(issue); err != nil {
 		return nil, err
 	}
-	body, err := encodeBody(issue.Description, metadata{Type: issue.Type, Priority: issue.Priority, Points: issue.Points, Acceptance: issue.Acceptance})
+	operationID := "td-op-" + rand.Text()
+	body, err := encodeBody(issue.Description, metadata{OperationID: operationID, Type: issue.Type, Priority: issue.Priority, Points: issue.Points, Acceptance: issue.Acceptance})
 	if err != nil {
 		return nil, err
 	}
@@ -221,11 +229,11 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	}
 	data, err := c.request(ctx, "POST", "/issues", payload, false)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w; operation %s is embedded in the issue body if created; inspect recent issues before retrying (search indexing can lag)", err, operationID)
 	}
 	record, err := decodeIssue(data)
 	if err != nil {
-		return nil, fmt.Errorf("create response unreadable; inspect GitHub before retrying: %w", err)
+		return nil, fmt.Errorf("create response unreadable; inspect GitHub for operation %s before retrying: %w", operationID, err)
 	}
 	if err := checkLabels(record, issue.Labels, "created"); err != nil {
 		return nil, err
@@ -312,6 +320,14 @@ func (c *Client) Update(ctx context.Context, id string, change Changes) (*Record
 	if len(payload) == 0 {
 		return nil, fmt.Errorf("no issue changes specified")
 	}
+	// This is best-effort detection, not conditional PATCH or a distributed lock.
+	latest, err := c.Get(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("verify %s before update (no write attempted): %w", record.ID, err)
+	}
+	if latest.revision != record.revision {
+		return nil, &ConflictError{ID: record.ID}
+	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", record.Number), payload, false)
 	if err != nil {
 		return nil, err
@@ -320,10 +336,32 @@ func (c *Client) Update(ctx context.Context, id string, change Changes) (*Record
 	if err != nil {
 		return nil, fmt.Errorf("update response unreadable; inspect GitHub before retrying: %w", err)
 	}
+	if updated.Number != record.Number {
+		return nil, fmt.Errorf("update response returned unexpected issue; inspect %s before retrying", record.ID)
+	}
+	var applied map[string]json.RawMessage
+	if err := json.Unmarshal(data, &applied); err != nil {
+		return nil, err
+	}
+	for _, field := range []string{"title", "body", "state"} {
+		if expected, ok := payload[field]; ok {
+			var actual string
+			if json.Unmarshal(applied[field], &actual) != nil || actual != fmt.Sprint(expected) {
+				return nil, fmt.Errorf("%s update was accepted but %s did not match the requested value; inspect GitHub before retrying", record.ID, field)
+			}
+		}
+	}
 	if change.Labels != nil {
 		if err := checkLabels(updated, *change.Labels, "updated"); err != nil {
 			return nil, err
 		}
+	}
+	observed, err := c.Get(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("%s update was accepted, but verification failed; inspect GitHub before retrying: %w", record.ID, err)
+	}
+	if observed.revision != updated.revision {
+		return nil, &ConflictError{ID: record.ID, AfterWrite: true}
 	}
 	return updated, nil
 }

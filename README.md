@@ -242,9 +242,22 @@ per line and stop with a nonzero exit code on failure (earlier successes remain)
 Lists follow every API page before filtering, sorting and applying the limit;
 the default limit is 50 and `--limit 0` is unlimited. API calls have a 60-second
 timeout. Writes are not automatically retried. A timeout can leave an uncertain
-result, so inspect GitHub before retrying a create. Body/metadata edits are
-read-modify-write operations without cross-client locking; avoid concurrent edits
-to the same body. Title-only and state-only changes do not rewrite its body.
+result, so inspect GitHub before retrying a create. Creates embed a unique
+`td-op-...` operation ID in body metadata; uncertain-create errors print that ID.
+Inspect recent issue bodies with `gh api repos/OWNER/REPO/issues?state=all` (follow
+pagination), or search GitHub for the ID. Search indexing can lag: no search
+result does not prove the create failed. Never blindly repeat an uncertain create.
+
+Updates re-read the issue before PATCH and reject an observed change without
+writing. After PATCH they validate returned fields and re-read to detect changes
+or verification failures. An error after PATCH can mean the update applied;
+inspect the issue before retrying. These checks are **best-effort**, not an atomic
+compare-and-swap or distributed lock: another writer can still change the issue
+between the last GET and PATCH, or after verification. Multi-issue updates are
+not a transaction. Title-only and state-only changes do not rewrite the body.
+GitHub [does not generally support conditional PATCH requests](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api).
+Clients predating `operation_id` metadata reject newly created managed issues
+rather than discarding unfamiliar fields; upgrade the fork when collaborating.
 
 API behavior follows the [GitHub issue REST endpoints](https://docs.github.com/en/rest/issues/issues)
 and [gh api](https://cli.github.com/manual/gh_api).

@@ -124,7 +124,7 @@ func TestGitHubPatchOnlyChangesSpecifiedFields(t *testing.T) {
 			calls := 0
 			client := &Client{repo: "owner/project", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 				calls++
-				if calls == 1 {
+				if slices.Contains(args, "GET") {
 					if !slices.Contains(args, "GET") {
 						t.Fatal(args)
 					}
@@ -164,7 +164,7 @@ func TestGitHubPatchOnlyChangesSpecifiedFields(t *testing.T) {
 			if _, err := client.Update(context.Background(), "gh-12", change); err != nil {
 				t.Fatal(err)
 			}
-			if calls != 2 {
+			if calls != 4 {
 				t.Fatalf("calls=%d", calls)
 			}
 		})

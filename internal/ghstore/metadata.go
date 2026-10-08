@@ -15,6 +15,7 @@ const markerStart = markerPrefix + "v1\n"
 const markerEnd = "\n-->"
 
 type metadata struct {
+	OperationID     string          `json:"operation_id,omitempty"`
 	Type            models.Type     `json:"type"`
 	Priority        models.Priority `json:"priority"`
 	Points          int             `json:"points"`
