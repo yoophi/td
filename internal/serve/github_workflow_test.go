@@ -2,21 +2,32 @@ package serve
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
+	"github.com/marcus/td/internal/reviewpolicy"
 )
 
 type githubWorkflowFixture struct {
 	githubWriteFixture
-	records    []ghstore.Record
-	options    ghstore.TransitionOptions
-	action     string
-	calls      int
-	afterChild bool
+	records           []ghstore.Record
+	options           ghstore.TransitionOptions
+	action            string
+	calls             int
+	afterChild        bool
+	availabilityError error
+}
+
+func (f *githubWorkflowFixture) AvailableTransitions(_ context.Context, _ *ghstore.Record, session string, mode reviewpolicy.Mode) ([]string, error) {
+	if session != "actual-web-fixture" {
+		return nil, errors.New("availability used wrong session")
+	}
+	return []string{"reject"}, f.availabilityError
 }
 
 func (f *githubWorkflowFixture) List(context.Context, bool) ([]ghstore.Record, error) {
@@ -91,5 +102,26 @@ func TestGitHubHTTPWorkflowPolicyWiringAndCascadeBoundary(t *testing.T) {
 	request("review", `{}`, "", 409)
 	if f.calls != 1 {
 		t.Fatal("partial result retried")
+	}
+	f.failure = nil
+	f.availabilityError = errors.New("fixture availability permission denied")
+	f.calls = 0
+	request("start", `{}`, "", 502)
+	if f.calls != 1 {
+		t.Fatal("saved transition retried on availability failure")
+	}
+	f.availabilityError = nil
+	r := httptest.NewRequest("POST", "/v1/issues/gh-1/start", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, r)
+	var body struct {
+		Data struct {
+			Issue struct {
+				Actions []string `json:"available_transitions"`
+			} `json:"issue"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || len(body.Data.Issue.Actions) != 1 || body.Data.Issue.Actions[0] != "reject" {
+		t.Fatalf("availability absent from mutation response: %s %v", w.Body.String(), err)
 	}
 }

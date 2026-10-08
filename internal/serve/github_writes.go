@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/marcus/td/internal/ghcontext"
@@ -20,6 +21,7 @@ type githubIssueWriter interface {
 	UpdateObserved(context.Context, *ghstore.Record, ghstore.Changes) (*ghstore.Record, error)
 }
 type GitHubWriteStore struct {
+	availabilityEnabled        func() bool
 	open                       func(context.Context) (githubIssueWriter, error)
 	baseDir, sessionID, branch string
 }
@@ -45,6 +47,7 @@ func NewGitHubWriteStore(dir string, selected models.GitHubStoreConfig, scope gh
 	}}
 }
 func (s *Server) EnableGitHubWrites(store *GitHubWriteStore) {
+	store.availabilityEnabled = func() bool { return slices.Contains(s.githubEndpoints, "POST /v1/issues/{id}/start") }
 	s.githubCapabilities = append(s.githubCapabilities, "issue_revisions")
 	s.githubEndpoints = append(s.githubEndpoints, "POST /v1/issues", "PATCH /v1/issues/{id}")
 	s.mux.HandleFunc("POST /v1/issues", store.create)
@@ -147,7 +150,7 @@ func (s *GitHubWriteStore) create(w http.ResponseWriter, r *http.Request) {
 		githubWriteError(w, err)
 		return
 	}
-	WriteSuccess(w, map[string]any{"issue": IssueToDTO(&result.Issue)}, 201)
+	s.writeIssueSuccess(w, r, client, result, 201, true)
 }
 func (s *GitHubWriteStore) update(w http.ResponseWriter, r *http.Request) {
 	var body IssueUpdateBody
@@ -226,7 +229,7 @@ func (s *GitHubWriteStore) update(w http.ResponseWriter, r *http.Request) {
 		changes.Details = &details
 	}
 	if !changes.HasFields() {
-		WriteSuccess(w, map[string]any{"issue": IssueToDTO(&observed.Issue)}, 200)
+		s.writeIssueSuccess(w, r, client, observed, 200, false)
 		return
 	}
 	result, err := client.UpdateObserved(r.Context(), observed, changes)
@@ -234,5 +237,5 @@ func (s *GitHubWriteStore) update(w http.ResponseWriter, r *http.Request) {
 		githubWriteError(w, err)
 		return
 	}
-	WriteSuccess(w, map[string]any{"issue": IssueToDTO(&result.Issue)}, 200)
+	s.writeIssueSuccess(w, r, client, result, 200, true)
 }

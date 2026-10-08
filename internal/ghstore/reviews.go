@@ -207,6 +207,13 @@ func reviewerEligibility(record *Record, details IssueDetails, o TransitionOptio
 	return reviewpolicy.EvaluateReviewerEligibility(reviewpolicy.ReviewerEligibilityInput{Mode: o.Mode, Issue: &record.Issue, SessionID: o.SessionID, SessionIsCreator: record.CreatorSession == o.SessionID, SessionIsImplementer: record.ImplementerSession == o.SessionID, HasImplementationHistory: impl, WasAnyInvolved: any, SelfReviewAcknowledged: o.SelfReview, AttributedTo: o.ReviewedBy})
 }
 
+// Shared by ordinary close writes and read-side transition availability.
+func closeWithoutApprovalAllowed(record *Record, details IssueDetails, o TransitionOptions) bool {
+	involved, implemented, hasHistory := participation(record, details, o.SessionID)
+	decision := reviewpolicy.EvaluateCloseEligibility(reviewpolicy.CloseEligibilityInput{Mode: reviewpolicy.ModeStrict, Issue: &record.Issue, SessionID: o.SessionID, SessionIsCreator: record.CreatorSession == o.SessionID, SessionIsImplementer: record.ImplementerSession == o.SessionID, HasImplementationHistory: implemented, WasAnyInvolved: involved})
+	return decision.Allowed && (!decision.CreatorOpenBypass || !hasHistory) && (o.Mode != reviewpolicy.ModeDelegated || !hasHistory || record.Minor)
+}
+
 func supersedeReviews(details *IssueDetails, now time.Time) {
 	for i := range details.Reviews {
 		if details.Reviews[i].SupersededAt == nil {
@@ -441,12 +448,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		if from == models.StatusInReview && !observed.Minor {
 			return nil, false, workflowStateError("cannot close %s while in review; use approve", id)
 		}
-		involved, implemented, hasHistory := participation(observed, d, o.SessionID)
-		decision := reviewpolicy.EvaluateCloseEligibility(reviewpolicy.CloseEligibilityInput{Mode: reviewpolicy.ModeStrict, Issue: &observed.Issue, SessionID: o.SessionID, SessionIsCreator: observed.CreatorSession == o.SessionID, SessionIsImplementer: observed.ImplementerSession == o.SessionID, HasImplementationHistory: implemented, WasAnyInvolved: involved})
-		allowed := decision.Allowed && (!decision.CreatorOpenBypass || !hasHistory)
-		if o.Mode == reviewpolicy.ModeDelegated && hasHistory && !observed.Minor {
-			allowed = false
-		}
+		allowed := closeWithoutApprovalAllowed(observed, d, o)
 		if !allowed && o.AdminReason == "" && o.SelfCloseException == "" {
 			return nil, false, &PolicyError{Reason: fmt.Sprintf("cannot close %s without review; use review/approve or an explicit --admin/--self-close-exception reason", id)}
 		}

@@ -30,7 +30,9 @@ func NewGitHubReadStore(dir string, selected models.GitHubStoreConfig) *GitHubRe
 func (s *Server) EnableGitHubReads(store *GitHubReadStore) {
 	s.githubEndpoints = append(s.githubEndpoints, "GET /v1/issues", "GET /v1/issues/{id}")
 	s.mux.HandleFunc("GET /v1/issues", func(w http.ResponseWriter, r *http.Request) { store.list(s.sessionID, w, r) })
-	s.mux.HandleFunc("GET /v1/issues/{id}", store.detail)
+	s.mux.HandleFunc("GET /v1/issues/{id}", func(w http.ResponseWriter, r *http.Request) {
+		store.detail(s.baseDir, s.sessionID, slices.Contains(s.githubEndpoints, "POST /v1/issues/{id}/start"), w, r)
+	})
 }
 func readError(w http.ResponseWriter, err error) {
 	code, status := "store_error", http.StatusBadGateway
@@ -222,7 +224,7 @@ func (s *GitHubReadStore) list(sessionID string, w http.ResponseWriter, r *http.
 	}
 	WriteSuccess(w, map[string]any{"issues": dtos, "total": total, "limit": limit, "offset": offset, "has_more": offset+limit < total}, 200)
 }
-func (s *GitHubReadStore) detail(w http.ResponseWriter, r *http.Request) {
+func (s *GitHubReadStore) detail(baseDir, sessionID string, withWorkflow bool, w http.ResponseWriter, r *http.Request) {
 	for key, values := range r.URL.Query() {
 		if key != "with" {
 			WriteError(w, ErrValidation, "unsupported query parameter: "+key, 400)
@@ -265,8 +267,10 @@ func (s *GitHubReadStore) detail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !found {
-		readError(w, fmt.Errorf("issue disappeared during detail read; reload"))
-		return
+		// GitHub's listing can lag a newly created issue even when its direct
+		// GET succeeds. Keep that explicit observation; availability re-reads
+		// it before returning. The wider relationship listing is not atomic.
+		records = append(records, *record)
 	}
 	snapshot, err := issuestore.NewGitHubQuerySnapshot(r.Context(), records, c)
 	if err != nil {
@@ -314,10 +318,11 @@ func (s *GitHubReadStore) detail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	dto := IssueToDTO(&record.Issue)
-	// No workflow HTTP endpoints are enabled yet; do not advertise actions a
-	// client cannot execute. #35 wires common-policy transition availability.
-	dto.AvailableTransitions = []string{}
+	dto, err := githubIssueDTO(r.Context(), c, record, baseDir, sessionID, withWorkflow)
+	if err != nil {
+		githubWriteError(w, err)
+		return
+	}
 	if record.Details != nil {
 		for _, review := range record.Details.Reviews {
 			if hasWithValue(r.URL.Query().Get("with"), "reviews") {

@@ -15,6 +15,7 @@ import (
 )
 
 type githubReadFixture struct {
+	omitFromList  string
 	records       []ghstore.Record
 	activityCalls int
 	fail          bool
@@ -34,6 +35,15 @@ func (f *githubReadFixture) Get(ctx context.Context, id string) (*ghstore.Record
 	return nil, errors.New("HTTP 404")
 }
 func (f *githubReadFixture) List(ctx context.Context, all bool) ([]ghstore.Record, error) {
+	if f.omitFromList != "" {
+		records := []ghstore.Record{}
+		for _, record := range f.records {
+			if record.ID != f.omitFromList {
+				records = append(records, record)
+			}
+		}
+		return records, nil
+	}
 	return f.records, nil
 }
 func (f *githubReadFixture) AppendActivity(context.Context, string, models.Activity) (*models.Activity, error) {
@@ -104,6 +114,17 @@ func TestGitHubHTTPReadContractsAndTDQ(t *testing.T) {
 	if data["issue"].(map[string]any)["description"] != "full description" || len(data["logs"].([]any)) != 1 || len(data["comments"].([]any)) != 1 || data["latest_handoff"] == nil || len(data["dependencies"].([]any)) != 1 {
 		t.Fatalf("%v", data)
 	}
+	now := time.Now()
+	f.records[1].Status = models.StatusInReview
+	f.records[1].ReviewerSession = "fixture-reviewer"
+	f.records[1].ReviewedAt = &now
+	f.records[1].Details.Reviews = []models.IssueReview{{ID: "fixture-review", IssueID: "gh-2", ReviewerSession: "fixture-reviewer", RequestedBySession: "fixture-requester", Decision: "approved", CreatedAt: now}}
+	data = request("/v1/issues/2?with=reviews", 200)
+	reviewDTO := data["issue"].(map[string]any)
+	revision, ok := reviewDTO["revision"].(string)
+	if !ok || len(revision) != 64 || len(reviewDTO["reviews"].([]any)) != 1 || reviewDTO["active_review"] == nil {
+		t.Fatalf("reviews/revision contract missing: %v", reviewDTO)
+	}
 	request("/v1/issues/999", 404)
 	request("/v1/issues?limit=-1", 400)
 	request("/v1/issues?unknown=1", 400)
@@ -114,4 +135,24 @@ func TestGitHubHTTPReadContractsAndTDQ(t *testing.T) {
 	f.fail = false
 	f.records = append(f.records, f.records[0])
 	request("/v1/issues", 502)
+}
+
+func TestGitHubDetailRetainsExplicitGetWhenListingLags(t *testing.T) {
+	f := &githubReadFixture{omitFromList: "gh-1", records: []ghstore.Record{
+		{Issue: models.Issue{ID: "gh-1", Title: "Recently created fixture", Type: models.TypeEpic, Status: models.StatusOpen, Priority: models.PriorityP2}, Number: 1},
+		{Issue: models.Issue{ID: "gh-2", Title: "Listed child fixture", ParentID: "gh-1", Type: models.TypeTask, Status: models.StatusOpen, Priority: models.PriorityP2}, Number: 2},
+	}}
+	srv := NewGitHubServer(t.TempDir(), "fixture-web", "owner/repo", ServeConfig{})
+	srv.EnableGitHubReads(&GitHubReadStore{open: func(context.Context) (githubReadClient, error) { return f, nil }})
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/v1/issues/gh-1", nil))
+	var body struct {
+		Data struct {
+			Issue    IssueDTO   `json:"issue"`
+			Children []IssueDTO `json:"children"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || w.Code != 200 || body.Data.Issue.ID != "gh-1" || len(body.Data.Children) != 1 {
+		t.Fatalf("valid direct observation discarded: %s %v", w.Body.String(), err)
+	}
 }

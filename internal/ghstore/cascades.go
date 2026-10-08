@@ -87,7 +87,7 @@ func (c *Client) transitionWithLocalCascades(ctx context.Context, id, action str
 }
 
 func (c *Client) reviewGraph(ctx context.Context, root string) (map[string]Record, []Record, error) {
-	records, err := c.List(ctx, true)
+	records, err := c.listWithRoot(ctx, root)
 	if err != nil {
 		return nil, nil, err
 	}

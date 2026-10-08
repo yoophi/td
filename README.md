@@ -320,8 +320,19 @@ Automatic epic closure unblocks its dependents and records the actual initiating
 session and aggregate transition reason; it does not fabricate a reviewer or
 approval. Ancestor/sibling membership and revisions are checked before and after
 each parent write. These checks cannot guarantee an atomic snapshot: partial
-failures preserve earlier changes and explicitly report applied IDs. Read-side
-transition availability remains pending in #35/#32.
+failures preserve earlier changes and explicitly report applied IDs.
+Issue detail and create/update/transition responses now include
+`available_transitions` from the common GitHub policy and expose the
+`workflow_transitions` capability. An action can require a reason or honest
+review acknowledgement. Stale review content/events/handoffs hide approval and
+recorded-approval closure; permission/transport failures are reported, not
+interpreted as an empty action list. Availability reads never write or grant
+authorization: mutations revalidate policy and observed state independently.
+When GitHub's listing lags a newly created issue, detail/cascade reads retain
+its successful direct GET instead of treating list omission as deletion.
+Relationship discovery can still lag and is not an atomic snapshot.
+A failure to read availability after a write explicitly reports that the issue
+was already saved, so clients must inspect its current state before retrying.
 Sessions report device-local liveness; focus belongs to the stable web session,
 separate from CLI focus. Session APIs revalidate the configured repository and
 authentication on each request and reject changed web identities. Other operations explicitly return

@@ -14,7 +14,7 @@ import (
 // Watch the ancestor chain and every direct child used to decide completion.
 // These are optimistic, paginated reads, not a GitHub transaction or lock.
 func (c *Client) parentGraph(ctx context.Context, root string) (map[string]Record, []string, error) {
-	records, err := c.List(ctx, true)
+	records, err := c.listWithRoot(ctx, root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -38,7 +38,11 @@ func (c *Client) parentGraph(ctx context.Context, root string) (map[string]Recor
 		}
 		current, exists = all[id]
 		if !exists {
-			return nil, nil, fmt.Errorf("parent %s is missing or deleted", id)
+			parent, err := c.Get(ctx, id)
+			if err != nil {
+				return nil, nil, fmt.Errorf("parent %s: %w", id, err)
+			}
+			current = *parent
 		}
 		graph[id] = current
 		parents = append(parents, id)

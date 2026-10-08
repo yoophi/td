@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -30,6 +31,7 @@ type githubWorkflowBody struct {
 }
 
 func (s *Server) EnableGitHubWorkflow(store *GitHubWriteStore) {
+	s.githubCapabilities = append(s.githubCapabilities, "workflow_transitions")
 	for _, action := range []string{"start", "review", "approve", "reviews", "reject", "block", "unblock", "close", "reopen"} {
 		route := "POST /v1/issues/{id}/" + action
 		s.githubEndpoints = append(s.githubEndpoints, route)
@@ -105,6 +107,11 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 		githubWriteError(w, err)
 		return
 	}
+	dto, err := githubIssueDTO(r.Context(), client, result, s.baseDir, s.sessionID, true)
+	if err != nil {
+		githubWriteError(w, fmt.Errorf("%s transitioned to %s, but availability could not be read (inspect current state before retrying): %w", result.ID, result.Status, err))
+		return
+	}
 	reviewed := []IssueDTO{}
 	for _, child := range result.CascadedReviews {
 		reviewed = append(reviewed, IssueToDTO(&child.Issue))
@@ -117,5 +124,5 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 	for _, dependent := range result.AutoUnblocked {
 		unblocked = append(unblocked, IssueToDTO(&dependent.Issue))
 	}
-	WriteSuccess(w, map[string]any{"reviewed_descendants": reviewed, "issue": IssueToDTO(&result.Issue), "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: parents, AutoUnblocked: unblocked}}, 200)
+	WriteSuccess(w, map[string]any{"reviewed_descendants": reviewed, "issue": dto, "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: parents, AutoUnblocked: unblocked}}, 200)
 }

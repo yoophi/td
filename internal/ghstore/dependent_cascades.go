@@ -14,7 +14,7 @@ import (
 // used to decide whether to unblock them. Missing dependencies never count as
 // closed. Unrelated issues need not retain their revisions during this cascade.
 func (c *Client) dependentGraph(ctx context.Context, root string) (map[string]Record, []string, error) {
-	records, err := c.List(ctx, true)
+	records, err := c.listWithRoot(ctx, root)
 	if err != nil {
 		return nil, nil, err
 	}
