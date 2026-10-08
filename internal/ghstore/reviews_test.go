@@ -28,6 +28,12 @@ func newReviewFixture(t *testing.T) *reviewFixture {
 	f := &reviewFixture{issue: map[string]any{"number": 1, "state": "open", "title": "Fixture"}, events: []nativeStateEvent{}, comments: []apiComment{}}
 	f.client = &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 		switch {
+		case slices.Contains(args, "repos/owner/repo/issues?state=all&per_page=100"):
+			data, err := fixtureIssueJSON(f.issue)
+			if err != nil {
+				return nil, err
+			}
+			return json.Marshal([][]json.RawMessage{{data}})
 		case slices.Contains(args, "repos/owner/repo/issues/1/events?per_page=100"):
 			return json.Marshal([][]nativeStateEvent{f.events})
 		case slices.Contains(args, "repos/owner/repo/issues/1/comments?per_page=100"):

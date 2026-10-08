@@ -304,8 +304,12 @@ comments are separate reads, not an atomic snapshot. Workflow HTTP endpoints are
 issues, including record-only and acknowledged self-review. In trusted/delegated
 mode, `close` can consume an existing valid recorded approval without replacing
 the reviewer; another closing session must supply a reason. Changed issue
-content, handoff, or native close/reopen history invalidates that approval. Review/close/approve
-requests requiring parent/child/dependent cascades currently fail explicitly
+content, handoff, or native close/reopen history invalidates that approval. Review submits open/in_progress descendants and reports the changed children.
+Individual descendant handoffs are waived; implementer attribution is preserved.
+Each write is followed by a membership/revision check, with already changed IDs
+reported on failure. Review/close/approve
+requests requiring upward parent cascades or close/approve requests requiring
+dependent unblocking currently fail explicitly
 with 501 before changing the issue; a newly observed relationship after a write
 is reported as a partial-result conflict. Cascade support and read-side
 transition availability remain pending in #35/#32.

@@ -38,6 +38,7 @@ func workflowStateError(format string, args ...any) error {
 
 type TransitionOptions struct {
 	expectedRevision                                      *[32]byte
+	skipReviewHandoff                                     bool
 	Mode                                                  reviewpolicy.Mode
 	Minor, RecordOnly, SelfReview                         bool
 	ReviewedBy, Decision, AdminReason, SelfCloseException string

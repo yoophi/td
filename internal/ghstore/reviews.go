@@ -339,7 +339,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		if o.Minor {
 			d.Minor = true
 		}
-		if !d.Minor {
+		if !d.Minor && !o.skipReviewHandoff {
 			var handoff *models.Activity
 			observed, handoff, err = c.reviewHandoff(ctx, observed, o)
 			if err != nil {

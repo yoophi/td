@@ -15,7 +15,7 @@ import (
 type githubWorkflowClient interface {
 	githubIssueWriter
 	List(context.Context, bool) ([]ghstore.Record, error)
-	TransitionObserved(context.Context, *ghstore.Record, string, ghstore.TransitionOptions) (*ghstore.Record, bool, error)
+	TransitionObservedWithCascades(context.Context, *ghstore.Record, string, ghstore.TransitionOptions) (*ghstore.Record, bool, error)
 }
 
 type githubWorkflowBody struct {
@@ -61,9 +61,7 @@ func standaloneWorkflow(ctx context.Context, client githubWorkflowClient, root *
 			return fmt.Errorf("GitHub listing repeated %s; retry the read", record.ID)
 		}
 		seen[record.ID] = true
-		if action == "review" && record.ParentID == root.ID {
-			return fmt.Errorf("workflow cascades for issues with children are not yet supported by HTTP")
-		}
+
 		if (action == "close" || action == "approve") && record.Details != nil && slices.Contains(record.Details.Dependencies, root.ID) {
 			return fmt.Errorf("workflow cascades for issues with dependents are not yet supported by HTTP")
 		}
@@ -141,7 +139,7 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 		}
 		return
 	}
-	result, noop, err := client.TransitionObserved(r.Context(), observed, action, options)
+	result, noop, err := client.TransitionObservedWithCascades(r.Context(), observed, action, options)
 	if err != nil {
 		githubWriteError(w, err)
 		return
@@ -152,5 +150,9 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 		WriteError(w, ErrConflict, fmt.Sprintf("%s transitioned to %s, but cascade verification failed; inspect current state before retrying: %v", result.ID, result.Status, err), 409)
 		return
 	}
-	WriteSuccess(w, map[string]any{"issue": IssueToDTO(&result.Issue), "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: []IssueDTO{}, AutoUnblocked: []IssueDTO{}}}, 200)
+	reviewed := []IssueDTO{}
+	for _, child := range result.CascadedReviews {
+		reviewed = append(reviewed, IssueToDTO(&child.Issue))
+	}
+	WriteSuccess(w, map[string]any{"reviewed_descendants": reviewed, "issue": IssueToDTO(&result.Issue), "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: []IssueDTO{}, AutoUnblocked: []IssueDTO{}}}, 200)
 }

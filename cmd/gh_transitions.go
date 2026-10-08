@@ -149,7 +149,7 @@ func init() {
 			}
 			completed := []string{}
 			for _, id := range args {
-				record, noop, err := client.Transition(cmd.Context(), id, command.Name(), options)
+				record, noop, err := client.TransitionWithCascades(cmd.Context(), id, command.Name(), options)
 				if err != nil {
 					if len(completed) > 0 {
 						return fmt.Errorf("%s completed for %s; stopped at %s (earlier changes remain): %w", command.Name(), strings.Join(completed, ", "), id, err)
@@ -177,6 +177,11 @@ func init() {
 					}
 				} else {
 					cmd.Printf("%s %s [%s] (best-effort claim; no distributed lock)\n", command.Name(), record.ID, record.Status)
+				}
+				if !jsonMode(cmd) {
+					for _, child := range record.CascadedReviews {
+						cmd.Printf("review %s [in_review] (cascaded from %s)\n", child.ID, record.ID)
+					}
 				}
 				completed = append(completed, record.ID)
 			}

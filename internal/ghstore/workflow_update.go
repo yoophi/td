@@ -43,7 +43,7 @@ func (c *Client) UpdateWorkflow(ctx context.Context, id string, change Changes, 
 			return nil, err
 		}
 	}
-	record, _, err := c.Transition(ctx, id, action, options)
+	record, _, err := c.TransitionWithCascades(ctx, id, action, options)
 	if err != nil && edited {
 		return nil, fmt.Errorf("%s field changes were saved, but requested %s transition failed; inspect current status and do not repeat the entire update: %w", observed.ID, action, err)
 	}
