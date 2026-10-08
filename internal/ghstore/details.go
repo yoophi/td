@@ -15,6 +15,7 @@ import (
 // this structure. Unknown fields/versions fail closed rather than being lost.
 // Workflow writes must use UpdateObserved after validating the observed issue.
 type IssueDetails struct {
+	Transitions              []TransitionRecord           `json:"transitions,omitempty"`
 	Status                   models.Status                `json:"status,omitempty"`
 	Minor                    bool                         `json:"minor,omitempty"`
 	Sprint                   string                       `json:"sprint,omitempty"`
@@ -78,6 +79,15 @@ func (d IssueDetails) validate() error {
 	for _, entry := range d.Sessions {
 		if entry.SessionID == "" || entry.CreatedAt.IsZero() || !slices.Contains([]models.IssueSessionAction{models.ActionSessionCreated, models.ActionSessionStarted, models.ActionSessionUnstarted, models.ActionSessionReviewed, models.ActionSessionReviewApproved, models.ActionSessionReviewChangesRequested, models.ActionSessionClosed}, entry.Action) {
 			return fmt.Errorf("invalid session history")
+		}
+	}
+
+	for _, entry := range d.Transitions {
+		if entry.OperationID == "" || entry.SessionID == "" || entry.At.IsZero() || !slices.Contains([]string{"start", "unstart", "block", "unblock"}, entry.Action) {
+			return fmt.Errorf("invalid transition history")
+		}
+		if !slices.Contains([]models.Status{models.StatusOpen, models.StatusInProgress, models.StatusInReview, models.StatusBlocked, models.StatusClosed}, entry.From) || !slices.Contains([]models.Status{models.StatusOpen, models.StatusInProgress, models.StatusBlocked}, entry.To) {
+			return fmt.Errorf("invalid transition history status")
 		}
 	}
 	return nil

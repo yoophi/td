@@ -348,6 +348,29 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 			return nil, err
 		}
 	}
+	// Legacy/native state writes must not resurrect an old detailed claim or
+	// masquerade as reviewed closes. Policy-aware transitions supply Details.
+	if change.Status != nil && change.Details == nil && record.Details != nil {
+		details, copyErr := record.CopyDetails()
+		if copyErr != nil {
+			return nil, copyErr
+		}
+		details.Status = *change.Status
+		details.ReviewerSession = ""
+		details.ReviewedAt = nil
+		details.ReviewRequestedBySession = ""
+		details.ClosedBySession = ""
+		if *change.Status == models.StatusOpen {
+			details.ImplementerSession = ""
+		}
+		now := time.Now().UTC()
+		for i := range details.Reviews {
+			if details.Reviews[i].SupersededAt == nil {
+				details.Reviews[i].SupersededAt = &now
+			}
+		}
+		change.Details = &details
+	}
 	payload := make(map[string]any)
 	if change.Title != nil {
 		record.Title = *change.Title

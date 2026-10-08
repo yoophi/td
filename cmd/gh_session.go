@@ -164,7 +164,7 @@ func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.C
 		}
 		quiet, _ := cmd.Flags().GetBool("quiet")
 		if !quiet {
-			cmd.Println("GitHub issues are shared; session identity/focus are device-local. Claims, reviews and work sessions are not yet supported.")
+			cmd.Println("GitHub issues are shared; session identity/focus are device-local. Use start/unstart/block/unblock for shared claims. Reviews and work sessions are not yet supported.")
 		}
 	}
 	return nil

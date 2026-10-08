@@ -23,8 +23,8 @@ func listGitHubIssues(cmd *cobra.Command, args []string, _ *models.Config) error
 	statuses, _ := cmd.Flags().GetStringArray("status")
 	statuses = mergeMultiValueFlag(statuses)
 	for _, status := range statuses {
-		if status != "open" && status != "closed" && status != "all" {
-			return fmt.Errorf("gh-issue status must be open, closed or all")
+		if !slices.Contains([]string{"open", "in_progress", "blocked", "in_review", "closed", "all"}, status) {
+			return fmt.Errorf("gh-issue status must be open, in_progress, blocked, in_review, closed or all")
 		}
 		if status == "closed" || status == "all" {
 			all = true

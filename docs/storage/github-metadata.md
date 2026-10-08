@@ -12,7 +12,9 @@ Their feature-specific payloads and commands remain separate work.
 
 `details` holds minor/sprint, parent, creator/implementer/reviewer/requester/closer
 session attribution, creation branch, reviewed/deleted timestamps, due/defer dates
-and defer count, dependency IDs, linked files, review records, and session history.
+and defer count, dependency IDs, linked files, review records, session history,
+and transition records. Transition records keep actor, action, previous/new
+status, reason, operation ID, timestamp, and optional Git snapshot together.
 Dates use YYYY-MM-DD. Repository-local relationship IDs use canonical `gh-N`.
 Readers validate these fields, including nested records, before exposing them.
 
@@ -42,7 +44,8 @@ GetIncludingDeleted/ListIncludingDeleted. Internal entities remain excluded ther
 repository and issue identity, and compares its original revision immediately
 before PATCH. It does not refresh away the policy observation. A stale observation
 returns a conflict without writing. Callers must not modify the observed record;
-changes belong in the Changes argument. Existing Update delegates through this
+changes belong in the Changes argument. `CopyDetails` returns a deep copy of
+details so nested history can be edited without mutating that observation. Existing Update delegates through this
 same path. Writes validate the response and fetch again to detect observed races.
 Cancellation before a request prevents executing gh.
 

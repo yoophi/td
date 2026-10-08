@@ -228,7 +228,7 @@ Supported flags:
 | Command | GitHub storage options |
 | --- | --- |
 | `create` | title, type, priority, points, labels and aliases, description and aliases/file/stdin, acceptance/file/stdin, minor |
-| `list` | all, open, status (`open`, `closed`, `all`), type, priority, labels, id, search, sort, reverse, limit, short/long, format, json |
+| `list` | all, open, status (`open`, `in_progress`, `blocked`, `in_review`, `closed`, `all`), type, priority, labels, id, search, sort, reverse, limit, short/long, format, json |
 | `show` | one or more issue IDs, short/long, format, json |
 | `update` | one or more IDs, title, type, priority, points, labels, description/file/stdin, acceptance/file/stdin, append, status (`open`, `closed`), comment/note, sprint (empty clears) |
 | `close`, `reopen` | one or more IDs, reason (`close` also accepts existing reason aliases) |
@@ -271,8 +271,19 @@ inspect comments before retrying. There is no automatic retry or atomic
 idempotency guarantee. `check-handoff`, descendant handoff propagation and
 workflow integration are still pending.
 
-Unsupported flags are errors, not ignored options. Session claims,
-review approval policies, dependencies, boards, TDQ, undo and offline operations
+Shared claims support `start` (`begin`), `unstart` (`stop`), `block`, and
+`unblock`, including multiple IDs and `--reason`. `start --force` allows starting
+blocked work; it does not steal an existing `in_progress` claim. Repeating your
+own start, an already completed unstart, block, or unblock is a no-op. Starting
+sets device-local focus, and unstarting clears matching focus. Each transition
+stores status, session attribution, reason and history in one issue PATCH;
+starts also capture the selected worktree's Git snapshot. Release history keeps
+the former holder distinct from the acting session. Bulk commands stop at the
+first error, preserving earlier successful results. Claim conflict detection is
+best-effort and does not provide a distributed lock. `unstart --session/--stale`
+sweeps and review/approval policy integration are not yet implemented.
+
+Unsupported flags are errors, not ignored options. Review approval policies, dependencies, boards, TDQ, undo and offline operations
 remain SQLite-only. GitHub `close`/`reopen` change native issue state and store the
 latest supplied reason in metadata; they do not claim a td review took place.
 `--json` works for all supported commands; multi-issue mutations emit one result
