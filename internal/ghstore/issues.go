@@ -267,6 +267,10 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	if err := validateIssue(issue); err != nil {
 		return nil, err
 	}
+	parents, err := c.parentObservations(ctx, "", issue.ParentID)
+	if err != nil {
+		return nil, err
+	}
 	operationID := "td-op-" + rand.Text()
 	meta := metadata{OperationID: operationID, Type: issue.Type, Priority: issue.Priority, Points: issue.Points, Acceptance: issue.Acceptance}
 	details := detailsFromIssue(issue)
@@ -285,6 +289,9 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 		return nil, err
 	}
 	payload := map[string]any{"title": issue.Title, "body": body, "labels": labels}
+	if err := c.verifyParentObservations(ctx, "new issue", parents, false); err != nil {
+		return nil, err
+	}
 	data, err := c.request(ctx, "POST", "/issues", payload, false)
 	if err != nil {
 		return nil, fmt.Errorf("%w; operation %s is embedded in the issue body if created; inspect recent issues before retrying (search indexing can lag)", err, operationID)
@@ -307,11 +314,15 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	if warning := record.StateLabelWarning(); warning != "" {
 		return nil, fmt.Errorf("issue %s was created, but %s", record.ID, warning)
 	}
+	if err := c.verifyParentObservations(ctx, record.ID, parents, true); err != nil {
+		return nil, fmt.Errorf("%s was created, but its parent hierarchy changed; inspect %s before retrying: %w", record.ID, record.URL, err)
+	}
 	return record, nil
 }
 
 // Changes uses pointers so omitted fields, empty strings and cleared labels differ.
 type Changes struct {
+	ParentID                       *string
 	Details                        *IssueDetails
 	Minor                          *bool
 	Sprint                         *string
@@ -348,10 +359,23 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	id := record.ID
 	var err error
 	if change.Details != nil {
-		if change.Minor != nil || change.Sprint != nil {
+		if change.Minor != nil || change.Sprint != nil || change.ParentID != nil {
 			return nil, fmt.Errorf("specify full details or individual detail fields, not both")
 		}
 		if err := change.Details.validate(); err != nil {
+			return nil, err
+		}
+	}
+	parents := []Record{}
+	var newParent *string
+	if change.ParentID != nil {
+		newParent = change.ParentID
+	} else if change.Details != nil && change.Details.ParentID != record.ParentID {
+		newParent = &change.Details.ParentID
+	}
+	if newParent != nil {
+		parents, err = c.parentObservations(ctx, record.ID, *newParent)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -419,7 +443,7 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	if err := validateIssue(&record.Issue); err != nil {
 		return nil, err
 	}
-	metadataChanged := change.Details != nil || change.Minor != nil || change.Sprint != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Reason != nil
+	metadataChanged := change.Details != nil || change.ParentID != nil || change.Minor != nil || change.Sprint != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Reason != nil
 	if change.Description != nil || metadataChanged {
 		body := record.Description
 		if record.managed || metadataChanged {
@@ -427,7 +451,7 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 			if change.Details != nil {
 				meta.Details = change.Details
 			}
-			if change.Minor != nil || change.Sprint != nil {
+			if change.Minor != nil || change.Sprint != nil || change.ParentID != nil {
 				details := detailsFromIssue(&record.Issue)
 				if meta.Details != nil {
 					details = *meta.Details
@@ -437,6 +461,9 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 				}
 				if change.Sprint != nil {
 					details.Sprint = *change.Sprint
+				}
+				if change.ParentID != nil {
+					details.ParentID = *change.ParentID
 				}
 				meta.Details = &details
 			}
@@ -487,6 +514,9 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	if latest.revision != record.revision {
 		return nil, &ConflictError{ID: record.ID}
 	}
+	if err := c.verifyParentObservations(ctx, record.ID, parents, false); err != nil {
+		return nil, err
+	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", record.Number), payload, false)
 	if err != nil {
 		return nil, err
@@ -523,6 +553,9 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 		return nil, &ConflictError{ID: record.ID, AfterWrite: true}
 	}
 	updated.repository = c.repo
+	if err := c.verifyParentObservations(ctx, record.ID, parents, true); err != nil {
+		return nil, err
+	}
 	return updated, nil
 }
 

@@ -42,9 +42,9 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 	allowed := " json work-dir help "
 	switch operation {
 	case "create":
-		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file minor "
+		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file minor parent epic "
 	case "update":
-		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint "
+		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint parent "
 	case "list":
 		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager "
 	case "show":
@@ -286,11 +286,35 @@ func newGitHubIssue(cmd *cobra.Command, args []string) (*models.Issue, error) {
 	if change.Labels != nil {
 		issue.Labels = *change.Labels
 	}
+	if change.ParentID != nil {
+		issue.ParentID = *change.ParentID
+	}
 	return issue, nil
 }
 
 func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 	change := ghstore.Changes{}
+	parentFlags := []string{"parent"}
+	if create {
+		parentFlags = append(parentFlags, "epic")
+	}
+	for _, flag := range parentFlags {
+		if !cmd.Flags().Changed(flag) {
+			continue
+		}
+		value, _ := cmd.Flags().GetString(flag)
+		if value != "" {
+			number, err := ghstore.Number(value)
+			if err != nil {
+				return change, err
+			}
+			value = fmt.Sprintf("gh-%d", number)
+		}
+		if change.ParentID != nil && *change.ParentID != value {
+			return change, fmt.Errorf("--parent and --epic specify different parents")
+		}
+		change.ParentID = &value
+	}
 	if !create && cmd.Flags().Changed("sprint") {
 		value, _ := cmd.Flags().GetString("sprint")
 		change.Sprint = &value

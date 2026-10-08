@@ -17,7 +17,7 @@ import (
 
 func githubTestCommand(original *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: original.Use, RunE: original.RunE, SilenceErrors: true, SilenceUsage: true}
-	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "comment", "note", "sprint"} {
+	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "epic", "comment", "note", "sprint"} {
 		if original == listCmd && (name == "type" || name == "status") {
 			continue
 		}
@@ -58,7 +58,7 @@ func TestGitHubRoutingRejectsUnsupportedBeforeNetwork(t *testing.T) {
 		args    []string
 		want    string
 	}{
-		{createCmd, []string{"Example issue title", "--parent", "gh-2"}, "does not support --parent"},
+		{createCmd, []string{"Example issue title", "--parent", "td-invalid"}, "invalid GitHub issue ID"},
 		{updateCmd, []string{"gh-1", "--status", "invalid"}, "invalid status"},
 		{updateCmd, []string{"gh-1"}, "no issue changes"},
 		{showCmd, []string{"td-abcdef"}, "invalid GitHub issue ID"},

@@ -885,3 +885,15 @@ each forced release, local liveness/lineage and the observed GitHub revision are
 checked again. Changed claims are skipped, never replaced by a newly read holder.
 Other failures stop the sweep and report releases already saved. Release history
 records both the former holder and the acting session. No SQLite state is read.
+
+GitHub-backed creation accepts `--parent gh-N` and its `--epic` alias; updates
+accept `--parent gh-N`, or `--parent ""` to detach. Numeric and `#N` inputs are
+normalized to repository-local `gh-N` identifiers. Conflicting parent aliases,
+missing/deleted parents, pull requests, internal entities, and self/ancestor
+cycles are rejected. Existing unrelated detail fields are preserved.
+
+Parent writes verify the observed ancestor chain before and after the issue
+write. An observed concurrent change fails explicitly; a failure after writing
+may leave the new relationship applied. This cannot make several GitHub issues
+transactional, so simultaneous edits can still require manual repair. Read-side
+hierarchy traversal detects cycles and repeated pagination entries.
