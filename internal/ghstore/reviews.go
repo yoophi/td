@@ -22,6 +22,30 @@ type PolicyError struct{ Reason string }
 
 func (e *PolicyError) Error() string { return e.Reason }
 
+// WorkflowInputError reports request options incompatible with stored review state.
+type WorkflowInputError struct{ Reason string }
+
+func (e *WorkflowInputError) Error() string { return e.Reason }
+
+func activeApproval(d *IssueDetails) *models.IssueReview {
+	var active *models.IssueReview
+	for i := range d.Reviews {
+		if d.Reviews[i].SupersededAt == nil && d.Reviews[i].Decision == reviewpolicy.DecisionApproved {
+			active = &d.Reviews[i]
+		}
+	}
+	return active
+}
+func validateRecordedClose(active *models.IssueReview, o TransitionOptions) error {
+	if o.ReviewedBy != "" || o.SelfReview {
+		return &WorkflowInputError{Reason: "existing approval already names a reviewer; omit review attribution when closing on it"}
+	}
+	if active.ReviewerSession != o.SessionID && strings.TrimSpace(o.Reason) == "" {
+		return &WorkflowInputError{Reason: "closing on another session's approval requires --reason"}
+	}
+	return nil
+}
+
 func ValidateReviewOptions(action string, o TransitionOptions) error {
 	for _, field := range []struct{ name, value string }{{"reviewed-by", o.ReviewedBy}, {"admin", o.AdminReason}, {"self-close-exception", o.SelfCloseException}} {
 		if field.value != "" && strings.TrimSpace(field.value) == "" {
@@ -350,18 +374,10 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		if err != nil {
 			return nil, false, err
 		}
-		var active *models.IssueReview
-		for i := range d.Reviews {
-			if d.Reviews[i].SupersededAt == nil && d.Reviews[i].Decision == reviewpolicy.DecisionApproved {
-				active = &d.Reviews[i]
-			}
-		}
+		active := activeApproval(&d)
 		if active != nil && !o.RecordOnly && (o.Mode == reviewpolicy.ModeTrusted || o.Mode == reviewpolicy.ModeDelegated) {
-			if o.ReviewedBy != "" || o.SelfReview {
-				return nil, false, fmt.Errorf("existing approval already names a reviewer; omit review attribution when closing on it")
-			}
-			if active.ReviewerSession != o.SessionID && strings.TrimSpace(o.Reason) == "" {
-				return nil, false, fmt.Errorf("closing on another session's approval requires --reason")
+			if err := validateRecordedClose(active, o); err != nil {
+				return nil, false, err
 			}
 			target = models.StatusClosed
 			d.ClosedBySession = o.SessionID
@@ -409,6 +425,19 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		d.Reviews = append(d.Reviews, models.IssueReview{ID: "rv-" + rand.Text(), IssueID: observed.ID, ReviewerSession: o.SessionID, Decision: reviewpolicy.DecisionChangesRequested, Summary: o.Reason, CreatedAt: now})
 		history(o.SessionID, models.ActionSessionReviewChangesRequested)
 	case "close":
+		if active := activeApproval(&d); from == models.StatusInReview && active != nil && (o.Mode == reviewpolicy.ModeTrusted || o.Mode == reviewpolicy.ModeDelegated) {
+			if err := validateRecordedClose(active, o); err != nil {
+				return nil, false, err
+			}
+			checkedEvents, err = c.verifyReview(ctx, observed, d)
+			if err != nil {
+				return nil, false, err
+			}
+			target = models.StatusClosed
+			d.ClosedBySession = o.SessionID
+			history(o.SessionID, models.ActionSessionClosed)
+			break
+		}
 		if from == models.StatusInReview && !observed.Minor {
 			return nil, false, workflowStateError("cannot close %s while in review; use approve", id)
 		}

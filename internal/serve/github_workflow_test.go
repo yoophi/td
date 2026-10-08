@@ -68,6 +68,8 @@ func TestGitHubHTTPWorkflowPolicyWiringAndCascadeBoundary(t *testing.T) {
 	if f.action != "approve" || !f.options.RecordOnly || !f.options.SelfReview || f.options.Reason != "Fixture self-review" {
 		t.Fatalf("%+v", f.options)
 	}
+	f.failure = &ghstore.WorkflowInputError{Reason: "closer must supply reason"}
+	request("close", `{}`, "", 400)
 	f.failure = &ghstore.PolicyError{Reason: "review denied"}
 	request("approve", `{}`, "", 403)
 	f.failure = &ghstore.WorkflowStateError{Reason: "stale review"}

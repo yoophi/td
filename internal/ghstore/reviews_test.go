@@ -241,3 +241,58 @@ func TestObservedWorkflowRejectsStaleReadBeforeSideEffects(t *testing.T) {
 		t.Fatal("nil observation accepted")
 	}
 }
+
+func TestCloseUsingRecordedApprovalPreservesReviewer(t *testing.T) {
+	for _, mode := range []reviewpolicy.Mode{reviewpolicy.ModeTrusted, reviewpolicy.ModeDelegated} {
+		t.Run(string(mode), func(t *testing.T) {
+			f := newReviewFixture(t)
+			worker := TransitionOptions{SessionID: "fixture-worker", Mode: mode}
+			f.transition(t, "review", worker)
+			reviewer := TransitionOptions{SessionID: "fixture-reviewer", Mode: mode, RecordOnly: true, Reason: "Fixture recorded review"}
+			approved := f.transition(t, "approve", reviewer)
+			originalReview := approved.Details.Reviews[0]
+			before := f.writes
+			if _, _, err := f.client.Transition(context.Background(), "1", "close", worker); err == nil || f.writes != before {
+				t.Fatal("different closer needs reason")
+			}
+			worker.Reason = "Closing on the recorded review"
+			closed := f.transition(t, "close", worker)
+			if closed.Status != models.StatusClosed || closed.ReviewerSession != reviewer.SessionID || closed.ClosedBySession != worker.SessionID || len(closed.Details.Reviews) != 1 || closed.Details.Reviews[0].ID != originalReview.ID || closed.Details.Reviews[0].SupersededAt != nil || closed.Details.ReviewBasis != approved.Details.ReviewBasis {
+				t.Fatalf("lost review attribution: %+v", closed)
+			}
+			if closed.Details.Transitions[len(closed.Details.Transitions)-1].Action != "close" {
+				t.Fatal("close recorded as a new approval")
+			}
+			f.transition(t, "approve", TransitionOptions{SessionID: "fixture-reader", Mode: mode})
+		})
+	}
+}
+
+func TestCloseRecordedApprovalRejectsStaleContentAndPolicyMode(t *testing.T) {
+	for _, kind := range []string{"title", "events", "handoff", "strict", "no-approval"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newReviewFixture(t)
+			worker := TransitionOptions{SessionID: "fixture-worker", Mode: reviewpolicy.ModeTrusted}
+			f.transition(t, "review", worker)
+			if kind != "no-approval" {
+				f.transition(t, "approve", TransitionOptions{SessionID: "fixture-reviewer", Mode: worker.Mode, RecordOnly: true, Reason: "Fixture approval"})
+			}
+			switch kind {
+			case "title":
+				f.issue["title"] = "Changed after approval"
+			case "events":
+				f.nativeState("closed")
+				f.nativeState("open")
+			case "handoff":
+				f.comments[0].UpdatedAt = f.comments[0].UpdatedAt.Add(time.Second)
+			case "strict":
+				worker.Mode = reviewpolicy.ModeStrict
+			}
+			worker.Reason = "Fixture close attempt"
+			before := f.writes
+			if _, _, err := f.client.Transition(context.Background(), "1", "close", worker); err == nil || f.writes != before {
+				t.Fatalf("%s bypassed review: %v", kind, err)
+			}
+		})
+	}
+}

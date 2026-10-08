@@ -78,6 +78,11 @@ func canonicalParent(id string) (string, error) {
 	return fmt.Sprintf("gh-%d", n), nil
 }
 func githubWriteError(w http.ResponseWriter, err error) {
+	var input *ghstore.WorkflowInputError
+	if errors.As(err, &input) {
+		WriteError(w, ErrValidation, err.Error(), 400)
+		return
+	}
 	var state *ghstore.WorkflowStateError
 	if errors.As(err, &state) {
 		WriteError(w, ErrConflict, err.Error(), 409)
