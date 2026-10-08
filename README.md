@@ -287,7 +287,7 @@ sweeps are not yet implemented.
 policy checks. Approval supports `--record-only`, `--self-review`, `--reviewed-by`,
 and `--decision`, with explicit reasons where required. Native close/reopen events
 and changed review content invalidate approval. Full lifecycle parity (including
-`approve --all`, descendant cascades and unstart sweeps) remains
+descendant cascades and unstart sweeps) remains
 tracked in #3.
 
 Unsupported flags are errors, not ignored options. Dependencies, boards, TDQ,
@@ -860,3 +860,13 @@ separate writes: a failed transition reports that field edits were already saved
 Changing reviewed content cannot reuse its previous approval. Use `start` and
 `review` to begin a fresh review cycle. Comments are appended after the update and
 have their own partial-success diagnostics.
+
+`td approve --all` selects all in-review issues this session is eligible to
+review, plus issues with an active recorded approval that it can close under
+trusted/delegated policy. Attribution flags participate in selection; recorded
+approvals still retain their original reviewer. Without IDs or `--all`, exactly
+one candidate is selected automatically; multiple candidates require an explicit
+choice and zero candidates produce an error. Combining IDs with `--all` is an
+error. Candidate selection is read-only and every approval revalidates current
+content, native events, handoff and participation policy. Processing stops at the
+first failure, reporting earlier completed IDs; those writes are not rolled back.

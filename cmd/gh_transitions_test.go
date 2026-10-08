@@ -21,6 +21,7 @@ func claimTestCommand(original *cobra.Command) *cobra.Command {
 		cmd.Flags().String(name, "", "")
 	}
 	cmd.Flags().Bool("force", false, "")
+	cmd.Flags().Bool("all", false, "")
 	cmd.Flags().Bool("minor", false, "")
 	cmd.Flags().Bool("self-review", false, "")
 	cmd.Flags().Bool("record-only", false, "")
@@ -51,6 +52,10 @@ func TestGitHubTransitionRoutingAndFocus(t *testing.T) {
 if [ "$1" = auth ]; then exit 0; fi
 if [ "$4" = repos/owner/repo ]; then
  printf '%s' '{"full_name":"owner/repo","has_issues":true}'
+elif [ "$6" = "repos/owner/repo/issues?state=open&per_page=100" ]; then
+ printf '[['
+ cat "$TD_TEST_ISSUE"
+ printf ']]'
 elif [ "$6" = "repos/owner/repo/labels?per_page=100" ]; then
  printf '%s' '[[{"name":"td:open"},{"name":"td:in_progress"},{"name":"td:blocked"},{"name":"td:in_review"},{"name":"td:closed"}]]'
 elif [ "$6" = "repos/owner/repo/issues/1/events?per_page=100" ]; then
@@ -128,6 +133,28 @@ fi
 		if err != nil || json.Unmarshal([]byte(out), &result) != nil || result.Status != status {
 			t.Fatalf("update --status %s: %s %v", status, out, err)
 		}
+	}
+	for _, all := range []bool{false, true} {
+		if _, err := executeGitHubTest(claimTestCommand(reviewCmd), "gh-1", "--minor", "--json"); err != nil {
+			t.Fatal(err)
+		}
+		args := []string{"--json", "--reason", "Fixture bulk approval"}
+		if all {
+			args = append(args, "--all")
+		}
+		out, err := executeGitHubTest(claimTestCommand(approveCmd), args...)
+		var result struct {
+			Status string `json:"status"`
+		}
+		if err != nil || json.Unmarshal([]byte(out), &result) != nil || result.Status != "closed" {
+			t.Fatalf("approve all=%v: %s %v", all, out, err)
+		}
+		if _, err := executeGitHubTest(claimTestCommand(reopenCmd), "gh-1", "--json"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := executeGitHubTest(claimTestCommand(approveCmd), "--all", "gh-1"); err == nil || !strings.Contains(err.Error(), "not both") {
+		t.Fatalf("ambiguous bulk args: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("created SQLite DB")

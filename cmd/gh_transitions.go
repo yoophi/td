@@ -42,7 +42,7 @@ func init() {
 				allowed = append(allowed, "minor")
 			}
 			if command == approveCmd {
-				allowed = append(allowed, "record-only", "self-review", "reviewed-by", "decision")
+				allowed = append(allowed, "all", "record-only", "self-review", "reviewed-by", "decision")
 			}
 			if command == closeCmd {
 				allowed = append(allowed, "admin", "self-close-exception")
@@ -80,7 +80,11 @@ func init() {
 					return err
 				}
 			}
-			if len(args) == 0 {
+			all, _ := cmd.Flags().GetBool("all")
+			if all && len(args) > 0 {
+				return fmt.Errorf("specify issue IDs or --all, not both")
+			}
+			if len(args) == 0 && command != approveCmd {
 				return fmt.Errorf("requires at least one issue ID")
 			}
 			for _, id := range args {
@@ -105,15 +109,38 @@ func init() {
 				return err
 			}
 			options.SessionID = state.Session.ID
+			if command == approveCmd && len(args) == 0 {
+				candidates, err := client.ApprovalCandidates(cmd.Context(), options)
+				if err != nil {
+					return err
+				}
+				if len(candidates) == 0 {
+					return fmt.Errorf("no issues eligible for approval by this session")
+				}
+				if !all && len(candidates) > 1 {
+					ids := make([]string, len(candidates))
+					for i, record := range candidates {
+						ids[i] = record.ID
+					}
+					return fmt.Errorf("multiple issues await approval (%s); specify an issue ID or --all", strings.Join(ids, ", "))
+				}
+				for _, record := range candidates {
+					args = append(args, record.ID)
+				}
+			}
 			if command == startCmd {
 				options.Snapshot, err = gitHubSnapshot(cmd.Context(), scope.Worktree)
 				if err != nil {
 					return fmt.Errorf("capture start snapshot: %w", err)
 				}
 			}
+			completed := []string{}
 			for _, id := range args {
 				record, noop, err := client.Transition(cmd.Context(), id, command.Name(), options)
 				if err != nil {
+					if len(completed) > 0 {
+						return fmt.Errorf("%s completed for %s; stopped at %s (earlier changes remain): %w", command.Name(), strings.Join(completed, ", "), id, err)
+					}
 					return err
 				}
 				_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
@@ -138,6 +165,7 @@ func init() {
 				} else {
 					cmd.Printf("%s %s [%s] (best-effort claim; no distributed lock)\n", command.Name(), record.ID, record.Status)
 				}
+				completed = append(completed, record.ID)
 			}
 			return nil
 		}
