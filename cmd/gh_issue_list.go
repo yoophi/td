@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	"github.com/marcus/td/internal/ghstore"
+	"github.com/marcus/td/internal/issuestore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
 )
 
-func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) error {
+func listGitHubIssues(cmd *cobra.Command, args []string, _ *models.Config) error {
 	if len(args) > 0 {
 		return fmt.Errorf("gh-issue does not support positional TDQ queries; use --search or supported filter flags")
 	}
@@ -77,15 +78,16 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 	if !slices.Contains([]string{"", "short", "long", "json"}, format) {
 		return fmt.Errorf("unsupported output format %q", format)
 	}
-	client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
+	client, err := issuestore.OpenReader(cmd.Context(), getBaseDir())
 	if err != nil {
 		return err
 	}
+	defer func() { _ = client.Close() }()
 	records, err := client.List(cmd.Context(), all)
 	if err != nil {
 		return err
 	}
-	filtered := make([]ghstore.Record, 0)
+	filtered := make([]issuestore.Record, 0)
 	for _, record := range records {
 		if len(statuses) > 0 && !slices.Contains(statuses, "all") && !slices.Contains(statuses, string(record.Status)) {
 			continue
@@ -114,7 +116,7 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 		}
 	}
 	reverse, _ := cmd.Flags().GetBool("reverse")
-	slices.SortFunc(filtered, func(a, b ghstore.Record) int {
+	slices.SortFunc(filtered, func(a, b issuestore.Record) int {
 		order := 0
 		switch sortBy {
 		case "id":
