@@ -58,6 +58,19 @@ func Resolve(ctx context.Context, dir, repo string) (Scope, error) {
 	return Scope{Directory: directory, Path: filepath.Join(directory, fmt.Sprintf("%x.json", key)), Branch: strings.TrimSpace(string(branch)), Repo: repo, Worktree: info.WorktreeRoot}, nil
 }
 
+// ResolveWeb isolates the shared web identity from the launching terminal or
+// agent. Each repository/worktree/branch has a stable, separate web session.
+func ResolveWeb(ctx context.Context, dir, repo string) (Scope, error) {
+	scope, err := Resolve(ctx, dir, repo)
+	if err != nil {
+		return Scope{}, err
+	}
+	identity, _ := json.Marshal([]string{"td-serve-web", strings.ToLower(repo), scope.Worktree, scope.Branch})
+	key := sha256.Sum256(identity)
+	scope.Path = filepath.Join(scope.Directory, fmt.Sprintf("%x.json", key))
+	return scope, nil
+}
+
 func (s Scope) Update(ctx context.Context, change func(*State) error) (*State, error) {
 	var state State
 	err := config.WithLocalStateLock(s.Directory, func() error {

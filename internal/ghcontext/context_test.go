@@ -115,3 +115,34 @@ func TestScopeUsesFullExplicitIdentityAndContext(t *testing.T) {
 		t.Fatal("contexts collided")
 	}
 }
+
+func TestWebScopeIndependentOfLauncher(t *testing.T) {
+	dir := t.TempDir()
+	if data, err := exec.Command("git", "init", "-b", "main", dir).CombinedOutput(); err != nil {
+		t.Fatalf("%s: %v", data, err)
+	}
+	t.Setenv("TD_CONTEXT_ID", "fixture-terminal-one")
+	first, err := ResolveWeb(context.Background(), dir, "owner/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli, err := Resolve(context.Background(), dir, "owner/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TD_CONTEXT_ID", "fixture-terminal-two")
+	second, err := ResolveWeb(context.Background(), dir, "owner/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Path != second.Path || first.Path == cli.Path {
+		t.Fatal("web identity depends on launcher or shares CLI identity")
+	}
+	other, err := ResolveWeb(context.Background(), dir, "owner/other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Path == other.Path {
+		t.Fatal("repository web identities collide")
+	}
+}

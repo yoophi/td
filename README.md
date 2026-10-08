@@ -289,6 +289,15 @@ and changed review content invalidate approval. Full lifecycle parity (including
 descendant cascades and remaining native-state parity) remains
 tracked in #3.
 
+`serve` can now bootstrap with `store=gh-issue` without opening an SQLite
+issue database. It validates the configured GitHub remote and authentication
+before listening, retains the existing port/address/token/CORS settings, and
+uses a persistent web session separate from CLI sessions. The current HTTP
+support is `/health` and `/v1/project`; other operations explicitly return
+`501 unsupported_operation`. Issue endpoints and SSE are being connected in
+#13; this bootstrap alone is not a complete GitHub HTTP API. The project
+response advertises the currently supported endpoints.
+
 Unsupported flags are errors, not ignored options. Dependencies, boards, TDQ,
 undo and offline operations remain pending for GitHub. Administrative closes do
 not count as td review approval.

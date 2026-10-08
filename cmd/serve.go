@@ -12,7 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/ghcontext"
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/serve"
 	"github.com/spf13/cobra"
 )
@@ -45,44 +48,84 @@ func init() {
 func runServe(cmd *cobra.Command, args []string) error {
 	dir := getBaseDir()
 
-	// Open database
-	database, err := db.Open(dir)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
-	defer func() { _ = database.Close() }()
-
-	// Limit connections for long-running server process
-	database.SetMaxOpenConns(1)
-
-	// Get or create web session
-	session, err := serve.GetOrCreateWebSession(database)
-	if err != nil {
-		return fmt.Errorf("bootstrap web session: %w", err)
-	}
-
-	// Start session heartbeat
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
-	serve.StartSessionHeartbeat(ctx, database, session.ID)
-
-	// Read flags
 	port, _ := cmd.Flags().GetInt("port")
 	addr, _ := cmd.Flags().GetString("addr")
 	token, _ := cmd.Flags().GetString("token")
 	cors, _ := cmd.Flags().GetString("cors")
 	interval, _ := cmd.Flags().GetDuration("interval")
-
-	config := serve.ServeConfig{
-		Port:         port,
-		Addr:         addr,
-		Token:        token,
-		CORSOrigin:   cors,
-		PollInterval: interval,
+	if interval <= 0 {
+		return fmt.Errorf("--interval must be positive")
 	}
-
-	// Create server
-	srv := serve.NewServer(database, dir, session.ID, config)
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return err
+	}
+	kind, err := config.Store(cfg)
+	if err != nil {
+		return err
+	}
+	serverConfig := serve.ServeConfig{Port: port, Addr: addr, Token: token, CORSOrigin: cors, PollInterval: interval}
+	var srv *serve.Server
+	var sessionID string
+	storageDescription := filepath.Join(dir, ".todos", "issues.db")
+	if kind == config.StoreGitHub {
+		if _, err := ghstore.Open(ctx, dir, cfg.GitHub); err != nil {
+			return err
+		}
+		scope, err := ghcontext.ResolveWeb(ctx, dir, cfg.GitHub.Repo)
+		if err != nil {
+			return err
+		}
+		state, err := scope.Update(ctx, func(state *ghcontext.State) error {
+			state.Session.AgentType = "web"
+			state.Session.AgentPID = 0
+			state.Session.Name = "td-serve-web"
+			state.Session.MatchContextID = ""
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("bootstrap GitHub web session: %w", err)
+		}
+		sessionID = state.Session.ID
+		storageDescription = "gh-issue: " + cfg.GitHub.Repo
+		srv = serve.NewGitHubServer(dir, sessionID, cfg.GitHub.Repo, serverConfig)
+		go func() {
+			ticker := time.NewTicker(time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					_, err := scope.Update(ctx, func(current *ghcontext.State) error {
+						if current.Session.ID != sessionID {
+							return fmt.Errorf("web session identity changed")
+						}
+						return nil
+					})
+					if err != nil {
+						slog.Error("GitHub web session heartbeat failed", "err", err)
+					}
+				}
+			}
+		}()
+	} else {
+		database, err := db.Open(dir)
+		if err != nil {
+			return fmt.Errorf("open database: %w", err)
+		}
+		defer func() { _ = database.Close() }()
+		database.SetMaxOpenConns(1)
+		session, err := serve.GetOrCreateWebSession(database)
+		if err != nil {
+			return fmt.Errorf("bootstrap web session: %w", err)
+		}
+		sessionID = session.ID
+		serve.StartSessionHeartbeat(ctx, database, sessionID)
+		srv = serve.NewServer(database, dir, sessionID, serverConfig)
+	}
 
 	// Start listener (use net.Listen for auto-port support)
 	listenAddr := fmt.Sprintf("%s:%d", addr, port)
@@ -120,12 +163,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}()
 
 	// Print startup banner to stderr
-	dbPath := filepath.Join(dir, ".todos", "issues.db")
 	portFilePath := filepath.Join(dir, ".todos", "serve-port")
 	fmt.Fprintf(os.Stderr, "td serve listening on http://%s:%d\n", addr, actualPort)
 	fmt.Fprintf(os.Stderr, "  base dir:   %s\n", dir)
-	fmt.Fprintf(os.Stderr, "  database:   %s\n", dbPath)
-	fmt.Fprintf(os.Stderr, "  session:    %s (web)\n", session.ID)
+	fmt.Fprintf(os.Stderr, "  storage:    %s\n", storageDescription)
+	fmt.Fprintf(os.Stderr, "  session:    %s (web)\n", sessionID)
 	fmt.Fprintf(os.Stderr, "  port file:  %s\n", portFilePath)
 
 	// Start HTTP server in background
