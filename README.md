@@ -148,6 +148,45 @@ td start <issue-id>
 
 For complete guides, see the [full documentation](https://marcus.github.io/td/docs/intro).
 
+### Project storage configuration (fork)
+
+```bash
+td config setup                          # Interactive storage selection
+td config set store sqlite               # Default local SQLite storage
+td config set store gh-issue             # Validate and select origin's GitHub repo
+td config set store gh-issue --remote upstream
+td config get store
+td config list
+td init --store sqlite                   # Initialize local storage
+td init --store gh-issue --remote origin # Initialize GitHub storage configuration
+```
+
+Storage settings are project-local in `.todos/config.json` and honor `--work-dir`
+and td project/worktree resolution. Existing projects default to `sqlite`.
+The existing `sync.*` settings remain global and require the `sync_cli` feature.
+Use space-separated keys and values (`set store sqlite`, not `set store=sqlite`).
+
+**Current implementation: configuration and validation only. GitHub issue
+read/write operations are not implemented yet.** Selecting `gh-issue` blocks
+SQLite issue commands with an explicit error instead of silently using local data.
+Switch back with `td config set store sqlite` to access existing local issues.
+Changing the setting does not migrate, delete or synchronize issues. If a project
+has only configuration and no SQLite database, run `td init --store sqlite`.
+
+GitHub selection requires `git` and `gh` in PATH, a Git working tree, and an
+existing selected remote (default `origin`) pointing to a `github.com` repository
+via HTTPS or SSH. td invokes `gh` directly to verify authentication, repository
+access, enabled Issues and that the repository is not archived. Validation is
+read-only and times out after 30 seconds. Missing tools, missing or non-GitHub
+remotes, authentication failures and unavailable repositories produce explicit
+errors and a nonzero exit code; the previous setting is preserved. There is no
+automatic fallback to SQLite or another remote. `GH_REPO` does not override the
+selected Git remote. GitHub Enterprise hosts are not supported in this version.
+
+`config set/get/list` support `--json`. Interactive setup requires a completed
+input line; EOF cancels without saving. Configuration commands are always visible
+in `td --help`, independently of sync feature flags.
+
 ## Claude Code / OpenAI Codex Skill
 
 For AI agents in Claude Code, Codex, Cursor, or other compatible environments:

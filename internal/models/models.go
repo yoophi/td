@@ -276,10 +276,12 @@ type Note struct {
 
 // Config represents the local config state
 type Config struct {
-	FocusedIssueID    string          `json:"focused_issue_id,omitempty"`
-	ActiveWorkSession string          `json:"active_work_session,omitempty"`
-	PaneHeights       [3]float64      `json:"pane_heights,omitempty"`  // Ratios for 3 horizontal panes (sum=1.0)
-	FeatureFlags      map[string]bool `json:"feature_flags,omitempty"` // Experimental feature gates
+	Store             string             `json:"store,omitempty"`
+	GitHub            *GitHubStoreConfig `json:"github,omitempty"`
+	FocusedIssueID    string             `json:"focused_issue_id,omitempty"`
+	ActiveWorkSession string             `json:"active_work_session,omitempty"`
+	PaneHeights       [3]float64         `json:"pane_heights,omitempty"`  // Ratios for 3 horizontal panes (sum=1.0)
+	FeatureFlags      map[string]bool    `json:"feature_flags,omitempty"` // Experimental feature gates
 	// FeatureStringFlags holds string-valued feature settings (e.g.
 	// review_policy_mode = "strict"|"balanced"|"delegated"). Kept separate
 	// from FeatureFlags so the bool-feature code paths stay simple and
@@ -297,6 +299,12 @@ type Config struct {
 	// shown at least once in this project, so it is not re-shown on every monitor
 	// launch. Set automatically the first time the modal is displayed.
 	GettingStartedSeen bool `json:"getting_started_seen,omitempty"`
+}
+
+// GitHubStoreConfig pins the selected project remote and resolved repository.
+type GitHubStoreConfig struct {
+	Remote string `json:"remote"`
+	Repo   string `json:"repo"`
 }
 
 // ActionType represents the type of action that was performed

@@ -1,0 +1,110 @@
+// Package ghstore validates GitHub storage through the installed gh CLI.
+package ghstore
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"os/exec"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/marcus/td/internal/models"
+)
+
+type runner func(context.Context, string, string, ...string) ([]byte, error)
+
+func runCommand(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+	data, err := cmd.Output()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return data, err
+}
+
+var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$`)
+
+// repositoryFromRemote accepts GitHub HTTPS, SSH and SCP-style Git URLs.
+// Local paths and other hosts must never be treated as GitHub repositories.
+func repositoryFromRemote(remoteURL string) (string, error) {
+	var path string
+	if strings.HasPrefix(remoteURL, "git@github.com:") {
+		path = strings.TrimPrefix(remoteURL, "git@github.com:")
+	} else {
+		u, err := url.Parse(remoteURL)
+		if err != nil || !strings.EqualFold(u.Hostname(), "github.com") ||
+			(u.Scheme != "https" && u.Scheme != "ssh") || u.RawQuery != "" || u.Fragment != "" || u.Port() != "" {
+			return "", fmt.Errorf("selected remote must be a github.com HTTPS or SSH repository")
+		}
+		path = strings.TrimPrefix(u.Path, "/")
+	}
+	path = strings.TrimSuffix(strings.TrimSuffix(path, "/"), ".git")
+	if !repositoryPattern.MatchString(path) || strings.HasSuffix(path, "/.") || strings.HasSuffix(path, "/..") {
+		return "", fmt.Errorf("selected remote must identify a GitHub owner/repository")
+	}
+	return path, nil
+}
+
+// ResolveRepository verifies the actual Git remote, gh authentication and Issues availability.
+// All calls are read-only; no issue, label or repository setting is changed.
+func ResolveRepository(ctx context.Context, baseDir, remote string) (*models.GitHubStoreConfig, error) {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return nil, fmt.Errorf("gh CLI not found or not executable in PATH; install GitHub CLI before selecting gh-issue: %w", err)
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		return nil, fmt.Errorf("git not found or not executable in PATH: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return resolveRepository(ctx, baseDir, remote, runCommand)
+}
+
+func resolveRepository(ctx context.Context, baseDir, remote string, run runner) (*models.GitHubStoreConfig, error) {
+	if remote == "" || strings.HasPrefix(remote, "-") || strings.ContainsAny(remote, "\r\n\t ") {
+		return nil, fmt.Errorf("a valid Git remote name is required")
+	}
+	data, err := run(ctx, baseDir, "git", "rev-parse", "--is-inside-work-tree")
+	if err != nil {
+		return nil, fmt.Errorf("project is not an accessible Git working tree: %w", err)
+	}
+	if strings.TrimSpace(string(data)) != "true" {
+		return nil, fmt.Errorf("project must be a Git working tree to use gh-issue")
+	}
+	data, err = run(ctx, baseDir, "git", "remote", "get-url", "--", remote)
+	if err != nil {
+		return nil, fmt.Errorf("Git remote %q is missing or unreadable: %w; configure this remote with a GitHub repository URL first", remote, err)
+	}
+	repo, err := repositoryFromRemote(strings.TrimSpace(string(data)))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := run(ctx, baseDir, "gh", "auth", "status", "--hostname", "github.com"); err != nil {
+		return nil, fmt.Errorf("GitHub authentication failed: %w; run 'gh auth login --hostname github.com'", err)
+	}
+	data, err = run(ctx, baseDir, "gh", "api", "--hostname", "github.com", "repos/"+repo)
+	if err != nil {
+		return nil, fmt.Errorf("cannot access GitHub repository %s: %w; check that it exists, your account has access, and the network is available", repo, err)
+	}
+	var info struct {
+		FullName  string `json:"full_name"`
+		HasIssues bool   `json:"has_issues"`
+		Archived  bool   `json:"archived"`
+	}
+	if err := json.Unmarshal(data, &info); err != nil {
+		return nil, fmt.Errorf("invalid gh repository response: %w", err)
+	}
+	if !repositoryPattern.MatchString(info.FullName) {
+		return nil, fmt.Errorf("gh returned an invalid repository name")
+	}
+	if !info.HasIssues {
+		return nil, fmt.Errorf("GitHub Issues is disabled for %s; enable Issues in the repository settings first", info.FullName)
+	}
+	if info.Archived {
+		return nil, fmt.Errorf("GitHub repository %s is archived", info.FullName)
+	}
+	return &models.GitHubStoreConfig{Remote: remote, Repo: info.FullName}, nil
+}

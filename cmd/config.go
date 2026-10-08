@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/features"
 	"github.com/marcus/td/internal/output"
 	"github.com/marcus/td/internal/syncconfig"
@@ -14,6 +15,7 @@ import (
 
 // validConfigKeys lists the supported config keys for set/get.
 var validConfigKeys = []string{
+	"store",
 	"sync.url",
 	"sync.enabled",
 	"sync.auto.enabled",
@@ -50,6 +52,7 @@ func intPtr(n int) *int    { return &n }
 var configCmd = &cobra.Command{
 	Use:     "config",
 	Short:   "Manage td configuration",
+	Long:    "Manage td configuration. Store settings are project-local; sync.* settings are global.",
 	GroupID: "system",
 }
 
@@ -59,6 +62,19 @@ var configSetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, val := args[0], args[1]
+		if key == "store" {
+			remote, _ := cmd.Flags().GetString("remote")
+			if val != config.StoreGitHub && cmd.Flags().Changed("remote") {
+				return fmt.Errorf("--remote is only valid for store gh-issue")
+			}
+			return setProjectStore(cmd, val, remote)
+		}
+		if cmd.Flags().Changed("remote") {
+			return fmt.Errorf("--remote is only valid for store gh-issue")
+		}
+		if err := requireSyncConfig(key); err != nil {
+			return err
+		}
 
 		if !isValidConfigKey(key) {
 			output.Error("unknown config key: %s", key)
@@ -132,6 +148,24 @@ var configGetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
+		if key == "store" {
+			cfg, err := config.Load(getBaseDir())
+			if err != nil {
+				return err
+			}
+			store, err := config.Store(cfg)
+			if err != nil {
+				return err
+			}
+			if jsonMode(cmd) {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(store)
+			}
+			cmd.Println(store)
+			return nil
+		}
+		if err := requireSyncConfig(key); err != nil {
+			return err
+		}
 
 		if !isValidConfigKey(key) {
 			output.Error("unknown config key: %s", key)
@@ -196,26 +230,44 @@ var configListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all config values",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := syncconfig.LoadConfig()
+		project, err := config.Load(getBaseDir())
 		if err != nil {
-			output.Error("load config: %v", err)
 			return err
 		}
-
-		data, err := json.MarshalIndent(cfg, "", "  ")
+		store, err := config.Store(project)
 		if err != nil {
-			output.Error("marshal config: %v", err)
 			return err
 		}
-
-		fmt.Println(string(data))
-		return nil
+		values := map[string]any{"store": store}
+		if project.GitHub != nil {
+			values["github"] = project.GitHub
+		}
+		if features.IsEnabledForProcess(features.SyncCLI.Name) {
+			cfg, err := syncconfig.LoadConfig()
+			if err != nil {
+				return err
+			}
+			values["sync"] = cfg.Sync
+		}
+		encoder := json.NewEncoder(cmd.OutOrStdout())
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(values)
 	},
 }
 
 func init() {
+	configSetCmd.Flags().String("remote", "origin", "Git remote to use for gh-issue storage")
+	configSetCmd.Example = "  td config set store sqlite\n  td config set store gh-issue --remote origin"
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configGetCmd)
 	configCmd.AddCommand(configListCmd)
-	AddFeatureGatedCommand(features.SyncCLI.Name, configCmd)
+	configCmd.AddCommand(configSetupCmd)
+	rootCmd.AddCommand(configCmd)
+}
+
+func requireSyncConfig(key string) error {
+	if strings.HasPrefix(key, "sync.") && !features.IsEnabledForProcess(features.SyncCLI.Name) {
+		return fmt.Errorf("sync configuration requires TD_FEATURE_SYNC_CLI=true")
+	}
+	return nil
 }

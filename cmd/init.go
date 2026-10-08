@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/marcus/td/internal/agent"
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/git"
 	"github.com/marcus/td/internal/output"
@@ -18,15 +19,52 @@ import (
 var initCmd = &cobra.Command{
 	Use:     "init",
 	Short:   "Initialize a new td project",
-	Long:    `Creates the local .todos directory and SQLite database.`,
+	Long:    `Initialize project storage. SQLite is the default. GitHub Issues configuration requires a GitHub remote; GitHub issue operations are not implemented yet.`,
 	GroupID: "system",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
+		cfg, err := config.Load(baseDir)
+		if err != nil {
+			return err
+		}
+		store, _ := cmd.Flags().GetString("store")
+		if !cmd.Flags().Changed("store") {
+			store, err = config.Store(cfg)
+			if err != nil {
+				return err
+			}
+		}
+		remote, _ := cmd.Flags().GetString("remote")
+		if cmd.Flags().Changed("remote") && store != config.StoreGitHub {
+			return fmt.Errorf("--remote is only valid for store gh-issue")
+		}
+		if !cmd.Flags().Changed("remote") && cfg.GitHub != nil {
+			remote = cfg.GitHub.Remote
+		}
+		github, err := prepareProjectStore(cmd, store, remote)
+		if err != nil {
+			return err
+		}
+		if store == config.StoreGitHub {
+			if err := config.SetStore(baseDir, store, github); err != nil {
+				return err
+			}
+			return reportProjectStore(cmd, store, github)
+		}
 
-		// Check if already initialized
-		if _, err := os.Stat(filepath.Join(baseDir, ".todos")); err == nil {
-			output.Warning(".todos/ already exists")
+		// A config-only project still needs a database when SQLite is selected.
+		if _, err := os.Stat(filepath.Join(baseDir, ".todos", "issues.db")); err == nil {
+			if err := config.SetStore(baseDir, store, nil); err != nil {
+				return err
+			}
+			if jsonMode(cmd) {
+				return reportProjectStore(cmd, store, nil)
+			}
+			output.Warning("SQLite database already exists")
 			return nil
+		} else if !os.IsNotExist(err) {
+			return err
 		}
 
 		// Initialize database
@@ -36,6 +74,17 @@ var initCmd = &cobra.Command{
 			return err
 		}
 		defer func() { _ = database.Close() }()
+		if err := config.SetStore(baseDir, store, nil); err != nil {
+			return err
+		}
+		// Initialize session state in both human and JSON modes.
+		sess, err := session.GetOrCreate(database)
+		if err != nil {
+			return fmt.Errorf("failed to create session: %w", err)
+		}
+		if jsonMode(cmd) {
+			return reportProjectStore(cmd, store, nil)
+		}
 
 		todosPath := filepath.Join(baseDir, ".todos")
 		fmt.Printf("INITIALIZED %s\n", todosPath)
@@ -44,13 +93,6 @@ var initCmd = &cobra.Command{
 		if git.IsRepo() {
 			gitignorePath := filepath.Join(baseDir, ".gitignore")
 			addToGitignore(gitignorePath)
-		}
-
-		// Create session
-		sess, err := session.GetOrCreate(database)
-		if err != nil {
-			output.Error("failed to create session: %v", err)
-			return err
 		}
 
 		fmt.Printf("Session: %s\n", sess.ID)
@@ -153,5 +195,7 @@ func suggestAgentFileAddition(baseDir string) {
 }
 
 func init() {
+	initCmd.Flags().String("store", config.StoreSQLite, "Issue store: sqlite or gh-issue (defaults to current project setting)")
+	initCmd.Flags().String("remote", "origin", "Git remote to use for gh-issue storage")
 	rootCmd.AddCommand(initCmd)
 }

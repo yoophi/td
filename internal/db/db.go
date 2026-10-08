@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/workdir"
 	_ "modernc.org/sqlite"
 )
@@ -77,6 +78,18 @@ func openConn(dbPath string) (*sql.DB, error) {
 func Open(baseDir string) (*DB, error) {
 	// Check for worktree redirection via .td-root
 	baseDir = ResolveBaseDir(baseDir)
+	// Never silently read or mutate the old SQLite issues after selecting GitHub.
+	cfg, err := config.Load(baseDir)
+	if err != nil {
+		return nil, unavailable(err)
+	}
+	store, err := config.Store(cfg)
+	if err != nil {
+		return nil, unavailable(err)
+	}
+	if store == config.StoreGitHub {
+		return nil, unavailable(fmt.Errorf("gh-issue operations are not implemented yet; use 'td config set store sqlite' to access local issues"))
+	}
 	dbPath := filepath.Join(baseDir, dbFile)
 
 	// Check if db exists

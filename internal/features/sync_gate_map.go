@@ -43,7 +43,7 @@ var SyncGateMap = []GateMapEntry{
 	{
 		Feature: SyncCLI.Name,
 		Surface: "cmd/config.go",
-		Notes:   "Gates sync configuration commands",
+		Notes:   "Gates sync.* settings only. The config parent and project store settings are always available.",
 	},
 	{
 		Feature: SyncCLI.Name,
