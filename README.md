@@ -197,6 +197,9 @@ in `td --help`, independently of sync feature flags.
 td create "Fix login redirect" --type bug --priority P1 --points 3
 td show gh-123 --json                     # Also accepts 123 or '#123'
 td list --type bug --priority P1 --labels bug
+td task list --priority P1 --all --json  # Same as list --type task
+td epic list --limit 0                  # Same as list --type epic
+td task create "Implement login endpoint" --acceptance "Login succeeds"
 td update gh-123 --description-file details.md --acceptance "Redirect succeeds"
 td close gh-123 --reason "Duplicate issue"
 td reopen gh-123 --reason "Revisit this issue"
@@ -224,6 +227,10 @@ Supported flags:
 | `show` | one or more issue IDs, short/long, format, json |
 | `update` | one or more IDs, title, type, priority, points, labels, description/file/stdin, acceptance/file/stdin, append, status (`open`, `closed`) |
 | `close`, `reopen` | one or more IDs, reason (`close` also accepts existing reason aliases) |
+
+`task` and `epic` create/list shortcuts use the same storage routing and flags
+as `create`/`list`, with their type fixed. Lists now share the default limit of 50,
+filtering (including deferred issue handling in SQLite), and output format.
 
 Unsupported flags are errors, not ignored options. Session claims, handoffs,
 review approval policies, dependencies, boards, TDQ, undo and offline operations

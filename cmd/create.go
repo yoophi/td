@@ -271,28 +271,8 @@ var createCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(createCmd)
 
-	createCmd.Flags().String("title", "", "Issue title (max 200 characters)")
-	createCmd.Flags().StringP("type", "t", "", "Issue type (bug, feature, task, epic, chore)")
-	createCmd.Flags().StringP("priority", "p", "", "Priority (P0, P1, P2, P3, P4)")
-	createCmd.Flags().Int("points", 0, "Story points (Fibonacci: 1,2,3,5,8,13,21)")
-	createCmd.Flags().StringArrayP("labels", "l", nil, "Labels (repeatable, comma-separated)")
-	createCmd.Flags().StringArray("label", nil, "Alias for --labels")
-	createCmd.Flags().StringArray("tags", nil, "Alias for --labels")
-	createCmd.Flags().StringArray("tag", nil, "Alias for --labels")
-	createCmd.Flags().StringP("description", "d", "", "Description text")
-	createCmd.Flags().String("desc", "", "Alias for --description")
-	createCmd.Flags().String("body", "", "Alias for --description")
-	createCmd.Flags().String("notes", "", "Alias for --description")
-	createCmd.Flags().String("description-file", "", "Read description from file or - for stdin (preserves formatting)")
-	createCmd.Flags().String("acceptance", "", "Acceptance criteria")
-	createCmd.Flags().String("acceptance-file", "", "Read acceptance criteria from file or - for stdin (preserves formatting)")
-	createCmd.Flags().String("parent", "", "Parent issue ID")
-	createCmd.Flags().String("epic", "", "Parent issue ID (alias for --parent)")
-	createCmd.Flags().StringArray("depends-on", nil, "Issues this depends on (repeatable, comma-separated)")
-	createCmd.Flags().StringArray("blocks", nil, "Issues this blocks (repeatable, comma-separated)")
-	createCmd.Flags().Bool("minor", false, "Mark as minor task (allows self-review)")
-	createCmd.Flags().String("defer", "", "Defer until date (e.g., +7d, monday, 2026-03-01)")
-	createCmd.Flags().String("due", "", "Due date (e.g., friday, +2w, 2026-03-15)")
+	registerCreateFlags(createCmd)
+
 }
 
 // parseTypeFromTitle extracts type prefix from title (e.g., "epic: Title" → "epic", "Title")
@@ -367,4 +347,30 @@ func validateTitle(title string, minLength, maxLength int) (warning string, err 
 	}
 
 	return "", nil
+}
+
+// registerCreateFlags gives each command independent flag values.
+func registerCreateFlags(cmd *cobra.Command) {
+	cmd.Flags().String("title", "", "Issue title (max 200 characters)")
+	cmd.Flags().StringP("type", "t", "", "Issue type (bug, feature, task, epic, chore)")
+	cmd.Flags().StringP("priority", "p", "", "Priority (P0, P1, P2, P3, P4)")
+	cmd.Flags().Int("points", 0, "Story points (Fibonacci: 1,2,3,5,8,13,21)")
+	cmd.Flags().StringArrayP("labels", "l", nil, "Labels (repeatable, comma-separated)")
+	cmd.Flags().StringArray("label", nil, "Alias for --labels")
+	cmd.Flags().StringArray("tags", nil, "Alias for --labels")
+	cmd.Flags().StringArray("tag", nil, "Alias for --labels")
+	cmd.Flags().StringP("description", "d", "", "Description text")
+	cmd.Flags().String("desc", "", "Alias for --description")
+	cmd.Flags().String("body", "", "Alias for --description")
+	cmd.Flags().String("notes", "", "Alias for --description")
+	cmd.Flags().String("description-file", "", "Read description from file or - for stdin (preserves formatting)")
+	cmd.Flags().String("acceptance", "", "Acceptance criteria")
+	cmd.Flags().String("acceptance-file", "", "Read acceptance criteria from file or - for stdin (preserves formatting)")
+	cmd.Flags().String("parent", "", "Parent issue ID")
+	cmd.Flags().String("epic", "", "Parent issue ID (alias for --parent)")
+	cmd.Flags().StringArray("depends-on", nil, "Issues this depends on (repeatable, comma-separated)")
+	cmd.Flags().StringArray("blocks", nil, "Issues this blocks (repeatable, comma-separated)")
+	cmd.Flags().Bool("minor", false, "Mark as minor task (allows self-review)")
+	cmd.Flags().String("defer", "", "Defer until date (e.g., +7d, monday, 2026-03-01)")
+	cmd.Flags().String("due", "", "Due date (e.g., friday, +2w, 2026-03-15)")
 }
