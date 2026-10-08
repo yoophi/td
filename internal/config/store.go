@@ -44,3 +44,9 @@ func SetStore(baseDir, store string, github *models.GitHubStoreConfig) error {
 		return Save(baseDir, cfg)
 	})
 }
+
+// WithLocalStateLock serializes auxiliary project JSON updates across processes.
+// The callback must not perform network calls. It does not open an issue DB.
+func WithLocalStateLock(baseDir string, fn func() error) error {
+	return withConfigLock(baseDir, fn)
+}

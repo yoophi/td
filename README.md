@@ -232,6 +232,17 @@ Supported flags:
 as `create`/`list`, with their type fixed. Lists now share the default limit of 50,
 filtering (including deferred issue handling in SQLite), and output format.
 
+GitHub storage also supports `session [name] [--new]`, `session list`, `whoami`,
+`focus`, `unfocus`, `resume`, `status`/`current`, and `usage` (`--new-session`,
+`--compact`, `--quiet`). Sessions and focus are **device-local**, stored under
+`os.UserConfigDir()/td/gh-contexts`, scoped by repository, worktree, branch, agent,
+terminal and `TD_CONTEXT_ID`. Set a stable `TD_SESSION_ID` and `TD_CONTEXT_ID` to
+resume an explicit context across agent restarts. New sessions preserve their
+previous identity in local history and clear focus. These files are not shared
+claims or review attestations; GitHub remains the issue data store. `status` and
+`usage` currently show focus and open issues, not SQLite review queues. Work
+sessions (`ws`) and `session cleanup` are not yet supported.
+
 Unsupported flags are errors, not ignored options. Session claims, handoffs,
 review approval policies, dependencies, boards, TDQ, undo and offline operations
 remain SQLite-only. GitHub `close`/`reopen` change native issue state and store the
