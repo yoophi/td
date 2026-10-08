@@ -1,9 +1,6 @@
 package version
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 func TestIsDevelopmentVersion(t *testing.T) {
 	tests := []struct {
@@ -61,17 +58,17 @@ func TestUpdateCommand(t *testing.T) {
 		expected string
 	}{
 		// Valid standard versions
-		{"v1.2.3", `go install -ldflags "-X main.Version=v1.2.3" github.com/marcus/td@v1.2.3`},
-		{"1.2.3", `go install -ldflags "-X main.Version=1.2.3" github.com/marcus/td@1.2.3`},
+		{"v1.2.3", `brew update && brew upgrade yoophi/tap/td`},
+		{"1.2.3", `brew update && brew upgrade yoophi/tap/td`},
 
 		// Valid prerelease versions
-		{"v0.3.0-beta", `go install -ldflags "-X main.Version=v0.3.0-beta" github.com/marcus/td@v0.3.0-beta`},
-		{"v1.0.0-rc.1", `go install -ldflags "-X main.Version=v1.0.0-rc.1" github.com/marcus/td@v1.0.0-rc.1`},
-		{"v0.1.0-alpha", `go install -ldflags "-X main.Version=v0.1.0-alpha" github.com/marcus/td@v0.1.0-alpha`},
-		{"1.5.0-beta.2", `go install -ldflags "-X main.Version=1.5.0-beta.2" github.com/marcus/td@1.5.0-beta.2`},
+		{"v0.3.0-beta", `brew update && brew upgrade yoophi/tap/td`},
+		{"v1.0.0-rc.1", `brew update && brew upgrade yoophi/tap/td`},
+		{"v0.1.0-alpha", `brew update && brew upgrade yoophi/tap/td`},
+		{"1.5.0-beta.2", `brew update && brew upgrade yoophi/tap/td`},
 
 		// Valid versions with complex prerelease identifiers
-		{"v2.0.0-rc1.test", `go install -ldflags "-X main.Version=v2.0.0-rc1.test" github.com/marcus/td@v2.0.0-rc1.test`},
+		{"v2.0.0-rc1.test", `brew update && brew upgrade yoophi/tap/td`},
 
 		// Invalid: empty string
 		{"", ""},
@@ -136,18 +133,8 @@ func TestUpdateCommandStructure(t *testing.T) {
 				t.Errorf("UpdateCommand(%q) returned empty string for valid version", version)
 			}
 
-			// Check that command contains expected components
-			if !strings.Contains(cmd, "go install") {
-				t.Errorf("UpdateCommand result missing 'go install'")
-			}
-			if !strings.Contains(cmd, "-ldflags") {
-				t.Errorf("UpdateCommand result missing '-ldflags'")
-			}
-			if !strings.Contains(cmd, "-X main.Version="+version) {
-				t.Errorf("UpdateCommand result missing version flag")
-			}
-			if !strings.Contains(cmd, "github.com/marcus/td@"+version) {
-				t.Errorf("UpdateCommand result missing package import with version")
+			if cmd != "brew update && brew upgrade yoophi/tap/td" {
+				t.Errorf("UpdateCommand must target the fork tap, got %q", cmd)
 			}
 		})
 	}

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	repoOwner = "marcus"
+	repoOwner = "yoophi"
 	repoName  = "td"
 	apiURL    = "https://api.github.com/repos/%s/%s/releases/latest"
 )
@@ -85,14 +85,11 @@ func IsDevelopmentVersion(v string) bool {
 // Rejects double hyphens (v1.2.3--), trailing hyphens (v1.2.3-), etc.
 var validVersionRegex = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*)?$`)
 
-// UpdateCommand generates the go install command for updating.
+// UpdateCommand generates the fork Homebrew upgrade command.
 // Returns empty string if version is invalid (prevents shell injection).
 func UpdateCommand(version string) string {
 	if !validVersionRegex.MatchString(version) {
 		return ""
 	}
-	return fmt.Sprintf(
-		"go install -ldflags \"-X main.Version=%s\" github.com/marcus/td@%s",
-		version, version,
-	)
+	return "brew update && brew upgrade yoophi/tap/td"
 }

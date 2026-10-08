@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# gh must target this fork even when its default repository is upstream.
+export GH_REPO="${GH_REPO:-yoophi/td}"
+
 # A tag push must not bypass the checks enforced by `make release`.
 version=${RELEASE_VERSION:?RELEASE_VERSION is required}
 if [[ ! $version =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then

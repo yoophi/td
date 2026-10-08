@@ -35,8 +35,6 @@ changelog:
       - "^ci:"
       - "^chore:"
 
-# Note: GoReleaser does NOT publish the Homebrew formula (there is intentionally
-# no `brews:` block). The formula in marcus/homebrew-tap builds from source (to
-# avoid Gatekeeper warnings on macOS) and is bumped automatically by the separate
-# `update-homebrew-tap` job in .github/workflows/release.yml, which rewrites the
-# tag URL and the source-tarball sha256 in Formula/td.rb after each tagged build.
+# Homebrew source builds are maintained by yoophi/homebrew-tap.
+# Its update-td.yml workflow picks up published stable fork releases using the
+# tap's own Actions token. No cross-repository HOMEBREW_TAP_TOKEN is needed here.

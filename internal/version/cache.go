@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	cacheFile = "version_cache.json"
+	cacheFile = "yoophi_version_cache.json"
 	cacheTTL  = 6 * time.Hour
 )
 

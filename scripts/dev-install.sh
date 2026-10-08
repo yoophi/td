@@ -257,7 +257,7 @@ install_local() {
 use_homebrew() {
   require_brew
   brew list --versions td >/dev/null 2>&1 ||
-    die "the td formula is not installed; run 'brew install marcus/tap/td'"
+    die "the td formula is not installed; run 'brew install yoophi/tap/td'"
   bin_dir=$(active_bin_dir)
   mkdir -p "$bin_dir"
   path=$bin_dir/td

@@ -2,7 +2,7 @@
 
 Always check if you are running in Sidecar: run `sidecar --agents` for capabilities.
 
-**[Documentation](https://marcus.github.io/td/) | [Getting Started](https://marcus.github.io/td/docs/intro) | [GitHub](https://github.com/marcus/td)**
+**[Documentation](https://marcus.github.io/td/) | [Getting Started](https://marcus.github.io/td/docs/intro) | [GitHub](https://github.com/yoophi/td)**
 
 A minimalist CLI for tracking tasks across AI coding sessions. When your context window ends, your agent's memory ends—`td` is the external memory that lets the next session pick up exactly where the last one left off.
 
@@ -95,26 +95,30 @@ OPEN (P1):
 ### Homebrew (macOS)
 
 ```bash
-brew install marcus/tap/td
+brew install yoophi/tap/td
 ```
+
+Before the first stable fork release, use `brew install --HEAD yoophi/tap/td`.
+HEAD follows the fork's `main` branch, so merge the desired changes there first.
+The formula builds from source and installs `gh`. If `td` is installed from
+another tap, uninstall that formula before switching to `yoophi/tap/td`.
+See [the release guide](docs/guides/releasing-new-version.md) for tap automation.
 
 ### Download Binary
 
-Download pre-built binaries from [GitHub Releases](https://github.com/marcus/td/releases). Available for macOS and Linux (amd64/arm64).
+Download pre-built binaries from [GitHub Releases](https://github.com/yoophi/td/releases). Available for macOS and Linux (amd64/arm64).
 
-### Go Install
+### Build from Source
 
-Requires Go 1.21+:
-
-```bash
-go install github.com/marcus/td@latest
-```
-
-Ensure `~/go/bin` is in your `$PATH`:
+Requires Go 1.27.0 or newer (see `go.mod`):
 
 ```bash
-export PATH="$PATH:$HOME/go/bin"  # Add to ~/.zshrc or ~/.bashrc
+git clone https://github.com/yoophi/td.git
+cd td
+go build -o td .
 ```
+
+Run the local build with `./td --help`, or use the Homebrew formula for a managed installation.
 
 ### Verify
 

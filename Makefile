@@ -99,7 +99,7 @@ check-changelog:
 # Go CI (tests + full-codebase lint) must be green on the commit being released.
 # Fails closed if red, still running, or hasn't started. Skips with a warning
 # if gh can't resolve a GitHub repo here (e.g. no origin, or origin isn't
-# github.com/marcus/td).
+# github.com/yoophi/td).
 check-ci:
 	./scripts/check-ci.sh
 

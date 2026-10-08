@@ -356,8 +356,8 @@ func TestSaveCacheCreatesDirs(t *testing.T) {
 	}
 
 	// Verify cache file exists
-	cacheFile := filepath.Join(configDir, "version_cache.json")
-	if _, err := os.Stat(cacheFile); os.IsNotExist(err) {
+	cachePath := filepath.Join(configDir, "yoophi_version_cache.json")
+	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 		t.Errorf("SaveCache() should create cache file")
 	}
 }

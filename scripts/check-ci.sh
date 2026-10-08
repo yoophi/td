@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# gh must target this fork even when its default repository is upstream.
+export GH_REPO="${GH_REPO:-yoophi/td}"
+
 # Go CI must be green on the commit being released.
 #
 # Fails closed if CI is red, still running, or has not started. Skips with a
 # warning if `gh` cannot resolve a GitHub repo here (no origin, or origin is
-# not github.com/marcus/td).
+# not github.com/yoophi/td).
 #
 # The commit being released is normally docs-only — the changelog stamp — and
 # go-ci.yml's path filters skip it, so a strict "find a run for this SHA" gate
