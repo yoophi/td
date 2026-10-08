@@ -28,6 +28,14 @@ type TransitionRecord struct {
 	Snapshot           *models.GitSnapshot `json:"snapshot,omitempty"`
 }
 
+// WorkflowStateError reports a transition incompatible with current state.
+type WorkflowStateError struct{ Reason string }
+
+func (e *WorkflowStateError) Error() string { return e.Reason }
+func workflowStateError(format string, args ...any) error {
+	return &WorkflowStateError{Reason: fmt.Sprintf(format, args...)}
+}
+
 type TransitionOptions struct {
 	expectedRevision                                      *[32]byte
 	Mode                                                  reviewpolicy.Mode
@@ -54,6 +62,18 @@ func (r *Record) CopyDetails() (IssueDetails, error) {
 		return IssueDetails{}, err
 	}
 	return details, nil
+}
+
+// TransitionObserved preserves the caller's revision across policy evaluation.
+// It is used by HTTP If-Match and other callers that validated a specific read.
+// This is optimistic conflict detection, not a conditional GitHub PATCH.
+func (c *Client) TransitionObserved(ctx context.Context, observed *Record, action string, options TransitionOptions) (*Record, bool, error) {
+	if observed == nil || observed.repository != c.repo || observed.revision == ([32]byte{}) {
+		return nil, false, fmt.Errorf("transition observation from this repository is required")
+	}
+	revision := observed.revision
+	options.expectedRevision = &revision
+	return c.Transition(ctx, observed.ID, action, options)
 }
 
 func (c *Client) Transition(ctx context.Context, id, action string, options TransitionOptions) (*Record, bool, error) {
@@ -83,17 +103,17 @@ func (c *Client) Transition(ctx context.Context, id, action string, options Tran
 			if observed.ImplementerSession == options.SessionID {
 				return observed, true, nil
 			}
-			return nil, false, fmt.Errorf("cannot start %s: already in_progress under session %q; release the claim explicitly before starting", observed.ID, observed.ImplementerSession)
+			return nil, false, workflowStateError("cannot start %s: already in_progress under session %q; release the claim explicitly before starting", observed.ID, observed.ImplementerSession)
 		}
 		if from == models.StatusBlocked && !options.Force {
-			return nil, false, fmt.Errorf("cannot start blocked issue %s without --force", observed.ID)
+			return nil, false, workflowStateError("cannot start blocked issue %s without --force", observed.ID)
 		}
 	case "unstart":
 		if from == models.StatusOpen && observed.ImplementerSession == "" {
 			return observed, true, nil
 		}
 		if from != models.StatusInProgress && from != models.StatusOpen {
-			return nil, false, fmt.Errorf("cannot unstart %s: status is %s", observed.ID, from)
+			return nil, false, workflowStateError("cannot unstart %s: status is %s", observed.ID, from)
 		}
 	case "block":
 		target = models.StatusBlocked
@@ -105,13 +125,13 @@ func (c *Client) Transition(ctx context.Context, id, action string, options Tran
 			return observed, true, nil
 		}
 		if from != models.StatusBlocked {
-			return nil, false, fmt.Errorf("cannot unblock %s: status is %s", observed.ID, from)
+			return nil, false, workflowStateError("cannot unblock %s: status is %s", observed.ID, from)
 		}
 	default:
 		return nil, false, fmt.Errorf("unsupported GitHub transition %q", action)
 	}
 	if from != target && !workflow.DefaultMachine().IsValidTransition(from, target) {
-		return nil, false, fmt.Errorf("cannot %s %s: invalid transition from %s", action, observed.ID, from)
+		return nil, false, workflowStateError("cannot %s %s: invalid transition from %s", action, observed.ID, from)
 	}
 	now := time.Now().UTC()
 	// Use effective attribution when native state no longer matches the details.

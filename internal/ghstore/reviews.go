@@ -17,6 +17,11 @@ import (
 	"github.com/marcus/td/internal/workflow"
 )
 
+// PolicyError distinguishes a denied workflow from a GitHub transport failure.
+type PolicyError struct{ Reason string }
+
+func (e *PolicyError) Error() string { return e.Reason }
+
 func ValidateReviewOptions(action string, o TransitionOptions) error {
 	for _, field := range []struct{ name, value string }{{"reviewed-by", o.ReviewedBy}, {"admin", o.AdminReason}, {"self-close-exception", o.SelfCloseException}} {
 		if field.value != "" && strings.TrimSpace(field.value) == "" {
@@ -135,7 +140,7 @@ func (c *Client) readStateEvents(ctx context.Context, id string) ([]nativeStateE
 // issue has returned to closed and its body still contains the old reviewer.
 func (c *Client) verifyClosedApproval(ctx context.Context, record *Record, details IssueDetails) error {
 	if details.ReviewBasis == "" || details.ReviewBasis != reviewBasis(record, details) {
-		return fmt.Errorf("closed approval is stale for %s; reopen and submit a new review cycle", record.ID)
+		return workflowStateError("closed approval is stale for %s; reopen and submit a new review cycle", record.ID)
 	}
 	events, err := c.readStateEvents(ctx, record.ID)
 	if err != nil {
@@ -152,7 +157,7 @@ func (c *Client) verifyClosedApproval(ctx context.Context, record *Record, detai
 			return nil
 		}
 	}
-	return fmt.Errorf("cannot verify completed approval for %s: native close/reopen history changed or is not yet visible; retry the read, or reopen and submit a new review cycle", record.ID)
+	return workflowStateError("cannot verify completed approval for %s: native close/reopen history changed or is not yet visible; retry the read, or reopen and submit a new review cycle", record.ID)
 }
 
 func participation(record *Record, details IssueDetails, session string) (any, implementation, issueImplementation bool) {
@@ -237,14 +242,14 @@ func (c *Client) reviewHandoff(ctx context.Context, observed *Record, o Transiti
 
 func (c *Client) verifyReview(ctx context.Context, record *Record, details IssueDetails) (string, error) {
 	if details.ReviewBasis == "" || details.ReviewBasis != reviewBasis(record, details) {
-		return "", fmt.Errorf("review is stale or missing for %s; start and submit it for review again", record.ID)
+		return "", workflowStateError("review is stale or missing for %s; start and submit it for review again", record.ID)
 	}
 	events, err := c.stateEvents(ctx, record.ID)
 	if err != nil {
 		return "", err
 	}
 	if events != details.ReviewEvents {
-		return "", fmt.Errorf("native close/reopen history changed for %s; submit a new review cycle", record.ID)
+		return "", workflowStateError("native close/reopen history changed for %s; submit a new review cycle", record.ID)
 	}
 	if details.ReviewHandoffID != "" {
 		entries, err := c.ListActivity(ctx, record.ID)
@@ -258,7 +263,7 @@ func (c *Client) verifyReview(ctx context.Context, record *Record, details Issue
 			}
 		}
 		if !found {
-			return "", fmt.Errorf("review handoff was edited or deleted for %s; submit a new review cycle", record.ID)
+			return "", workflowStateError("review handoff was edited or deleted for %s; submit a new review cycle", record.ID)
 		}
 	}
 	return events, nil
@@ -272,6 +277,9 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 	if err != nil {
 		return nil, false, err
 	}
+	if o.expectedRevision != nil && observed.revision != *o.expectedRevision {
+		return nil, false, &ConflictError{ID: observed.ID}
+	}
 	d, err := observed.CopyDetails()
 	if err != nil {
 		return nil, false, err
@@ -283,7 +291,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 	if action == "approve" || action == "close" {
 		if from == models.StatusClosed {
 			if action == "approve" && (observed.ReviewerSession == "" || observed.ReviewedAt == nil) {
-				return nil, false, fmt.Errorf("%s is closed without a td approval; native close is not a review", id)
+				return nil, false, workflowStateError("%s is closed without a td approval; native close is not a review", id)
 			}
 			if action == "approve" {
 				if err := c.verifyClosedApproval(ctx, observed, d); err != nil {
@@ -302,7 +310,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 	case "review":
 		target = models.StatusInReview
 		if !workflow.DefaultMachine().IsValidTransition(from, target) {
-			return nil, false, fmt.Errorf("cannot review %s from %s; start a new review cycle explicitly", id, from)
+			return nil, false, workflowStateError("cannot review %s from %s; start a new review cycle explicitly", id, from)
 		}
 		if o.Minor {
 			d.Minor = true
@@ -336,7 +344,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		d.ReviewEvents = checkedEvents
 	case "approve":
 		if from != models.StatusInReview {
-			return nil, false, fmt.Errorf("cannot approve %s: status is %s", id, from)
+			return nil, false, workflowStateError("cannot approve %s: status is %s", id, from)
 		}
 		checkedEvents, err = c.verifyReview(ctx, observed, d)
 		if err != nil {
@@ -361,7 +369,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		} else {
 			decision := reviewerEligibility(observed, d, o)
 			if !decision.Allowed {
-				return nil, false, fmt.Errorf("%s", decision.RejectionMessage)
+				return nil, false, &PolicyError{Reason: decision.RejectionMessage}
 			}
 			if decision.RequiresReason && strings.TrimSpace(o.Reason) == "" {
 				return nil, false, fmt.Errorf("review approval requires --reason")
@@ -390,7 +398,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 			return observed, true, nil
 		}
 		if from != models.StatusInReview {
-			return nil, false, fmt.Errorf("cannot reject %s: status is %s", id, from)
+			return nil, false, workflowStateError("cannot reject %s: status is %s", id, from)
 		}
 		target = models.StatusOpen
 		supersedeReviews(&d, now)
@@ -402,7 +410,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		history(o.SessionID, models.ActionSessionReviewChangesRequested)
 	case "close":
 		if from == models.StatusInReview && !observed.Minor {
-			return nil, false, fmt.Errorf("cannot close %s while in review; use approve", id)
+			return nil, false, workflowStateError("cannot close %s while in review; use approve", id)
 		}
 		involved, implemented, hasHistory := participation(observed, d, o.SessionID)
 		decision := reviewpolicy.EvaluateCloseEligibility(reviewpolicy.CloseEligibilityInput{Mode: reviewpolicy.ModeStrict, Issue: &observed.Issue, SessionID: o.SessionID, SessionIsCreator: observed.CreatorSession == o.SessionID, SessionIsImplementer: observed.ImplementerSession == o.SessionID, HasImplementationHistory: implemented, WasAnyInvolved: involved})
@@ -411,7 +419,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 			allowed = false
 		}
 		if !allowed && o.AdminReason == "" && o.SelfCloseException == "" {
-			return nil, false, fmt.Errorf("cannot close %s without review; use review/approve or an explicit --admin/--self-close-exception reason", id)
+			return nil, false, &PolicyError{Reason: fmt.Sprintf("cannot close %s without review; use review/approve or an explicit --admin/--self-close-exception reason", id)}
 		}
 		target = models.StatusClosed
 		d.ClosedBySession = o.SessionID
@@ -423,7 +431,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 			return observed, true, nil
 		}
 		if from != models.StatusClosed {
-			return nil, false, fmt.Errorf("cannot reopen %s: status is %s", id, from)
+			return nil, false, workflowStateError("cannot reopen %s: status is %s", id, from)
 		}
 		target = models.StatusOpen
 		supersedeReviews(&d, now)
@@ -435,7 +443,7 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		return nil, false, fmt.Errorf("unsupported review transition %q", action)
 	}
 	if from != target && !workflow.DefaultMachine().IsValidTransition(from, target) {
-		return nil, false, fmt.Errorf("invalid %s transition from %s to %s", action, from, target)
+		return nil, false, workflowStateError("invalid %s transition from %s to %s", action, from, target)
 	}
 	d.Status = target
 	operation := "td-op-" + rand.Text()

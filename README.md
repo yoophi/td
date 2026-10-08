@@ -300,8 +300,12 @@ existing field contract, validate the current repository and web identity,
 and check `If-Match` plus observed GitHub revisions before an update.
 Conflict checks are best-effort; uncertain writes are never retried automatically. Issue reads
 support filters, pagination, TDQ and shared activity. GitHub issue listings and
-comments are separate reads, not an atomic snapshot. Workflow HTTP operations
-remain pending, so read responses do not advertise transition actions yet.
+comments are separate reads, not an atomic snapshot. Workflow HTTP endpoints are connected to the shared CLI policy for standalone
+issues, including record-only and acknowledged self-review. Review/close/approve
+requests requiring parent/child/dependent cascades currently fail explicitly
+with 501 before changing the issue; a newly observed relationship after a write
+is reported as a partial-result conflict. Cascade support and read-side
+transition availability remain pending in #35/#32.
 Sessions report device-local liveness; focus belongs to the stable web session,
 separate from CLI focus. Session APIs revalidate the configured repository and
 authentication on each request and reject changed web identities. Other operations explicitly return

@@ -220,3 +220,24 @@ func TestRejectAndAdminClosePreserveAudit(t *testing.T) {
 		t.Fatalf("reopen: %+v", r)
 	}
 }
+
+func TestObservedWorkflowRejectsStaleReadBeforeSideEffects(t *testing.T) {
+	for _, action := range []string{"start", "block", "unblock", "unstart", "review", "approve", "reject", "close", "reopen"} {
+		t.Run(action, func(t *testing.T) {
+			f := newReviewFixture(t)
+			previous, err := f.client.Get(context.Background(), "1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.issue["title"] = "Concurrent changed title"
+			_, _, err = f.client.TransitionObserved(context.Background(), previous, action, TransitionOptions{SessionID: "fixture", Mode: reviewpolicy.ModeTrusted})
+			if err == nil || !strings.Contains(err.Error(), "changed since") || f.writes != 0 || f.posts != 0 {
+				t.Fatalf("writes=%d posts=%d err=%v", f.writes, f.posts, err)
+			}
+		})
+	}
+	f := newReviewFixture(t)
+	if _, _, err := f.client.TransitionObserved(context.Background(), nil, "start", TransitionOptions{}); err == nil {
+		t.Fatal("nil observation accepted")
+	}
+}
