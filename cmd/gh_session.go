@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -59,15 +58,9 @@ func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.C
 		return err
 	}
 	defer func() { _ = reader.Close() }()
-	dir, err := os.Getwd()
+	dir, err := gitHubContextDirectory()
 	if err != nil {
 		return err
-	}
-	if workDirFlag != "" {
-		dir = normalizeWorkDir(workDirFlag)
-	}
-	if baseDirOverride != nil {
-		dir = *baseDirOverride
 	}
 	scope, err := ghcontext.Resolve(cmd.Context(), dir, cfg.GitHub.Repo)
 	if err != nil {

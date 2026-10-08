@@ -76,7 +76,7 @@ func resolveRepository(ctx context.Context, baseDir, remote string, run runner) 
 	}
 	data, err = run(ctx, baseDir, "git", "remote", "get-url", "--", remote)
 	if err != nil {
-		return nil, fmt.Errorf("Git remote %q is missing or unreadable: %w; configure this remote with a GitHub repository URL first", remote, err)
+		return nil, fmt.Errorf("git remote %q is missing or unreadable: %w; configure this remote with a GitHub repository URL first", remote, err)
 	}
 	repo, err := repositoryFromRemote(strings.TrimSpace(string(data)))
 	if err != nil {

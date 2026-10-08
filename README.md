@@ -243,7 +243,27 @@ claims or review attestations; GitHub remains the issue data store. `status` and
 `usage` currently show focus and open issues, not SQLite review queues. Work
 sessions (`ws`) and `session cleanup` are not yet supported.
 
-Unsupported flags are errors, not ignored options. Session claims, handoffs,
+GitHub storage supports shared `comment` / `comments add`, `comments`, `log`,
+and `handoff` records. Logs support explicit issue IDs, `--issue` / `--task`,
+focused issues, stdin, `--type` and the existing type flags. Handoffs support
+structured flags, `@file` (one item per line), `-` for stdin, simple messages,
+and the existing YAML-like stdin sections. Input errors stop before writing.
+Git snapshots use the selected worktree; repositories with no commits retain
+branch/dirty-file information with an empty commit SHA.
+
+Records are appended as GitHub issue comments, with readable text and a trailing
+`td:activity:v1` block. `comments` shows native GitHub comments and td comments;
+logs and handoffs remain distinct activity kinds. GitHub supplies the comment
+author, timestamps and URL. Session IDs are attribution, not verified identity.
+Malformed/unknown metadata, inconsistent visible text and duplicate operation
+IDs produce explicit read errors. Consistent edits are marked `edited` in JSON;
+deleted comments are no longer available (GitHub comments are not an immutable
+audit log). Every write has an operation ID, shown in uncertain-write errors;
+inspect comments before retrying. There is no automatic retry or atomic
+idempotency guarantee. `check-handoff`, descendant handoff propagation and
+workflow integration are still pending.
+
+Unsupported flags are errors, not ignored options. Session claims,
 review approval policies, dependencies, boards, TDQ, undo and offline operations
 remain SQLite-only. GitHub `close`/`reopen` change native issue state and store the
 latest supplied reason in metadata; they do not claim a td review took place.

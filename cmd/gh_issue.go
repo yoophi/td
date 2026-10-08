@@ -90,9 +90,10 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 				return err
 			}
 		}
-		if operation == "update" {
+		switch operation {
+		case "update":
 			change, err = gitHubChanges(cmd, false)
-		} else if operation == "close" || operation == "reopen" {
+		case "close", "reopen":
 			status := models.StatusClosed
 			if operation == "reopen" {
 				status = models.StatusOpen

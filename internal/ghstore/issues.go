@@ -34,7 +34,7 @@ func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Clie
 		return nil, err
 	}
 	if !strings.EqualFold(resolved.Repo, cfg.Repo) {
-		return nil, fmt.Errorf("Git remote %q now resolves to %s, but the configured store is %s; run 'td config set store gh-issue --remote %s' to select it explicitly", cfg.Remote, resolved.Repo, cfg.Repo, cfg.Remote)
+		return nil, fmt.Errorf("git remote %q now resolves to %s, but the configured store is %s; run 'td config set store gh-issue --remote %s' to select it explicitly", cfg.Remote, resolved.Repo, cfg.Repo, cfg.Remote)
 	}
 	return &Client{dir: dir, repo: resolved.Repo, run: runAPI}, nil
 }
