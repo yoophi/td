@@ -182,6 +182,9 @@ func init() {
 					for _, child := range record.CascadedReviews {
 						cmd.Printf("review %s [in_review] (cascaded from %s)\n", child.ID, record.ID)
 					}
+					for _, dependent := range record.AutoUnblocked {
+						cmd.Printf("unblock %s [open] (dependency %s closed)\n", dependent.ID, record.ID)
+					}
 				}
 				completed = append(completed, record.ID)
 			}

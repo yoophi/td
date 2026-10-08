@@ -307,9 +307,13 @@ the reviewer; another closing session must supply a reason. Changed issue
 content, handoff, or native close/reopen history invalidates that approval. Review submits open/in_progress descendants and reports the changed children.
 Individual descendant handoffs are waived; implementer attribution is preserved.
 Each write is followed by a membership/revision check, with already changed IDs
-reported on failure. Review/close/approve
-requests requiring upward parent cascades or close/approve requests requiring
-dependent unblocking currently fail explicitly
+reported on failure.
+Close/approve automatically opens blocked direct dependents only when every
+dependency is closed, and releases their implementer claims. Root, dependent
+membership and all dependency revisions are checked after each write. Missing
+dependencies keep the issue blocked. Already changed IDs are reported on failure;
+GitHub does not provide an atomic transaction or lock across these reads/writes.
+Requests requiring upward parent cascades currently fail explicitly
 with 501 before changing the issue; a newly observed relationship after a write
 is reported as a partial-result conflict. Cascade support and read-side
 transition availability remain pending in #35/#32.

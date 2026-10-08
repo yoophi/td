@@ -91,6 +91,7 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload a
 // Record exposes td-compatible fields plus the GitHub number and URL.
 type Record struct {
 	CascadedReviews []Record `json:"cascaded_reviews,omitempty"`
+	AutoUnblocked   []Record `json:"auto_unblocked,omitempty"`
 	models.Issue
 	StateLabelDiagnostic string `json:"state_label_warning,omitempty"`
 	Number               int    `json:"number"`

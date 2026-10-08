@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/marcus/td/internal/features"
@@ -62,9 +61,6 @@ func standaloneWorkflow(ctx context.Context, client githubWorkflowClient, root *
 		}
 		seen[record.ID] = true
 
-		if (action == "close" || action == "approve") && record.Details != nil && slices.Contains(record.Details.Dependencies, root.ID) {
-			return fmt.Errorf("workflow cascades for issues with dependents are not yet supported by HTTP")
-		}
 	}
 	return nil
 }
@@ -154,5 +150,9 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 	for _, child := range result.CascadedReviews {
 		reviewed = append(reviewed, IssueToDTO(&child.Issue))
 	}
-	WriteSuccess(w, map[string]any{"reviewed_descendants": reviewed, "issue": IssueToDTO(&result.Issue), "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: []IssueDTO{}, AutoUnblocked: []IssueDTO{}}}, 200)
+	unblocked := []IssueDTO{}
+	for _, dependent := range result.AutoUnblocked {
+		unblocked = append(unblocked, IssueToDTO(&dependent.Issue))
+	}
+	WriteSuccess(w, map[string]any{"reviewed_descendants": reviewed, "issue": IssueToDTO(&result.Issue), "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: []IssueDTO{}, AutoUnblocked: unblocked}}, 200)
 }
