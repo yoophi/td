@@ -73,7 +73,7 @@ func TestIssueListsSeparateEntitiesAndDeletedRecords(t *testing.T) {
 		}
 		issues = append(issues, apiIssue{Number: i + 2, State: "open", Title: kind, Body: body})
 	}
-	client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
 		if slices.Contains(args, "--paginate") {
 			return json.Marshal([][]apiIssue{issues[:2], issues[2:]})
 		}
@@ -110,7 +110,7 @@ func TestIndividualDetailsUpdatePreservesOtherMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := map[string]any{"number": 1, "state": "open", "title": "Title", "body": body}
-	client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 		if slices.Contains(args, "PATCH") {
 			var fields map[string]any
 			if err := json.Unmarshal(payload, &fields); err != nil {
@@ -120,7 +120,7 @@ func TestIndividualDetailsUpdatePreservesOtherMetadata(t *testing.T) {
 				state[key] = value
 			}
 		}
-		return json.Marshal(state)
+		return fixtureIssueJSON(state)
 	}}
 	for _, sprint := range []string{"next", ""} {
 		updated, err := client.Update(context.Background(), "gh-1", Changes{Sprint: &sprint})
@@ -133,7 +133,7 @@ func TestIndividualDetailsUpdatePreservesOtherMetadata(t *testing.T) {
 func TestCreateDetailsAndRejectedLoss(t *testing.T) {
 	for _, drop := range []bool{false, true} {
 		writes := 0
-		client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+		client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 			writes++
 			var fields map[string]any
 			if err := json.Unmarshal(payload, &fields); err != nil {
@@ -144,7 +144,7 @@ func TestCreateDetailsAndRejectedLoss(t *testing.T) {
 			if drop {
 				fields["body"] = ""
 			}
-			return json.Marshal(fields)
+			return fixtureIssueJSON(fields)
 		}}
 		result, err := client.Create(context.Background(), &models.Issue{Title: "Minor fixture", Type: models.TypeTask, Priority: models.PriorityP2, Status: models.StatusOpen, Minor: true})
 		if drop {
@@ -168,7 +168,7 @@ func TestDeletedObservationCanRestoreWithoutChangingNativeState(t *testing.T) {
 	}
 	state := map[string]any{"number": 1, "state": "closed", "title": "Title", "body": body}
 	writes := 0
-	client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 		if slices.Contains(args, "PATCH") {
 			writes++
 			var patch map[string]any
@@ -182,7 +182,7 @@ func TestDeletedObservationCanRestoreWithoutChangingNativeState(t *testing.T) {
 				state[key] = value
 			}
 		}
-		return json.Marshal(state)
+		return fixtureIssueJSON(state)
 	}}
 	title := "Changed"
 	if _, err := client.Update(context.Background(), "1", Changes{Title: &title}); err == nil || writes != 0 {

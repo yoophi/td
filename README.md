@@ -281,11 +281,18 @@ starts also capture the selected worktree's Git snapshot. Release history keeps
 the former holder distinct from the acting session. Bulk commands stop at the
 first error, preserving earlier successful results. Claim conflict detection is
 best-effort and does not provide a distributed lock. `unstart --session/--stale`
-sweeps and review/approval policy integration are not yet implemented.
+sweeps are not yet implemented.
 
-Unsupported flags are errors, not ignored options. Review approval policies, dependencies, boards, TDQ, undo and offline operations
-remain SQLite-only. GitHub `close`/`reopen` change native issue state and store the
-latest supplied reason in metadata; they do not claim a td review took place.
+`review`, `approve`, `reject`, `close`, and `reopen` use shared session and review
+policy checks. Approval supports `--record-only`, `--self-review`, `--reviewed-by`,
+and `--decision`, with explicit reasons where required. Native close/reopen events
+and changed review content invalidate approval. Full lifecycle parity (including
+`approve --all`, descendant cascades and `update --status` policy routing) remains
+tracked in #3.
+
+Unsupported flags are errors, not ignored options. Dependencies, boards, TDQ,
+undo and offline operations remain pending for GitHub. Administrative closes do
+not count as td review approval.
 `--json` works for all supported commands; multi-issue mutations emit one result
 per line and stop with a nonzero exit code on failure (earlier successes remain).
 
@@ -813,3 +820,30 @@ Inspired by [beads](https://github.com/steveyegge/beads) by Steve Yegge.
 ## License
 
 MIT
+
+### GitHub status labels
+
+GitHub-backed creates and issue updates mirror the effective td status into
+exactly one reserved label: `td:open`, `td:in_progress`, `td:blocked`,
+`td:in_review`, or `td:closed`. Metadata remains authoritative for detailed
+status, with native GitHub open/closed reconciliation as described above.
+Editing labels on GitHub never starts work or grants review approval.
+
+Unrelated labels (including other `td:*` labels) are preserved. Missing state
+labels are created as needed. A missing permission or an ignored label update
+produces an explicit error; a reported partial update may already have changed
+the issue, so inspect it before retrying. Label changes use the same best-effort
+revision checks as other writes, without a distributed lock.
+
+`td show` and `td list` report stale/missing mirrors. To backfill existing managed
+issues or repair web edits (including native closes), run:
+
+```bash
+td config sync-state-labels
+```
+
+The command includes closed and soft-deleted td issues, skips unmanaged issues
+and internal entities, preserves user labels, and reports how many repairs were
+saved if a later repair fails. Repeating it when labels match makes no changes.
+Read commands never silently write repairs. Clearing ordinary labels with
+`td update --labels` still retains the generated state label.

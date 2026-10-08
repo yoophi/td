@@ -15,6 +15,10 @@ import (
 // this structure. Unknown fields/versions fail closed rather than being lost.
 // Workflow writes must use UpdateObserved after validating the observed issue.
 type IssueDetails struct {
+	ReviewBasis              string                       `json:"review_basis,omitempty"`
+	ReviewEvents             string                       `json:"review_events,omitempty"`
+	ReviewHandoffID          string                       `json:"review_handoff_id,omitempty"`
+	ReviewHandoffUpdatedAt   time.Time                    `json:"review_handoff_updated_at,omitzero"`
 	Transitions              []TransitionRecord           `json:"transitions,omitempty"`
 	Status                   models.Status                `json:"status,omitempty"`
 	Minor                    bool                         `json:"minor,omitempty"`
@@ -83,10 +87,10 @@ func (d IssueDetails) validate() error {
 	}
 
 	for _, entry := range d.Transitions {
-		if entry.OperationID == "" || entry.SessionID == "" || entry.At.IsZero() || !slices.Contains([]string{"start", "unstart", "block", "unblock"}, entry.Action) {
+		if entry.OperationID == "" || entry.SessionID == "" || entry.At.IsZero() || !slices.Contains([]string{"start", "unstart", "block", "unblock", "review", "approve", "reject", "close", "reopen"}, entry.Action) {
 			return fmt.Errorf("invalid transition history")
 		}
-		if !slices.Contains([]models.Status{models.StatusOpen, models.StatusInProgress, models.StatusInReview, models.StatusBlocked, models.StatusClosed}, entry.From) || !slices.Contains([]models.Status{models.StatusOpen, models.StatusInProgress, models.StatusBlocked}, entry.To) {
+		if !slices.Contains([]models.Status{models.StatusOpen, models.StatusInProgress, models.StatusInReview, models.StatusBlocked, models.StatusClosed}, entry.From) || !slices.Contains([]models.Status{models.StatusOpen, models.StatusInProgress, models.StatusBlocked, models.StatusInReview, models.StatusClosed}, entry.To) {
 			return fmt.Errorf("invalid transition history status")
 		}
 	}

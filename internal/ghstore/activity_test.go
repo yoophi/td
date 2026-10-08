@@ -69,7 +69,7 @@ func TestActivityRejectsCorruption(t *testing.T) {
 func TestActivityPaginationAndDuplicateDetection(t *testing.T) {
 	body, _ := renderActivity(activityData{Kind: "log", SessionID: "ses", OperationID: "op", Message: "progress", LogType: models.LogTypeProgress})
 	pages := [][]apiComment{{{ID: 1, Body: "native"}}, {{ID: 2, Body: body}}}
-	client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
 		if slices.Contains(args, "repos/owner/repo/issues/9") {
 			return []byte(`{"number":9,"state":"open"}`), nil
 		}
@@ -96,7 +96,7 @@ func TestActivityWriteFailureNeverRetries(t *testing.T) {
 	for _, mode := range []string{"success", "timeout", "invalid-json", "wrong-body", "pull-request"} {
 		t.Run(mode, func(t *testing.T) {
 			writes := 0
-			client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+			client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 				if slices.Contains(args, "GET") {
 					if mode == "pull-request" {
 						return []byte(`{"number":9,"state":"open","pull_request":{}}`), nil

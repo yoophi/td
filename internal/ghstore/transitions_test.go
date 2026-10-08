@@ -15,7 +15,7 @@ func transitionFixture(t *testing.T) (*Client, map[string]any, *int) {
 	t.Helper()
 	state := map[string]any{"number": 1, "state": "open", "title": "Fixture"}
 	writes := 0
-	client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 		if slices.Contains(args, "PATCH") {
 			writes++
 			var patch map[string]any
@@ -26,7 +26,7 @@ func transitionFixture(t *testing.T) (*Client, map[string]any, *int) {
 				state[key] = value
 			}
 		}
-		return json.Marshal(state)
+		return fixtureIssueJSON(state)
 	}}
 	return client, state, &writes
 }
@@ -93,7 +93,7 @@ func TestConcurrentClaimAndFailure(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			reads, writes := 0, 0
 			state := map[string]any{"number": 1, "state": "open", "title": "Fixture"}
-			client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
+			client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
 				if slices.Contains(args, "GET") {
 					reads++
 					if mode == "conflict" && reads == 2 {
@@ -103,7 +103,7 @@ func TestConcurrentClaimAndFailure(t *testing.T) {
 					writes++
 					return nil, context.DeadlineExceeded
 				}
-				return json.Marshal(state)
+				return fixtureIssueJSON(state)
 			}}
 			_, _, err := client.Transition(context.Background(), "1", "start", TransitionOptions{SessionID: "ses"})
 			if err == nil || !strings.Contains(err.Error(), "td-op-") {

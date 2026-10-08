@@ -17,7 +17,7 @@ import (
 // Route only implemented commands. All other SQLite consumers fail explicitly
 // in db.Open, so an unsupported command cannot silently mutate local issues.
 func init() {
-	for _, command := range []*cobra.Command{createCmd, listCmd, showCmd, updateCmd, closeCmd, reopenCmd} {
+	for _, command := range []*cobra.Command{createCmd, listCmd, showCmd, updateCmd} {
 		localRun := command.RunE
 		operation := command.Name()
 		command.RunE = func(cmd *cobra.Command, args []string) error {
@@ -140,6 +140,9 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 				return err
 			}
 			records = append(records, *record)
+			if warning := record.StateLabelWarning(); warning != "" && !jsonMode(cmd) && format != "json" {
+				cmd.PrintErrln("Warning:", warning)
+			}
 		}
 		if jsonMode(cmd) || format == "json" {
 			if len(records) == 1 {

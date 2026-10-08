@@ -17,10 +17,13 @@ import (
 
 func claimTestCommand(original *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: original.Use, Aliases: original.Aliases, Args: original.Args, RunE: original.RunE, SilenceErrors: true, SilenceUsage: true}
-	for _, name := range []string{"reason", "session", "stale"} {
+	for _, name := range []string{"reason", "session", "stale", "reviewed-by", "decision", "admin", "self-close-exception"} {
 		cmd.Flags().String(name, "", "")
 	}
 	cmd.Flags().Bool("force", false, "")
+	cmd.Flags().Bool("minor", false, "")
+	cmd.Flags().Bool("self-review", false, "")
+	cmd.Flags().Bool("record-only", false, "")
 	cmd.Flags().Bool("json", false, "")
 	return cmd
 }
@@ -48,8 +51,14 @@ func TestGitHubTransitionRoutingAndFocus(t *testing.T) {
 if [ "$1" = auth ]; then exit 0; fi
 if [ "$4" = repos/owner/repo ]; then
  printf '%s' '{"full_name":"owner/repo","has_issues":true}'
+elif [ "$6" = "repos/owner/repo/labels?per_page=100" ]; then
+ printf '%s' '[[{"name":"td:open"},{"name":"td:in_progress"},{"name":"td:blocked"},{"name":"td:in_review"},{"name":"td:closed"}]]'
+elif [ "$6" = "repos/owner/repo/issues/1/events?per_page=100" ]; then
+ if grep -q '"state":"closed"' "$TD_TEST_ISSUE"; then
+  printf '%s' '[[{"id":1,"event":"closed"}]]'
+ else printf '%s' '[[]]'; fi
 elif [ "$5" = PATCH ]; then
- input=$(cat)
+ input=$(sed -E 's/"labels":\["([^"]*)"\]/"labels":[{"name":"\1"}]/')
  printf '{"number":1,"title":"Fixture",%s' "${input#?}" > "$TD_TEST_ISSUE"
  cat "$TD_TEST_ISSUE"
 elif [ "$5" = GET ]; then
@@ -92,6 +101,24 @@ fi
 			t.Fatal("unstart did not clear focus")
 		}
 
+	}
+	for _, tc := range []struct {
+		command *cobra.Command
+		flags   []string
+		status  string
+	}{
+		{reviewCmd, []string{"--minor"}, "in_review"},
+		{approveCmd, []string{"--self-review", "--reason", "Explicit test fixture review"}, "closed"},
+		{reopenCmd, nil, "open"},
+	} {
+		args := append([]string{"gh-1", "--json"}, tc.flags...)
+		out, err := executeGitHubTest(claimTestCommand(tc.command), args...)
+		var result struct {
+			Status string `json:"status"`
+		}
+		if err != nil || json.Unmarshal([]byte(out), &result) != nil || result.Status != tc.status {
+			t.Fatalf("%s: %s %v", tc.command.Name(), out, err)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("created SQLite DB")

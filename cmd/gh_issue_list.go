@@ -147,6 +147,11 @@ func listGitHubIssues(cmd *cobra.Command, args []string, _ *models.Config) error
 	if limit > 0 && len(filtered) > limit {
 		filtered = filtered[:limit]
 	}
+	for _, record := range filtered {
+		if record.StateLabelDiagnostic != "" && !jsonMode(cmd) && format != "json" {
+			cmd.PrintErrln("Warning:", record.StateLabelDiagnostic)
+		}
+	}
 	if jsonMode(cmd) || format == "json" {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(filtered)
 	}

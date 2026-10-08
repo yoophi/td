@@ -29,8 +29,8 @@ writer contracts are still tracked in #3 and #16.
 Native closed/open state overrides conflicting detailed state. A native state
 change does not grant approval: effective reviewer, implementer, review-requester,
 closer, and reviewed time are cleared on a detected mismatch, while historical
-records remain available under details. This is only current-state reconciliation;
-intermediate close/reopen events require further lifecycle integration. Consumers
+records remain available under details. This read path reconciles current state only. Approval transitions additionally
+check native close/reopen event history, including intermediate round trips. Consumers
 must not treat historical review records as an active approval without validating
 the current review cycle and relevant mutations.
 
@@ -59,3 +59,18 @@ native transaction paths. No SQLite database is opened for GitHub operations.
 `td create --minor` (including task/epic shortcuts) stores the minor flag.
 `td update ID --sprint NAME` changes sprint; an empty string clears it. These
 updates preserve dates, relations, review/session records, and other details.
+
+## Status label projection
+
+State labels are a display/search projection, never the source of claims or
+review decisions. The five exact reserved names are `td:open`, `td:in_progress`,
+`td:blocked`, `td:in_review`, and `td:closed` (case-insensitive). Writes preserve
+other labels and include the desired mirror in the issue PATCH when needed.
+Repository label definitions are created lazily and verified before the issue
+write. Returned labels and the subsequent issue revision are checked, so ignored
+label changes are surfaced as partial failures.
+
+A missing/conflicting label produces `state_label_warning` in JSON reads and a
+warning in `td show`/`td list`. `td config sync-state-labels` repairs these from
+the effective metadata/native status. A closed native issue retains precedence
+over stale open-family metadata; mirroring does not infer approval from closure.

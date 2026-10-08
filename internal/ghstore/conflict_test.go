@@ -15,7 +15,7 @@ func TestUpdateDetectsObservedConcurrentChanges(t *testing.T) {
 		t.Run(map[bool]string{false: "before", true: "after"}[after], func(t *testing.T) {
 			reads, writes := 0, 0
 			current := map[string]any{"number": 1, "state": "open", "title": "Original", "body": "User text"}
-			client := &Client{run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+			client := &Client{stateLabels: fixtureStateLabels(), run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 				if slices.Contains(args, "GET") {
 					reads++
 					if (!after && reads == 2) || (after && reads == 3) {
@@ -31,7 +31,7 @@ func TestUpdateDetectsObservedConcurrentChanges(t *testing.T) {
 						current[key] = value
 					}
 				}
-				return json.Marshal(current)
+				return fixtureIssueJSON(current)
 			}}
 			description := "Replacement"
 			_, err := client.Update(context.Background(), "1", Changes{Description: &description})
@@ -54,7 +54,7 @@ func TestUpdateRejectsIgnoredFieldsAndUnverifiedWrites(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			reads, writes := 0, 0
 			current := map[string]any{"number": 1, "state": "open", "title": "Original"}
-			client := &Client{run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+			client := &Client{stateLabels: fixtureStateLabels(), run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 				if slices.Contains(args, "GET") {
 					reads++
 					if mode == "read-failed" && reads == 3 {
@@ -69,7 +69,7 @@ func TestUpdateRejectsIgnoredFieldsAndUnverifiedWrites(t *testing.T) {
 						current["title"] = "Changed"
 					}
 				}
-				return json.Marshal(current)
+				return fixtureIssueJSON(current)
 			}}
 			title := "Changed"
 			_, err := client.Update(context.Background(), "1", Changes{Title: &title})
@@ -84,7 +84,7 @@ func TestCreateUncertainResultIncludesOperationIdentity(t *testing.T) {
 	for _, failure := range []string{"HTTP 403: Resource not accessible", "HTTP 429: rate limit exceeded", "context deadline exceeded"} {
 		calls := 0
 		operation := ""
-		client := &Client{run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+		client := &Client{stateLabels: fixtureStateLabels(), run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 			calls++
 			var fields struct {
 				Body string `json:"body"`
@@ -109,7 +109,7 @@ func TestCreateUncertainResultIncludesOperationIdentity(t *testing.T) {
 func TestObservedUpdateRetainsPolicyReadRevision(t *testing.T) {
 	state := map[string]any{"number": 1, "state": "open", "title": "Original"}
 	writes := 0
-	client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 		if slices.Contains(args, "PATCH") {
 			writes++
 			var fields map[string]any
@@ -120,7 +120,7 @@ func TestObservedUpdateRetainsPolicyReadRevision(t *testing.T) {
 				state[key] = value
 			}
 		}
-		return json.Marshal(state)
+		return fixtureIssueJSON(state)
 	}}
 	observed, err := client.Get(context.Background(), "1")
 	if err != nil {

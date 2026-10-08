@@ -14,8 +14,9 @@ import (
 
 type Record struct {
 	models.Issue
-	Number int    `json:"number,omitempty"`
-	URL    string `json:"url,omitempty"`
+	StateLabelDiagnostic string `json:"state_label_warning,omitempty"`
+	Number               int    `json:"number,omitempty"`
+	URL                  string `json:"url,omitempty"`
 }
 
 // Reader returns complete, non-deleted issue sets. Callers filter, sort and
@@ -99,7 +100,7 @@ func (r *githubReader) Get(ctx context.Context, id string) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Record{Issue: issue.Issue, Number: issue.Number, URL: issue.URL}, nil
+	return &Record{Issue: issue.Issue, Number: issue.Number, URL: issue.URL, StateLabelDiagnostic: issue.StateLabelDiagnostic}, nil
 }
 func (r *githubReader) List(ctx context.Context, all bool) ([]Record, error) {
 	issues, err := r.client.List(ctx, all)
@@ -108,7 +109,7 @@ func (r *githubReader) List(ctx context.Context, all bool) ([]Record, error) {
 	}
 	records := make([]Record, 0, len(issues))
 	for _, issue := range issues {
-		records = append(records, Record{Issue: issue.Issue, Number: issue.Number, URL: issue.URL})
+		records = append(records, Record{Issue: issue.Issue, Number: issue.Number, URL: issue.URL, StateLabelDiagnostic: issue.StateLabelDiagnostic})
 	}
 	return records, nil
 }

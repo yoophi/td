@@ -9,27 +9,33 @@ import (
 	"time"
 
 	"github.com/marcus/td/internal/models"
+	"github.com/marcus/td/internal/reviewpolicy"
 	"github.com/marcus/td/internal/workflow"
 )
 
 // TransitionRecord records the actor separately from sessions whose claims
 // were released. It is shared, editable issue metadata, not a distributed lock.
 type TransitionRecord struct {
-	OperationID string              `json:"operation_id"`
-	Action      string              `json:"action"`
-	From        models.Status       `json:"from"`
-	To          models.Status       `json:"to"`
-	SessionID   string              `json:"session_id"`
-	Reason      string              `json:"reason,omitempty"`
-	At          time.Time           `json:"at"`
-	Snapshot    *models.GitSnapshot `json:"snapshot,omitempty"`
+	AdminReason        string              `json:"admin_reason,omitempty"`
+	SelfCloseException string              `json:"self_close_exception,omitempty"`
+	OperationID        string              `json:"operation_id"`
+	Action             string              `json:"action"`
+	From               models.Status       `json:"from"`
+	To                 models.Status       `json:"to"`
+	SessionID          string              `json:"session_id"`
+	Reason             string              `json:"reason,omitempty"`
+	At                 time.Time           `json:"at"`
+	Snapshot           *models.GitSnapshot `json:"snapshot,omitempty"`
 }
 
 type TransitionOptions struct {
-	SessionID string
-	Reason    string
-	Force     bool
-	Snapshot  *models.GitSnapshot
+	Mode                                                  reviewpolicy.Mode
+	Minor, RecordOnly, SelfReview                         bool
+	ReviewedBy, Decision, AdminReason, SelfCloseException string
+	SessionID                                             string
+	Reason                                                string
+	Force                                                 bool
+	Snapshot                                              *models.GitSnapshot
 }
 
 // CopyDetails gives policy callers a detached value to mutate without changing
@@ -52,6 +58,9 @@ func (r *Record) CopyDetails() (IssueDetails, error) {
 func (c *Client) Transition(ctx context.Context, id, action string, options TransitionOptions) (*Record, bool, error) {
 	if strings.TrimSpace(options.SessionID) == "" {
 		return nil, false, fmt.Errorf("transition requires a session")
+	}
+	if action == "review" || action == "approve" || action == "reject" || action == "close" || action == "reopen" {
+		return c.reviewTransition(ctx, id, action, options)
 	}
 	observed, err := c.Get(ctx, id)
 	if err != nil {
@@ -103,6 +112,7 @@ func (c *Client) Transition(ctx context.Context, id, action string, options Tran
 	now := time.Now().UTC()
 	// Use effective attribution when native state no longer matches the details.
 	details.Status = target
+	details.ReviewBasis = ""
 	details.ImplementerSession = observed.ImplementerSession
 	details.ReviewerSession = ""
 	details.ReviewedAt = nil

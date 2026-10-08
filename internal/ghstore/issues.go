@@ -19,8 +19,9 @@ import (
 
 // Client uses only the gh executable; it never opens the local issue database.
 type Client struct {
-	dir, repo string
-	run       func(context.Context, string, []byte, ...string) ([]byte, error)
+	stateLabels map[string]bool
+	dir, repo   string
+	run         func(context.Context, string, []byte, ...string) ([]byte, error)
 }
 
 // Open revalidates the selected remote on each invocation. A changed remote must
@@ -90,13 +91,14 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload a
 // Record exposes td-compatible fields plus the GitHub number and URL.
 type Record struct {
 	models.Issue
-	Number     int    `json:"number"`
-	URL        string `json:"url"`
-	meta       metadata
-	managed    bool
-	revision   [32]byte
-	repository string
-	Details    *IssueDetails `json:"details,omitempty"`
+	StateLabelDiagnostic string `json:"state_label_warning,omitempty"`
+	Number               int    `json:"number"`
+	URL                  string `json:"url"`
+	meta                 metadata
+	managed              bool
+	revision             [32]byte
+	repository           string
+	Details              *IssueDetails `json:"details,omitempty"`
 }
 
 type apiIssue struct {
@@ -150,6 +152,7 @@ func (item apiIssue) record() (*Record, error) {
 	if meta.Details != nil {
 		meta.Details.apply(&record.Issue)
 	}
+	record.StateLabelDiagnostic = record.StateLabelWarning()
 	return record, nil
 }
 
@@ -277,10 +280,11 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	if err != nil {
 		return nil, err
 	}
-	payload := map[string]any{"title": issue.Title, "body": body}
-	if len(issue.Labels) > 0 {
-		payload["labels"] = issue.Labels
+	labels := mirroredLabels(issue.Labels, models.StatusOpen)
+	if err := c.ensureStateLabel(ctx, "td:open"); err != nil {
+		return nil, err
 	}
+	payload := map[string]any{"title": issue.Title, "body": body, "labels": labels}
 	data, err := c.request(ctx, "POST", "/issues", payload, false)
 	if err != nil {
 		return nil, fmt.Errorf("%w; operation %s is embedded in the issue body if created; inspect recent issues before retrying (search indexing can lag)", err, operationID)
@@ -297,8 +301,11 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	if returned.Title != issue.Title || returned.Body != body || returned.State != "open" {
 		return nil, fmt.Errorf("%s was created, but returned fields differ from operation %s; inspect %s before retrying", record.ID, operationID, record.URL)
 	}
-	if err := checkLabels(record, issue.Labels, "created"); err != nil {
+	if err := checkLabels(record, labels, "created"); err != nil {
 		return nil, err
+	}
+	if warning := record.StateLabelWarning(); warning != "" {
+		return nil, fmt.Errorf("issue %s was created, but %s", record.ID, warning)
 	}
 	return record, nil
 }
@@ -448,6 +455,29 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	}
 	if len(payload) == 0 {
 		return nil, fmt.Errorf("no issue changes specified")
+	}
+	// Preserve unrelated labels and mirror the effective metadata/native state
+	// in the same PATCH as the workflow write. Labels are never read as state.
+	if record.managed || metadataChanged || change.Status != nil {
+		status := record.Status
+		if change.Status != nil {
+			status = *change.Status
+		}
+		if change.Details != nil && change.Details.Status != "" && nativeStatus(change.Details.Status) == nativeStatus(status) {
+			status = change.Details.Status
+		}
+		base := record.Labels
+		if change.Labels != nil {
+			base = *change.Labels
+		}
+		labels := mirroredLabels(base, status)
+		if !sameLabels(labels, record.Labels) || change.Labels != nil {
+			if err := c.ensureStateLabel(ctx, "td:"+string(status)); err != nil {
+				return nil, err
+			}
+			payload["labels"] = labels
+			change.Labels = &labels
+		}
 	}
 	// This is best-effort detection, not conditional PATCH or a distributed lock.
 	latest, err := c.GetIncludingDeleted(ctx, id)

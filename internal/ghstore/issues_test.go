@@ -62,7 +62,7 @@ func TestGitHubLabelsReportPartialSuccess(t *testing.T) {
 }
 
 func TestGitHubListPaginatesAndExcludesPullRequests(t *testing.T) {
-	client := &Client{repo: "owner/project", dir: "/project", run: func(_ context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/project", dir: "/project", run: func(_ context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
 		if dir != "/project" || !slices.Contains(args, "--paginate") || !slices.Contains(args, "--slurp") || !slices.Contains(args, "repos/owner/project/issues?state=all&per_page=100") || payload != nil {
 			t.Fatalf("unexpected request: %s %v %s", dir, args, payload)
 		}
@@ -76,7 +76,7 @@ func TestGitHubListPaginatesAndExcludesPullRequests(t *testing.T) {
 
 func TestGitHubCreateUsesJSONStdin(t *testing.T) {
 	issue := &models.Issue{Title: "Title $(echo injected) `id`", Description: "Body\nwith quotes \" and Unicode 한글", Type: models.TypeFeature, Priority: models.PriorityP0, Points: 8}
-	client := &Client{repo: "owner/project", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/project", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 		if !slices.Contains(args, "POST") || !slices.Contains(args, "--input") || slices.Contains(args, issue.Title) {
 			t.Fatalf("unsafe request: %v", args)
 		}
@@ -92,7 +92,7 @@ func TestGitHubCreateUsesJSONStdin(t *testing.T) {
 			t.Fatalf("bad body: %v %v", fields, err)
 		}
 		fields["number"], fields["state"] = 1, "open"
-		return json.Marshal(fields)
+		return fixtureIssueJSON(fields)
 	}}
 	result, err := client.Create(context.Background(), issue)
 	if err != nil || result.ID != "gh-1" || result.Description != issue.Description {
@@ -122,19 +122,23 @@ func TestGitHubPatchOnlyChangesSpecifiedFields(t *testing.T) {
 				change.Status = &status
 			}
 			calls := 0
-			client := &Client{repo: "owner/project", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+			client := &Client{stateLabels: fixtureStateLabels(), repo: "owner/project", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
 				calls++
 				if slices.Contains(args, "GET") {
 					if !slices.Contains(args, "GET") {
 						t.Fatal(args)
 					}
-					return json.Marshal(response)
+					return fixtureIssueJSON(response)
 				}
 				var patch map[string]any
 				if err := json.Unmarshal(payload, &patch); err != nil {
 					t.Fatal(err)
 				}
-				if len(patch) != 1 || !slices.Contains(args, "PATCH") {
+				expectedFields := 2
+				if action == "clear-labels" {
+					expectedFields = 1
+				}
+				if len(patch) != expectedFields || !slices.Contains(args, "PATCH") {
 					t.Fatalf("unexpected fields: %v", patch)
 				}
 				switch action {
@@ -148,7 +152,7 @@ func TestGitHubPatchOnlyChangesSpecifiedFields(t *testing.T) {
 						t.Fatalf("%q %+v %v", desc, meta, err)
 					}
 				case "clear-labels":
-					if len(patch["labels"].([]any)) != 0 {
+					if !reflect.DeepEqual(patch["labels"], []any{"td:open"}) {
 						t.Fatal(patch)
 					}
 				case "close":
@@ -159,7 +163,7 @@ func TestGitHubPatchOnlyChangesSpecifiedFields(t *testing.T) {
 				for k, v := range patch {
 					response[k] = v
 				}
-				return json.Marshal(response)
+				return fixtureIssueJSON(response)
 			}}
 			if _, err := client.Update(context.Background(), "gh-12", change); err != nil {
 				t.Fatal(err)
@@ -173,7 +177,7 @@ func TestGitHubPatchOnlyChangesSpecifiedFields(t *testing.T) {
 
 func TestGitHubRefusesPRAndDoesNotRetryFailedWrites(t *testing.T) {
 	calls := 0
-	client := &Client{run: func(context.Context, string, []byte, ...string) ([]byte, error) {
+	client := &Client{stateLabels: fixtureStateLabels(), run: func(context.Context, string, []byte, ...string) ([]byte, error) {
 		calls++
 		return []byte(`{"number":5,"state":"open","pull_request":{}}`), nil
 	}}
