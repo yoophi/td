@@ -49,10 +49,6 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager "
 	case "show":
 		allowed += "long short format "
-	case "close":
-		allowed += "reason comment message note notes "
-	case "reopen":
-		allowed += "reason "
 	}
 	var invalid []string
 	cmd.Flags().Visit(func(flag *pflag.Flag) {
@@ -101,21 +97,7 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		switch operation {
 		case "update":
 			change, err = gitHubChanges(cmd, false)
-		case "close", "reopen":
-			status := models.StatusClosed
-			if operation == "reopen" {
-				status = models.StatusOpen
-			}
-			change.Status = &status
-			for _, flag := range []string{"reason", "comment", "message", "note", "notes"} {
-				if cmd.Flags().Changed(flag) {
-					value, _ := cmd.Flags().GetString(flag)
-					if change.Reason != nil {
-						return fmt.Errorf("specify only one reason flag")
-					}
-					change.Reason = &value
-				}
-			}
+
 		}
 	}
 	if err != nil {
@@ -125,7 +107,39 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	if err != nil {
 		return err
 	}
+	var scope ghcontext.Scope
+	var local *ghcontext.State
+	options := ghstore.TransitionOptions{Reason: comment}
+	if operation == "create" || comment != "" || change.Status != nil {
+		dir, scopeErr := gitHubContextDirectory()
+		if scopeErr != nil {
+			return scopeErr
+		}
+		scope, err = ghcontext.Resolve(cmd.Context(), dir, cfg.GitHub.Repo)
+		if err != nil {
+			return err
+		}
+		local, err = scope.Update(cmd.Context(), nil)
+		if err != nil {
+			return err
+		}
+		options.SessionID = local.Session.ID
+	}
+	if change.Status != nil {
+		options.Mode, err = resolveReviewPolicyMode(getBaseDir())
+		if err != nil {
+			return err
+		}
+		if *change.Status == models.StatusInProgress {
+			options.Snapshot, err = gitHubSnapshot(cmd.Context(), scope.Worktree)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	if operation == "create" {
+		created.CreatorSession = local.Session.ID
+		created.CreatedBranch = scope.Branch
 		record, err := client.Create(cmd.Context(), created)
 		if err != nil {
 			return err
@@ -161,26 +175,16 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		}
 		return nil
 	}
-	action := map[string]string{"update": "updated", "close": "closed", "reopen": "reopened"}[operation]
+	action := "updated"
 	var activity models.Activity
 	if comment != "" {
-		dir, err := gitHubContextDirectory()
-		if err != nil {
-			return err
-		}
-		scope, err := ghcontext.Resolve(cmd.Context(), dir, cfg.GitHub.Repo)
-		if err != nil {
-			return err
-		}
-		state, err := scope.Update(cmd.Context(), nil)
-		if err != nil {
-			return err
-		}
-		activity = models.Activity{Kind: "comment", SessionID: state.Session.ID, Message: comment}
+		activity = models.Activity{Kind: "comment", SessionID: local.Session.ID, Message: comment}
 	}
 	for _, id := range args {
 		var record *ghstore.Record
-		if hasGitHubChanges(change) {
+		if change.Status != nil {
+			record, err = client.UpdateWorkflow(cmd.Context(), id, change, options)
+		} else if hasGitHubChanges(change) {
 			record, err = client.Update(cmd.Context(), id, change)
 		} else {
 			record, err = client.Get(cmd.Context(), id)
@@ -188,6 +192,23 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		if err != nil {
 			return fmt.Errorf("%s %s: %w", operation, id, err)
 		}
+		if change.Status != nil {
+			_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
+				if current.Session.ID != local.Session.ID {
+					return fmt.Errorf("local session changed during update")
+				}
+				if record.Status == models.StatusInProgress {
+					current.Focus = record.ID
+				} else if record.Status != models.StatusBlocked && current.Focus == record.ID {
+					current.Focus = ""
+				}
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("%s was updated, but local focus update failed: %w", record.ID, err)
+			}
+		}
+
 		if comment != "" {
 			if _, err := client.AppendActivity(cmd.Context(), record.ID, activity); err != nil {
 				if hasGitHubChanges(change) {
@@ -344,8 +365,8 @@ func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 		if cmd.Flags().Changed("status") {
 			value, _ := cmd.Flags().GetString("status")
 			status := models.NormalizeStatus(value)
-			if status != models.StatusOpen && status != models.StatusClosed {
-				return change, fmt.Errorf("gh-issue supports only open and closed states; session/review workflows are not supported yet")
+			if !models.IsValidStatus(status) {
+				return change, fmt.Errorf("invalid status %q (valid: open, in_progress, in_review, blocked, closed)", value)
 			}
 			change.Status = &status
 		}
@@ -357,7 +378,7 @@ func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 }
 
 func hasGitHubChanges(change ghstore.Changes) bool {
-	return change.Title != nil || change.Description != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Labels != nil || change.Status != nil || change.Details != nil || change.Minor != nil || change.Sprint != nil
+	return change.Status != nil || change.HasFields()
 }
 
 func gitHubUpdateComment(cmd *cobra.Command) (string, error) {

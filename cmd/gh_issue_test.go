@@ -59,7 +59,7 @@ func TestGitHubRoutingRejectsUnsupportedBeforeNetwork(t *testing.T) {
 		want    string
 	}{
 		{createCmd, []string{"Example issue title", "--parent", "gh-2"}, "does not support --parent"},
-		{updateCmd, []string{"gh-1", "--status", "in_review"}, "supports only open and closed"},
+		{updateCmd, []string{"gh-1", "--status", "invalid"}, "invalid status"},
 		{updateCmd, []string{"gh-1"}, "no issue changes"},
 		{showCmd, []string{"td-abcdef"}, "invalid GitHub issue ID"},
 		{listCmd, []string{"--sort", "bogus"}, "unsupported gh-issue sort"},

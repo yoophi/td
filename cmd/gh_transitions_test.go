@@ -17,7 +17,7 @@ import (
 
 func claimTestCommand(original *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: original.Use, Aliases: original.Aliases, Args: original.Args, RunE: original.RunE, SilenceErrors: true, SilenceUsage: true}
-	for _, name := range []string{"reason", "session", "stale", "reviewed-by", "decision", "admin", "self-close-exception"} {
+	for _, name := range []string{"reason", "session", "stale", "status", "reviewed-by", "decision", "admin", "self-close-exception"} {
 		cmd.Flags().String(name, "", "")
 	}
 	cmd.Flags().Bool("force", false, "")
@@ -118,6 +118,15 @@ fi
 		}
 		if err != nil || json.Unmarshal([]byte(out), &result) != nil || result.Status != tc.status {
 			t.Fatalf("%s: %s %v", tc.command.Name(), out, err)
+		}
+	}
+	for _, status := range []string{"in_progress", "blocked", "open"} {
+		out, err := executeGitHubTest(githubTestCommand(updateCmd), "gh-1", "--status", status, "--json")
+		var result struct {
+			Status string `json:"status"`
+		}
+		if err != nil || json.Unmarshal([]byte(out), &result) != nil || result.Status != status {
+			t.Fatalf("update --status %s: %s %v", status, out, err)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {

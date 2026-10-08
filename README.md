@@ -287,7 +287,7 @@ sweeps are not yet implemented.
 policy checks. Approval supports `--record-only`, `--self-review`, `--reviewed-by`,
 and `--decision`, with explicit reasons where required. Native close/reopen events
 and changed review content invalidate approval. Full lifecycle parity (including
-`approve --all`, descendant cascades and `update --status` policy routing) remains
+`approve --all`, descendant cascades and unstart sweeps) remains
 tracked in #3.
 
 Unsupported flags are errors, not ignored options. Dependencies, boards, TDQ,
@@ -847,3 +847,16 @@ and internal entities, preserves user labels, and reports how many repairs were
 saved if a later repair fails. Repeating it when labels match makes no changes.
 Read commands never silently write repairs. Clearing ordinary labels with
 `td update --labels` still retains the generated state label.
+
+`td update --status` uses the same claim and review transitions as the dedicated
+workflow commands. It records session history and updates local focus; it cannot
+approve your own non-minor work without the dedicated approval command's explicit
+acknowledgement. Closed-to-in-progress still requires reopening first. New issues
+record the creating session and branch for review eligibility.
+
+When status and ordinary fields are updated together, field edits are saved
+first, then the transition is evaluated against the resulting content. These are
+separate writes: a failed transition reports that field edits were already saved.
+Changing reviewed content cannot reuse its previous approval. Use `start` and
+`review` to begin a fresh review cycle. Comments are appended after the update and
+have their own partial-success diagnostics.
