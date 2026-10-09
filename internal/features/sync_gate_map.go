@@ -13,7 +13,7 @@ var SyncGateMap = []GateMapEntry{
 	{
 		Feature: SyncCLI.Name,
 		Surface: "cmd/auth.go",
-		Notes:   "Gates auth login/logout/status commands",
+		Notes:   "Gates SQLite td-sync authentication handlers; GitHub auth login/logout/status remain registered and use gh credentials independently of the flag",
 	},
 	{
 		Feature: SyncCLI.Name,

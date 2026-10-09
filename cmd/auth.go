@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marcus/td/internal/features"
 	"github.com/marcus/td/internal/output"
 	"github.com/marcus/td/internal/syncclient"
 	"github.com/marcus/td/internal/syncconfig"
@@ -16,18 +15,24 @@ import (
 
 var authCmd = &cobra.Command{
 	Use:     "auth",
-	Short:   "Manage sync authentication",
+	Short:   "Manage authentication for the selected store",
 	GroupID: "system",
 }
 
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Log in to sync server",
-	Long: "Log in to the sync server using email approval.\n\n" +
+	Args:  cobra.NoArgs,
+	Short: "Log in using the selected store's authentication",
+	Long: "GitHub stores: run gh's interactive github.com web login; gh manages credentials.\n" +
+		"For automation configure GH_TOKEN outside td; JSON login is not interactive.\n\n" +
+		"SQLite stores: log in to the sync server using email approval.\n\n" +
 		"You enter your email, td emails you an approval link, and the login\n" +
 		"completes only after you click that link. The login cannot be approved\n" +
 		"from the terminal alone.",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubAuth(cmd, "login"); handled {
+			return err
+		}
 		serverURL := syncconfig.GetServerURL()
 		client := syncclient.New(serverURL, "", "")
 
@@ -151,8 +156,18 @@ func deviceLoginName() string {
 
 var authLogoutCmd = &cobra.Command{
 	Use:   "logout",
-	Short: "Log out from sync server",
+	Args:  cobra.NoArgs,
+	Short: "Log out using the selected store's authentication",
+	Long: "GitHub logout removes the selected account's local gh credential for all projects.\n" +
+		"It requires --account LOGIN --confirm-global and does not revoke tokens.\n" +
+		"SQLite logout clears only td-sync authentication.",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubAuth(cmd, "logout"); handled {
+			return err
+		}
+		if cmd.Flags().Changed("account") || cmd.Flags().Changed("confirm-global") {
+			return fmt.Errorf("--account and --confirm-global apply only to GitHub authentication")
+		}
 		if err := syncconfig.ClearAuth(); err != nil {
 			output.Error("logout: %v", err)
 			return err
@@ -164,8 +179,12 @@ var authLogoutCmd = &cobra.Command{
 
 var authStatusCmd = &cobra.Command{
 	Use:   "status",
+	Args:  cobra.NoArgs,
 	Short: "Show authentication status",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubAuth(cmd, "status"); handled {
+			return err
+		}
 		creds, err := syncconfig.LoadAuth()
 		if err != nil {
 			output.Error("load auth: %v", err)
@@ -190,8 +209,10 @@ var authStatusCmd = &cobra.Command{
 }
 
 func init() {
+	authLogoutCmd.Flags().String("account", "", "GitHub account to log out of (shared across projects)")
+	authLogoutCmd.Flags().Bool("confirm-global", false, "Acknowledge removing this gh account credential for all projects")
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authLogoutCmd)
 	authCmd.AddCommand(authStatusCmd)
-	AddFeatureGatedCommand(features.SyncCLI.Name, authCmd)
+	rootCmd.AddCommand(authCmd)
 }
