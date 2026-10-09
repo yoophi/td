@@ -155,6 +155,20 @@ func (c *Client) completeImport(ctx context.Context, receipt importReceipt) erro
 	if err != nil {
 		return err
 	}
+	if receipt.SourceParts == 0 {
+		return fmt.Errorf("completion requires verified source provenance parts; no receipt POST attempted")
+	}
+	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+	if err != nil {
+		return err
+	}
+	inventory, err := snapshotImportProvenance(snapshot)
+	if err != nil {
+		return err
+	}
+	if _, err := verifyImportReceiptHistory(receipt, inventory); err != nil {
+		return err
+	}
 	return c.publishImportCheckpoint(ctx, receipt.TargetID, receipt.TargetBasis, body, "completion receipt")
 }
 

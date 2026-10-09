@@ -140,10 +140,19 @@ resume and a no-write repeat. Chunk replay makes two issue content checks per
 set, not one issue/comment lookup per piece. It still consumes one comment POST
 per missing piece and may encounter account/secondary API limits.
 
+Completion receipts record the source part count. Before publishing a receipt,
+the importer obtains a fresh bulk issue/comment snapshot and verifies the entire
+source archive, its digest and its binding to the source and destination.
+Later planning repeats that verification before skipping a completed item.
+Missing or edited history fails explicitly instead of silently skipping it.
+Older fields-only receipts produce `resume_history` / `history_pending`; a
+changed source cannot replace their unarchived original history, even with
+`--force`. History-only replay cannot enter the issue-field apply stage.
+
 These helpers are not yet connected to the normal CLI write path. Batch
-orchestration must capture prior destination data, verify complete source sets
-before final completion receipts and on later replays, and expose preserved
-history appropriately in reads/exports. Native provenance comments currently
+orchestration must capture prior destination data, invoke the verified source
+archive/completion stages, and expose preserved history appropriately in
+reads/exports. Native provenance comments currently
 remain passive comments rather than active log/handoff/workflow events.
 
 The shared import envelope keeps SQLite's historical lenient deserialization;

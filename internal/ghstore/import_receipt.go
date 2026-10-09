@@ -21,6 +21,7 @@ type importReceipt struct {
 	SourceDigest string `json:"source_digest"`
 	TargetID     string `json:"target_id"`
 	TargetBasis  string `json:"target_basis"`
+	SourceParts  int    `json:"source_parts,omitempty"`
 	commentID    int64
 }
 
@@ -33,10 +34,30 @@ func (receipt importReceipt) validate() error {
 		validSource = (parts[0] == "legacy" && importNamespacePattern.MatchString(parts[1])) || (parts[0] == "github" && repositoryPattern.MatchString(parts[1]))
 	}
 	n, err := Number(receipt.TargetID)
-	if receipt.Version != 1 || !validSource || err != nil || receipt.TargetID != fmt.Sprintf("gh-%d", n) || !importDigestPattern.MatchString(receipt.SourceDigest) || !importDigestPattern.MatchString(receipt.TargetBasis) {
+	if receipt.Version != 1 || !validSource || err != nil || receipt.SourceParts < 0 || receipt.TargetID != fmt.Sprintf("gh-%d", n) || !importDigestPattern.MatchString(receipt.SourceDigest) || !importDigestPattern.MatchString(receipt.TargetBasis) {
 		return fmt.Errorf("invalid or unsupported import completion receipt")
 	}
 	return nil
+}
+
+func verifyImportReceiptHistory(receipt importReceipt, inventory importProvenanceInventory) (bool, error) {
+	if receipt.SourceParts == 0 {
+		// Prototype receipts prove fields only, never that history was archived.
+		return false, nil
+	}
+	ref := importProvenancePart{SourceKey: receipt.SourceKey, SourceDigest: receipt.SourceDigest, TargetID: receipt.TargetID, Kind: "source", ContentDigest: receipt.SourceDigest}
+	parts := inventory[ref.key()]
+	if len(parts) != receipt.SourceParts {
+		return false, fmt.Errorf("%s completion history is incomplete: expected %d parts, found %d; no import writes attempted", receipt.TargetID, receipt.SourceParts, len(parts))
+	}
+	source, err := recoverImportSource(parts)
+	if err != nil {
+		return false, fmt.Errorf("%s completion history verification failed: %w", receipt.TargetID, err)
+	}
+	if parts[0].Count != receipt.SourceParts || source.SourceKey() != receipt.SourceKey {
+		return false, fmt.Errorf("%s completion history binding differs", receipt.TargetID)
+	}
+	return true, nil
 }
 
 func renderImportReceipt(receipt importReceipt) (string, error) {

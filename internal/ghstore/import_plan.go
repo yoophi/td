@@ -20,6 +20,7 @@ type ImportPlanRow struct {
 	Observed             *Record  `json:"-"`
 	OperationID          string   `json:"operation_id"`
 	ResumeState          string   `json:"resume_state,omitempty"`
+	HistoryVerified      bool     `json:"history_verified,omitempty"`
 	intent               *importIntent
 	basis                string
 }
@@ -63,6 +64,10 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 		return nil, err
 	}
 	intents, err := snapshotImportIntents(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	provenance, err := snapshotImportProvenance(snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +138,11 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 			if bases[row.TargetID] != receipt.TargetBasis {
 				return nil, fmt.Errorf("import destination changed after completion; --force does not overwrite subsequent edits: %w", &ConflictError{ID: row.TargetID})
 			}
+			verified, err := verifyImportReceiptHistory(receipt, provenance)
+			if err != nil {
+				return nil, err
+			}
+			row.HistoryVerified = verified
 			row.SourceChanged = receipt.SourceDigest != row.Digest
 			if row.SourceChanged && !force {
 				return nil, fmt.Errorf("source %s changed since completed import; inspect the plan with --force before applying; no import writes attempted", row.SourceKey)
@@ -140,6 +150,12 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 			row.Action = "skip"
 			if row.SourceChanged {
 				row.Action = "overwrite"
+			}
+			if !verified {
+				if row.SourceChanged {
+					return nil, fmt.Errorf("%s has a fields-only completion receipt; recover history with original input before importing a changed source", row.TargetID)
+				}
+				row.Action, row.ResumeState = "resume_history", "history_pending"
 			}
 		}
 		row.basis = bases[row.TargetID]

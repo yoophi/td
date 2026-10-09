@@ -25,6 +25,23 @@ func largeImportSource(t *testing.T) ImportItem {
 	return source
 }
 
+func importSourceProvenanceComments(t *testing.T, source ImportItem, targetID string, firstID int64) []apiComment {
+	t.Helper()
+	parts, err := sourceImportProvenance(source, targetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	comments := []apiComment{}
+	for index, part := range parts {
+		body, err := renderImportProvenance(part)
+		if err != nil {
+			t.Fatal(err)
+		}
+		comments = append(comments, apiComment{ID: firstID + int64(index), IssueURL: "https://api.github.com/repos/owner/repo/issues/" + strings.TrimPrefix(targetID, "gh-"), Body: body})
+	}
+	return comments
+}
+
 func TestImportProvenanceLargeHistoryRoundTripAndPassiveComments(t *testing.T) {
 	source := largeImportSource(t)
 	parts, err := sourceImportProvenance(source, "gh-1")

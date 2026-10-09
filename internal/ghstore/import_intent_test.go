@@ -69,11 +69,13 @@ func TestImportPreparedIntentRecoversBothSidesOfInterruptedApply(t *testing.T) {
 	check("after_apply")
 	// Completed receipt after the intent takes precedence and makes replay a
 	// no-op. The original before-basis is not an excuse to rerun the PATCH.
-	receiptBody, err := renderImportReceipt(importReceipt{Version: 1, SourceKey: source.SourceKey(), SourceDigest: digest, TargetID: "gh-1", TargetBasis: afterBasis})
+	history := importSourceProvenanceComments(t, source, "gh-1", 2)
+	comments = append(comments, history...)
+	receiptBody, err := renderImportReceipt(importReceipt{Version: 1, SourceKey: source.SourceKey(), SourceDigest: digest, TargetID: "gh-1", TargetBasis: afterBasis, SourceParts: len(history)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	comments = append(comments, apiComment{ID: 2, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: receiptBody})
+	comments = append(comments, apiComment{ID: 3, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: receiptBody})
 	plan, err := c.PlanImport(context.Background(), []ImportItem{source}, false)
 	if err != nil || plan.Rows[0].Action != "skip" || plan.Rows[0].ResumeState != "" {
 		t.Fatal("completed import resumed a stale intent", plan, err)
@@ -88,7 +90,7 @@ func TestImportPreparedIntentRecoversBothSidesOfInterruptedApply(t *testing.T) {
 	newBasis, _ := importTargetBasis(newAfter)
 	intent.SourceDigest, intent.BeforeBasis, intent.AfterBasis = newDigest, afterBasis, newBasis
 	intentBody, _ := renderImportIntent(intent)
-	comments = append(comments, apiComment{ID: 3, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: intentBody})
+	comments = append(comments, apiComment{ID: 4, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: intentBody})
 	current = newAfter
 	plan, err = c.PlanImport(context.Background(), []ImportItem{newSource}, false)
 	if err != nil || plan.Rows[0].ResumeState != "after_apply" {
@@ -159,8 +161,8 @@ func TestImportCompletionPublicationRecoverUncertainResponse(t *testing.T) {
 			}
 			item := apiIssue{Number: 1, State: "open", Title: source.Issue.Title, Body: body}
 			basis, _ := importTargetBasis(item)
-			receipt := importReceipt{Version: 1, SourceKey: source.SourceKey(), SourceDigest: digest, TargetID: "gh-1", TargetBasis: basis}
-			comments := []apiComment{}
+			comments := importSourceProvenanceComments(t, source, "gh-1", 1)
+			receipt := importReceipt{Version: 1, SourceKey: source.SourceKey(), SourceDigest: digest, TargetID: "gh-1", TargetBasis: basis, SourceParts: len(comments)}
 			posts := 0
 			failure := errors.New("fixture completion response lost")
 			c := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
@@ -170,7 +172,7 @@ func TestImportCompletionPublicationRecoverUncertainResponse(t *testing.T) {
 					if err := json.Unmarshal(payload, &fields); err != nil {
 						t.Fatal(err)
 					}
-					comment := apiComment{ID: 1, Body: fields["body"], IssueURL: "https://api.github.com/repos/owner/repo/issues/1"}
+					comment := apiComment{ID: int64(len(comments) + 1), Body: fields["body"], IssueURL: "https://api.github.com/repos/owner/repo/issues/1"}
 					comments = append(comments, comment)
 					if loseResponse {
 						return nil, failure
