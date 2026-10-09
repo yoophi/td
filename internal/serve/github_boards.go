@@ -102,6 +102,7 @@ func (s *GitHubReadStore) boards(w http.ResponseWriter, r *http.Request, detail 
 			boardReadError(w, fmt.Errorf("board task %s disappeared during read; refresh", v.Issue.ID))
 			return
 		}
+		dto.PriorityLabelWarning = source.PriorityLabelDiagnostic
 		blockers := []BlockerRefDTO{}
 		if source.Details != nil {
 			for _, id := range source.Details.Dependencies {

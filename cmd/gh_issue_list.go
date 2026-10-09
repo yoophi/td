@@ -154,7 +154,7 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 	awaiting, ready := map[string]bool{}, map[string]bool{}
 	records := make([]issuestore.Record, 0, len(rows))
 	for _, r := range rows {
-		records = append(records, issuestore.Record{Issue: r.Issue, Number: r.Number, URL: r.URL, StateLabelDiagnostic: r.StateLabelDiagnostic})
+		records = append(records, issuestore.Record{Issue: r.Issue, Number: r.Number, URL: r.URL, StateLabelDiagnostic: r.StateLabelDiagnostic, PriorityLabelDiagnostic: r.PriorityLabelDiagnostic})
 	}
 	filtered := make([]issuestore.Record, 0)
 	today := time.Now()
@@ -257,6 +257,9 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 	for _, record := range filtered {
 		if record.StateLabelDiagnostic != "" && !jsonMode(cmd) && format != "json" {
 			cmd.PrintErrln("Warning:", record.StateLabelDiagnostic)
+		}
+		if record.PriorityLabelDiagnostic != "" && !jsonMode(cmd) && format != "json" {
+			cmd.PrintErrln("Warning:", record.PriorityLabelDiagnostic)
 		}
 	}
 	if jsonMode(cmd) || format == "json" {

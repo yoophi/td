@@ -116,8 +116,10 @@ func (s *GitHubReadStore) list(sessionID string, w http.ResponseWriter, r *http.
 		return
 	}
 	issues := make([]models.Issue, 0, len(records))
+	priorityWarnings := make(map[string]string, len(records))
 	for _, v := range records {
 		issues = append(issues, v.Issue)
+		priorityWarnings[v.ID] = v.PriorityLabelDiagnostic
 	}
 	search, mode := q.Get("search"), q.Get("search_mode")
 	if !slices.Contains([]string{"", "auto", "text", "tdq"}, mode) {
@@ -212,6 +214,7 @@ func (s *GitHubReadStore) list(sessionID string, w http.ResponseWriter, r *http.
 	dtos := make([]IssueDTO, 0, len(paged))
 	for _, v := range paged {
 		dto := IssueToDTO(&v).slimForBoard()
+		dto.PriorityLabelWarning = priorityWarnings[v.ID]
 		deps, _ := snapshot.GetDependencies(v.ID)
 		refs := []BlockerRefDTO{}
 		for _, id := range deps {
@@ -308,7 +311,7 @@ func (s *GitHubReadStore) detail(baseDir, sessionID string, withWorkflow bool, w
 	}
 	for _, v := range records {
 		if v.ParentID == record.ID {
-			children = append(children, IssueToDTO(&v.Issue))
+			children = append(children, githubRecordIssueDTO(&v))
 		}
 		if v.Details != nil {
 			for _, dep := range v.Details.Dependencies {

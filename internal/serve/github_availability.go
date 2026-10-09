@@ -14,8 +14,16 @@ type githubAvailabilityClient interface {
 	AvailableTransitions(context.Context, *ghstore.Record, string, reviewpolicy.Mode) ([]string, error)
 }
 
-func githubIssueDTO(ctx context.Context, client any, record *ghstore.Record, baseDir, session string, enabled bool) (IssueDTO, error) {
+// Diagnostics arrive with the already-decoded record. Do not fetch an issue
+// or its labels again to decorate a list, board card or workflow response.
+func githubRecordIssueDTO(record *ghstore.Record) IssueDTO {
 	dto := IssueToDTO(&record.Issue)
+	dto.PriorityLabelWarning = record.PriorityLabelDiagnostic
+	return dto
+}
+
+func githubIssueDTO(ctx context.Context, client any, record *ghstore.Record, baseDir, session string, enabled bool) (IssueDTO, error) {
+	dto := githubRecordIssueDTO(record)
 	if !enabled {
 		return dto, nil
 	}

@@ -136,6 +136,7 @@ type IssueDTO struct {
 	Status                   string   `json:"status"`
 	Type                     string   `json:"type"`
 	Priority                 string   `json:"priority"`
+	PriorityLabelWarning     string   `json:"priority_label_warning,omitempty"`
 	Points                   int      `json:"points"`
 	Labels                   []string `json:"labels"`
 	ParentID                 *string  `json:"parent_id"`

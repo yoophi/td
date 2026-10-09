@@ -14,7 +14,11 @@ can adopt native issues into td, at which point the mirrors apply.
 
 Legacy issues without priority labels and externally edited/multiple priority
 labels still read priority from metadata. Record JSON exposes
-`priority_label_warning`; human `td show` prints the mismatch warning.
+`priority_label_warning`; human `td show` and `td list` print the mismatch warning.
+HTTP issue lists, board cards, issue details and workflow responses expose the
+same optional warning, using already-decoded records without extra issue or
+label requests. SQLite responses omit this GitHub-specific field. Clients
+must display it themselves; this does not add a warning banner to td-gui.
 An ordinary managed-issue edit repairs mirrors, or preview an explicit repair:
 
 ```sh
@@ -53,6 +57,13 @@ selection validation, revision conflicts, permission causes, earlier applied
 repairs and idempotence. The new CLI test verifies read-only previews do not
 even create the fake remote-state file, and a no-op repeat leaves it unchanged.
 Delete/restore, transition, config/cache command tests and Mac/Linux lint pass.
+Diagnostic propagation tests verify metadata priority survives a conflicting
+label in CLI human/JSON output and HTTP list/board/detail responses. List and
+board decoration performs no individual issue or activity reads. The shared
+reader race suite also passes. Additional existing TDQ/filter CLI regressions
+cannot run successfully in this sandbox because they write the user-global
+gh-context configuration; their latest failures are permission errors, not
+passing evidence for those paths.
 
 Before permissions changed, real sample gh-126 was previewed (0 writes),
 applied (1 repair, bug and td:open preserved), and repeated (0 repairs).

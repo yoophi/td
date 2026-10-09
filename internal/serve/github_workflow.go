@@ -114,15 +114,15 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 	}
 	reviewed := []IssueDTO{}
 	for _, child := range result.CascadedReviews {
-		reviewed = append(reviewed, IssueToDTO(&child.Issue))
+		reviewed = append(reviewed, githubRecordIssueDTO(&child))
 	}
 	parents := []IssueDTO{}
 	for _, parent := range result.ParentStatusUpdates {
-		parents = append(parents, IssueToDTO(&parent.Issue))
+		parents = append(parents, githubRecordIssueDTO(&parent))
 	}
 	unblocked := []IssueDTO{}
 	for _, dependent := range result.AutoUnblocked {
-		unblocked = append(unblocked, IssueToDTO(&dependent.Issue))
+		unblocked = append(unblocked, githubRecordIssueDTO(&dependent))
 	}
 	payload := map[string]any{"reviewed_descendants": reviewed, "issue": dto, "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: parents, AutoUnblocked: unblocked}}
 	status := http.StatusOK
