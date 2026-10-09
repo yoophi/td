@@ -301,3 +301,32 @@ observed revision conflicts are explicit failures. Checks around GitHub PATCH
 and comment writes are best-effort: they cannot provide a distributed atomic
 transaction. A post-write failure may have applied a change; operation IDs and
 fresh `td show`/activity reads identify what remains before a manual retry.
+
+## Relationship command reads and dependency writes
+
+`dep`, `dep add`, `dep rm` (`remove`), `depends-on` (`deps`/`dependencies`),
+`blocked-by`, `critical-path`, and `tree` read/write the repository's GitHub
+metadata. Parent IDs and dependency IDs are repository-local canonical `gh-N`,
+not GitHub native sub-issues or relationships. PRs, cross-repository references,
+self-reference and detected cycles are rejected. `dep add --depends-on` accepts
+comma-separated IDs alongside positional IDs. Duplicate adds are verified
+no-ops. Removal can clean an edge whose target is deleted or missing.
+
+Queries use the complete non-deleted issue set, including closed issues, and
+fetch referenced records missing from the list directly. A missing/invalid
+relationship is an explicit error, not an implicitly resolved dependency.
+Detected parent/dependency cycles produce an error, even when a tree depth limit
+would otherwise hide the cycle. Tree JSON has `children: []` on leaves and
+at a depth cut. `blocked-by --direct` limits results to direct dependents;
+without it, transitive dependents are included. Critical path considers an
+in_review dependency unresolved and does not offer its dependent as ready.
+Closed dependencies are resolved; epics are containers rather than candidate
+work. Bottleneck JSON rows expose `id` and `score`.
+
+Dependency batches produce one JSON object per completed target. On the first
+failure, the command returns nonzero and names targets already completed;
+earlier writes remain. Each write uses the observed source and validates the
+reachable target graph before/after PATCH. These remain best-effort checks,
+without rollback, distributed locking or automatic retries. No SQLite database
+is opened. The remaining file commands and create/update/show/list relationship
+options are still tracked in #4.
