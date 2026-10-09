@@ -9,6 +9,7 @@ import (
 	"github.com/marcus/td/internal/features"
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
+	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -68,6 +69,28 @@ func githubSyncProject(cmd *cobra.Command, args []string) (bool, error) {
 		return true, nil
 	case "unlink":
 		return true, fmt.Errorf("GitHub issue storage requires a repository; unlink cannot leave gh-issue without one. To switch storage explicitly use 'td config set store sqlite' after exporting/importing any data you need; no migration or remote deletion was attempted")
+	case "members":
+		client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
+		if err != nil {
+			return true, err
+		}
+		members, err := client.Collaborators(cmd.Context())
+		if err != nil {
+			return true, err
+		}
+		note := "Visible GitHub collaborators and effective roles; may include organization/team/inherited access. This list cannot identify the source of a grant and does not include pending invitations or td-sync roles."
+		if jsonMode(cmd) {
+			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"store": "gh-issue", "repository": cfg.GitHub.Repo, "scope": "visible-collaborators", "members": members, "note": note})
+		}
+		cmd.Printf("GitHub collaborators for %s (%d)\n", cfg.GitHub.Repo, len(members))
+		for _, member := range members {
+			cmd.Printf("%s (%d) role=%s\n", output.SanitizeIssueText(member.Login), member.ID, output.SanitizeIssueText(member.RoleName))
+		}
+		if len(members) == 0 {
+			cmd.Println("No visible collaborators.")
+		}
+		cmd.Println(note)
+		return true, nil
 	default:
 		return true, fmt.Errorf("GitHub sync-project %s is not implemented yet; no td-sync, SQLite or GitHub write was attempted. Use GitHub repository settings or gh for repository/access management", cmd.Name())
 	}

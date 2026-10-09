@@ -67,7 +67,6 @@ func TestGitHubProjectSelectionAndDiagnostics(t *testing.T) {
 		{syncProjectJoinCmd, nil, "explicit owner/repository"},
 		{syncProjectUnlinkCmd, nil, "requires a repository"},
 		{syncProjectCreateCmd, []string{"name"}, "not implemented yet"},
-		{syncProjectMembersCmd, nil, "not implemented yet"},
 		{syncProjectInviteCmd, []string{"someone@example.com"}, "not implemented yet"},
 		{syncProjectKickCmd, []string{"user"}, "not implemented yet"},
 		{syncProjectRoleCmd, []string{"user", "writer"}, "not implemented yet"},
@@ -141,5 +140,75 @@ func TestSQLiteProjectRouteStillRequiresFeature(t *testing.T) {
 	t.Setenv("TD_FEATURE_SYNC_CLI", "true")
 	if handled, err := githubSyncProject(cmd, nil); handled || err != nil {
 		t.Fatal(handled, err)
+	}
+}
+
+func TestGitHubProjectMembersPagesEmptyAndPermissionFailure(t *testing.T) {
+	dir := githubScheduleTestDir(t)
+	calls := recordScheduleGHCalls(t)
+	ghPath := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "gh")
+	script, err := os.ReadFile(ghPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor := "elif '/labels?' in path:"
+	route := `elif '/collaborators?' in path:
+ if os.environ.get('TD_MEMBERS_DENIED'):sys.stderr.write('fixture HTTP 403 collaborators denied');sys.exit(1)
+ data=json.loads(os.environ['TD_MEMBERS_RESPONSE'])
+`
+	if !strings.Contains(string(script), anchor) {
+		t.Fatal("fixture routing changed")
+	}
+	if err := os.WriteFile(ghPath, []byte(strings.Replace(string(script), anchor, route+anchor, 1)), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TD_MEMBERS_RESPONSE", `[[{"id":1,"login":"one","role_name":"custom-role","permissions":{"pull":true}}],[{"id":2,"login":"two","role_name":"maintain","permissions":{"maintain":true}}]]`)
+	for _, enabled := range []string{"false", "true"} {
+		t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+		out, err := executeGitHubProjectTest(syncProjectMembersCmd)
+		if err != nil || !json.Valid([]byte(out)) || !strings.Contains(out, `"role_name":"custom-role"`) || !strings.Contains(out, `"scope":"visible-collaborators"`) {
+			t.Fatal(out, err)
+		}
+	}
+	t.Setenv("TD_MEMBERS_RESPONSE", `[[]]`)
+	out, err := executeGitHubProjectTest(syncProjectMembersCmd)
+	if err != nil || !strings.Contains(out, `"members":[]`) {
+		t.Fatal(out, err)
+	}
+	t.Setenv("TD_MEMBERS_DENIED", "1")
+	out, err = executeGitHubProjectTest(syncProjectMembersCmd)
+	if err == nil || !strings.Contains(err.Error(), "fixture HTTP 403") || out != "" {
+		t.Fatal(out, err)
+	}
+	invocations, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collections := 0
+	for _, line := range strings.Split(strings.TrimSpace(string(invocations)), "\n") {
+		var args []string
+		if err := json.Unmarshal([]byte(line), &args); err != nil {
+			t.Fatal(err)
+		}
+		for _, arg := range args {
+			if strings.Contains(arg, "/collaborators?") {
+				collections++
+				if !strings.Contains(strings.Join(args, " "), "--paginate --slurp") {
+					t.Fatal("collection not paginated", args)
+				}
+			}
+			if strings.HasPrefix(arg, "repos/") && arg != "repos/owner/repo" && arg != "repos/owner/repo/collaborators?affiliation=all&per_page=100" {
+				t.Fatal("unexpected per-user/task API", args)
+			}
+		}
+	}
+	if collections != 4 {
+		t.Fatal("unexpected collection count", collections)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("members opened SQLite", err)
+	}
+	if _, err := os.Stat(os.Getenv("TD_SCHEDULE_STATE")); !os.IsNotExist(err) {
+		t.Fatal("members changed remote state", err)
 	}
 }

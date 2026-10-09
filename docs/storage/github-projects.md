@@ -28,8 +28,20 @@ GitHub store. `td sp unlink` therefore fails with instructions to switch stores
 explicitly (`td config set store sqlite`) after exporting/importing any needed
 data. No migration or remote deletion is implied or attempted.
 
-Repository creation and collaborators/invitations/permission management remain
-unfinished #29 requirements. `create`, `members`, `invite`, `kick` and `role`
+`td sp members` lists visible collaborators through one paginated collection
+(`per_page=100`), with no per-account lookups or issue/comment fetches. JSON
+preserves GitHub account IDs, login names, `role_name` and `permissions`, and
+declares `scope=visible-collaborators`. Empty results are `members: []`.
+The response can include inherited organization/team access; it cannot identify
+the source of a grant and does not include pending invitations. Collaborator
+listing requires access beyond ordinary issue access; denial remains an explicit
+failure with the original gh diagnostics, not a successful empty list.
+See [GitHub collaborator API](https://docs.github.com/en/rest/collaborators/collaborators#list-repository-collaborators)
+for the effective role semantics and required permissions. Native verification
+is still pending; this list alone does not establish administrator privileges.
+
+Repository creation and invitations/permission management remain
+unfinished #29 requirements. `create`, `invite`, `kick` and `role`
 currently fail explicitly in GitHub mode before SQLite/td-sync access. This is
 implementation pending, not an assertion that GitHub cannot support them.
 SQLite emails and owner/writer/reader roles must not be silently interpreted as
