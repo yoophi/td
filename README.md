@@ -420,6 +420,17 @@ receive 503. Cancellation of a mutation does not prove that GitHub rejected it;
 inspect the remote issue before retrying an uncertain write. The server does
 not retry writes automatically. Stopped server instances cannot be restarted.
 
+`td info` reports the GitHub repository, selected remote, issue URL, device-local
+context path and session, with complete visible status/type/priority counts and
+the current session's review queue. `--json` uses the same counts and has no
+SQLite `database` field. Deleted tasks and auxiliary entities are excluded.
+Stale reviews are counted separately and never advertised as actionable; any
+failed listing or review observation fails the entire overview. Counts reflect
+separate observations, not an atomic snapshot or permission for a later write.
+In trusted mode, `you_can_review` includes implementation participants who must
+explicitly acknowledge their review at approval time. `td stats` is the separate
+analytics/security/errors command group; it is no longer an alias for `info`.
+
 In `gh-issue` projects, `td doctor` performs read-only GitHub diagnostics instead
 of opening SQLite or checking td-sync credentials. `td doctor --json` returns
 `ok`, `store`, `repository` and named checks with `OK`, `WARN`, `FAIL` or `SKIP`

@@ -20,11 +20,14 @@ import (
 
 var infoCmd = &cobra.Command{
 	Use:     "info",
-	Aliases: []string{"stats"},
-	Short:   "Show database statistics and project overview",
+	Short:   "Show issue statistics and project overview (analytics: td stats)",
 	GroupID: "system",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
+		if handled, err := githubInfo(cmd, baseDir); handled {
+			return err
+		}
 
 		database, err := db.Open(baseDir)
 		if err != nil {
