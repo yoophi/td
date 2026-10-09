@@ -93,7 +93,24 @@ unexpected individual API endpoint fails the fixture. Existing non-bulk test
 adapters retain their older explicit review-observation contract; production
 ghstore clients implement `SnapshotReader` and use the conservative path.
 
-HTTP consumer request-budget and native selected-detail validation still need
-verification before #48 is closed. This change does not fix the entire #55
-20-second review timeout: write-side parent cascades and availability still
-perform their fresh checks.
+The HTTP router regression uses the actual configured GitHub read store and
+`GET /v1/monitor`: 1 and 60 in-review records both cost the same four gh
+invocations and return the unverified flag with no reviewable/ready-to-close
+grant. Individual endpoints are rejected by the fake executable.
+
+Native verification used disposable yoophi/td-sample#113. The aggregate monitor
+returned HTTP 200, the unverified flag, and no approval grant in four HTTP
+responses (repository preflight, two issue pages, one repository comment page).
+Selected detail performed ten HTTP responses and offered approve/reject after
+fresh verification. A direct GitHub close/reopen invalidated that review;
+detail then offered only reject, and an actual approve request returned HTTP
+409 with `native close/reopen history changed` before writing. A subsequent
+detail still had in_review status and no approval. The fixture was logically
+deleted and excluded from an include_closed listing; the test server stopped.
+Artifacts: tracking checkout `artifacts/gh-api-n-plus-one-plan/gh-48/`.
+
+Full related ghstore/serve/monitor race tests and macOS/Linux lint passed for
+the implementation; the additional HTTP router test also passed with race
+detection and both lint targets. This change does not fix the entire #55
+20-second review timeout: write-side parent cascades and selected availability
+still perform their fresh checks.
