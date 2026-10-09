@@ -21,6 +21,9 @@ func githubImport(cmd *cobra.Command, base, file string) (bool, error) {
 		return true, err
 	}
 	if kind != config.StoreGitHub {
+		if cmd.Flags().Changed("source") {
+			return true, fmt.Errorf("--source requires store=gh-issue")
+		}
 		return false, nil
 	}
 	format, _ := cmd.Flags().GetString("format")
@@ -46,6 +49,10 @@ func githubImport(cmd *cobra.Command, base, file string) (bool, error) {
 		items, err = ghstore.ParseImportMarkdown(string(data))
 	}
 	if err != nil {
+		return true, err
+	}
+	source, _ := cmd.Flags().GetString("source")
+	if err := ghstore.SetImportSourceNamespace(items, source); err != nil {
 		return true, err
 	}
 	client, err := ghstore.Open(cmd.Context(), base, cfg.GitHub)

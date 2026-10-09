@@ -1087,6 +1087,7 @@ func init() {
 	importCmd.Flags().String("format", "json", "Import format: json or md")
 	importCmd.Flags().Bool("dry-run", false, "Preview changes")
 	importCmd.Flags().Bool("force", false, "Overwrite existing")
+	importCmd.Flags().String("source", "", "Source namespace for legacy exports imported into GitHub")
 
 	sessionNameCmd.Flags().Bool("new", false, "Force create a new session")
 

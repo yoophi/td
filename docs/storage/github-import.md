@@ -5,7 +5,7 @@ are available; remote import writes, receipts, ID allocation, resumable replay
 and import/export round-trip verification remain required. A regular nonempty
 GitHub import currently exits with an explicit error and makes no remote changes.
 
-`td import FILE --format json|md --dry-run [--force] [--json]` reads a file;
+`td import FILE --format json|md --dry-run [--force] [--json] [--source NAME]` reads a file;
 `FILE=-` reads stdin. A `.md` extension selects Markdown with the default format.
 Every input item is parsed and validated before remote lookup. The target must
 still be a configured, accessible GitHub repository; there is no SQLite fallback.
@@ -40,9 +40,21 @@ simulate a POST that creates an issue but loses its response, then recover
 the allocated ID from a fresh repository listing without a second POST.
 The CLI still refuses nonempty writes: completion receipts, content/conflict
 verification on resume, relation application and provenance replay remain
-required before enabling it. Legacy exports do not identify their original
-project beyond the td ID; explicit source namespace handling remains required
-to distinguish two independent databases with the same legacy IDs.
+required before enabling it.
+
+Legacy exports do not identify their original project beyond the td ID. Use
+`--source project-a` to qualify SQLite/Markdown source identities, consistently
+on preview, apply and resume. Portable JSON can instead declare the optional
+`source_namespace` on each legacy item, allowing independent projects with the
+same td IDs in one input. Parent/dependency references stay in their item's
+namespace; a matching ID in another project cannot resolve them. The option
+cannot override a conflicting declaration. Namespace names use 1-128 ASCII
+letters/digits and `.`, `_`, `/`, `-`, starting with a letter or digit.
+GitHub exports keep their repository-qualified identity and cannot declare a
+legacy namespace. `--source` on GitHub-only input or a SQLite destination is an
+explicit error. For compatibility, unnamed legacy previews retain the original
+identity format; actual cross-project application must require a source name
+before it is enabled. Names identify public import provenance, not credentials.
 
 Markdown imports summary fields and descriptions. Anonymous headings receive
 deterministic IDs for an unchanged document; explicit td/gh headings retain

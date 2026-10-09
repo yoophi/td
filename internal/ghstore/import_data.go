@@ -16,12 +16,13 @@ import (
 // ImportItem is the portable JSON issue envelope. GitHub data is provenance,
 // never proof of a current review or permission to impersonate its author.
 type ImportItem struct {
-	GitHub       *ExportedIssue           `json:"github,omitempty"`
-	Issue        models.Issue             `json:"issue"`
-	Logs         []models.Log             `json:"logs"`
-	Handoffs     []models.Handoff         `json:"handoffs"`
-	Dependencies []models.IssueDependency `json:"dependencies"`
-	Files        []models.IssueFile       `json:"files"`
+	SourceNamespace string                   `json:"source_namespace,omitempty"`
+	GitHub          *ExportedIssue           `json:"github,omitempty"`
+	Issue           models.Issue             `json:"issue"`
+	Logs            []models.Log             `json:"logs"`
+	Handoffs        []models.Handoff         `json:"handoffs"`
+	Dependencies    []models.IssueDependency `json:"dependencies"`
+	Files           []models.IssueFile       `json:"files"`
 }
 
 func (e *ImportItem) UnmarshalJSON(data []byte) error {
@@ -29,13 +30,14 @@ func (e *ImportItem) UnmarshalJSON(data []byte) error {
 }
 func (e *ImportItem) decodeJSON(data []byte, strict bool) error {
 	var aux struct {
-		GitHub       *ExportedIssue     `json:"github,omitempty"`
-		Issue        models.Issue       `json:"issue"`
-		Logs         []models.Log       `json:"logs"`
-		Handoffs     []models.Handoff   `json:"handoffs"`
-		Handoff      *models.Handoff    `json:"handoff"`
-		Files        []models.IssueFile `json:"files"`
-		Dependencies json.RawMessage    `json:"dependencies"`
+		SourceNamespace string             `json:"source_namespace,omitempty"`
+		GitHub          *ExportedIssue     `json:"github,omitempty"`
+		Issue           models.Issue       `json:"issue"`
+		Logs            []models.Log       `json:"logs"`
+		Handoffs        []models.Handoff   `json:"handoffs"`
+		Handoff         *models.Handoff    `json:"handoff"`
+		Files           []models.IssueFile `json:"files"`
+		Dependencies    json.RawMessage    `json:"dependencies"`
 	}
 	decode := json.Unmarshal
 	if strict {
@@ -44,7 +46,7 @@ func (e *ImportItem) decodeJSON(data []byte, strict bool) error {
 	if err := decode(data, &aux); err != nil {
 		return err
 	}
-	*e = ImportItem{GitHub: aux.GitHub, Issue: aux.Issue, Logs: aux.Logs, Handoffs: aux.Handoffs, Files: aux.Files}
+	*e = ImportItem{SourceNamespace: aux.SourceNamespace, GitHub: aux.GitHub, Issue: aux.Issue, Logs: aux.Logs, Handoffs: aux.Handoffs, Files: aux.Files}
 	if len(e.Handoffs) == 0 && aux.Handoff != nil {
 		e.Handoffs = []models.Handoff{*aux.Handoff}
 	}
@@ -114,6 +116,37 @@ func ParseImportJSON(data []byte) ([]ImportItem, error) {
 }
 
 var importIDPattern = regexp.MustCompile(`^(td-[A-Za-z0-9]+|gh-[1-9][0-9]*)$`)
+var importNamespacePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
+
+// SetImportSourceNamespace qualifies legacy identities, without altering
+// repository-qualified GitHub identities. Never override a declared source.
+func SetImportSourceNamespace(items []ImportItem, namespace string) error {
+	if namespace == "" {
+		return nil
+	}
+	if !importNamespacePattern.MatchString(namespace) {
+		return fmt.Errorf("invalid import source namespace; use 1-128 letters, digits, '.', '_', '/', or '-', starting with a letter or digit")
+	}
+	legacy := 0
+	for _, item := range items {
+		if item.GitHub != nil {
+			continue
+		}
+		legacy++
+		if item.SourceNamespace != "" && item.SourceNamespace != namespace {
+			return fmt.Errorf("source namespace %q disagrees with declared namespace %q for %s", namespace, item.SourceNamespace, item.Issue.ID)
+		}
+	}
+	if legacy == 0 && len(items) != 0 {
+		return fmt.Errorf("--source applies to legacy exports; GitHub exports already identify their repository")
+	}
+	for i := range items {
+		if items[i].GitHub == nil {
+			items[i].SourceNamespace = namespace
+		}
+	}
+	return ValidateImportItems(items)
+}
 
 func (e ImportItem) SourceKey() string {
 	return e.ReferenceKey(e.Issue.ID)
@@ -121,6 +154,9 @@ func (e ImportItem) SourceKey() string {
 func (e ImportItem) ReferenceKey(id string) string {
 	if e.GitHub != nil {
 		return "github:" + strings.ToLower(e.GitHub.Repository) + ":" + id
+	}
+	if e.SourceNamespace != "" {
+		return "legacy:" + e.SourceNamespace + ":" + id
 	}
 	return "legacy:" + id
 }
@@ -134,6 +170,9 @@ func (e ImportItem) Digest() (string, error) {
 func ValidateImportItems(items []ImportItem) error {
 	byID := map[string]int{}
 	for i, e := range items {
+		if e.SourceNamespace != "" && (e.GitHub != nil || !importNamespacePattern.MatchString(e.SourceNamespace)) {
+			return fmt.Errorf("invalid source namespace for %s; only legacy exports can declare a source namespace", e.Issue.ID)
+		}
 		if !importIDPattern.MatchString(e.Issue.ID) {
 			return fmt.Errorf("import item %d requires a canonical source issue ID", i+1)
 		}
