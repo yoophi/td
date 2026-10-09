@@ -98,6 +98,11 @@ The HTTP router regression uses the actual configured GitHub read store and
 invocations and return the unverified flag with no reviewable/ready-to-close
 grant. Individual endpoints are rejected by the fake executable.
 
+The TUI board-source regression also covers 1 and 60 in-review records: one
+issue listing in both cases, all rows pending, and any individual review/history
+read fails the fixture. The selected-detail and write-side interfaces are not
+replaced by these conservative queue facts.
+
 Native verification used disposable yoophi/td-sample#113. The aggregate monitor
 returned HTTP 200, the unverified flag, and no approval grant in four HTTP
 responses (repository preflight, two issue pages, one repository comment page).

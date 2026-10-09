@@ -4,12 +4,53 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 )
+
+type unverifiedBoardFixture struct {
+	boardSourceFixture
+	lists int
+}
+
+func (f *unverifiedBoardFixture) List(ctx context.Context, all bool) ([]ghstore.Record, error) {
+	f.lists++
+	return f.boardSourceFixture.List(ctx, all)
+}
+func (*unverifiedBoardFixture) ReadSnapshot(context.Context, bool) (*ghstore.Snapshot, error) {
+	panic("board queue requested another full observation")
+}
+func (*unverifiedBoardFixture) ObserveMonitorReview(context.Context, *ghstore.Record, string) (*ghstore.MonitorReviewFacts, error) {
+	panic("board queue requested per-issue review verification")
+}
+func (*unverifiedBoardFixture) ListActivity(context.Context, string) ([]models.Activity, error) {
+	panic("board review queue requested per-issue history")
+}
+
+func TestGitHubBoardReviewCountDoesNotAddIndividualRequests(t *testing.T) {
+	for _, count := range []int{1, 60} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			f := &unverifiedBoardFixture{boardSourceFixture: boardSourceFixture{boards: []ghstore.BoardRecord{{Board: models.Board{ID: "bd-gh-9", Name: "Review queue"}, Details: ghstore.BoardDetails{Version: 1, ViewMode: "swimlanes"}}}}}
+			for n := 1; n <= count; n++ {
+				f.records = append(f.records, ghstore.Record{Issue: models.Issue{ID: fmt.Sprintf("gh-%d", n), Status: models.StatusInReview}})
+			}
+			s := &GitHubBoardSource{ctx: context.Background(), baseDir: t.TempDir(), actor: "actual-monitor", open: func(context.Context) (githubBoardClient, error) { return f, nil }}
+			msg := s.LoadBoard("bd-gh-9", DefaultBoardStatusFilter())
+			if msg.Error != nil || len(msg.Issues) != count || f.lists != 1 {
+				t.Fatalf("unsafe board cost: %+v lists=%d", msg, f.lists)
+			}
+			for _, row := range msg.Issues {
+				if row.Category != string(CategoryPendingOther) {
+					t.Fatalf("unverified board granted %s", row.Category)
+				}
+			}
+		})
+	}
+}
 
 type boardSourceFixture struct {
 	boards  []ghstore.BoardRecord
