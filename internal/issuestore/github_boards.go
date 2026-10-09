@@ -40,6 +40,15 @@ func ReadGitHubBoardSnapshot(ctx context.Context, c GitHubBoardReader, board *gh
 	if board == nil {
 		return nil, fmt.Errorf("board is required")
 	}
+	return ReadGitHubBoardSnapshotForActor(ctx, c, board, "", includeClosed, keep...)
+}
+
+// ReadGitHubBoardSnapshotForActor evaluates @me with the caller's actual td
+// actor. Web callers retain their established empty-actor contract.
+func ReadGitHubBoardSnapshotForActor(ctx context.Context, c GitHubBoardReader, board *ghstore.BoardRecord, actor string, includeClosed bool, keep ...string) (*GitHubBoardSnapshot, error) {
+	if board == nil {
+		return nil, fmt.Errorf("board is required")
+	}
 	expression, err := c.BoardQueryObserved(board)
 	if err != nil {
 		return nil, err
@@ -57,7 +66,7 @@ func ReadGitHubBoardSnapshot(ctx context.Context, c GitHubBoardReader, board *gh
 		matched, err = snapshot.ListIssues(db.ListIssuesOptions{SortBy: "priority"})
 	} else {
 		var result query.ExecuteResult
-		result, err = query.ExecuteDetailed(snapshot, expression, "", query.ExecuteOptions{SortBy: "priority", MaxResults: len(records) + 1})
+		result, err = query.ExecuteDetailed(snapshot, expression, actor, query.ExecuteOptions{SortBy: "priority", MaxResults: len(records) + 1})
 		if err == nil && (result.ScanLimited || result.Truncated) {
 			return nil, fmt.Errorf("board query was incomplete; refuse partial board")
 		}

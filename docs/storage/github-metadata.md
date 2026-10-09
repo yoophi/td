@@ -586,3 +586,31 @@ exclude requests performed internally by `gh auth`; they are observations of
 received headers, not a claim to count every network exchange. Credentials,
 bodies and arbitrary response headers are not printed. Rate-limit errors remain
 explicit and include the retry/reset observation when available.
+
+### Board CLI
+
+`td board list/create/show/edit/delete/move/unposition` use the configured
+GitHub repository when `store=gh-issue`. They never open SQLite or fall back to
+it. Board references accept the public ID (`bd-gh-N`, or `bd-all-issues` for the
+builtin) or an unambiguous name. Board query `@me` uses the actual device-local
+td actor; this differs from the web API's existing anonymous query scope.
+`show --status` accepts repeated/comma-separated valid statuses and defaults to
+hiding closed tasks. Future-deferred tasks remain eligible according to the
+board's query, without an implicit list deferral filter.
+
+Explicit CLI configuration edits are shared: name, TDQ, and `--view-mode` are
+saved together in one carrier update. Board history records the actual actor.
+The builtin cannot be renamed, filtered, or deleted; an explicit view/position
+write may materialize its virtual carrier. If a subsequent position write
+fails, the error reports that creation already occurred. `move` uses a positive,
+one-based slot among saved positions, matching the SQLite CLI contract;
+unpositioned cards retain query order. `unposition` also permits cleanup of a
+saved reference to a missing or logically deleted task.
+
+Writes compare the original observed revision before saving and verify the
+GitHub response and readback afterward. GitHub does not provide atomic
+compare-and-swap for these updates; conflicts or uncertain write outcomes are
+errors and are never automatically retried. Refresh and inspect the carrier
+before deciding whether to retry. Read-after-list propagation delays can occur.
+CLI mutations with `--json` emit the confirmed board object; list and show emit
+bare arrays. The wider monitor TUI integration is tracked separately within #6.

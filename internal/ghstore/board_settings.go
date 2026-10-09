@@ -13,11 +13,20 @@ type boardConfigMutation struct {
 	apply  func(*BoardDetails) error
 }
 
-func (c *Client) SetBoardViewModeObserved(ctx context.Context, board *BoardRecord, mode, actor string) (*BoardRecord, error) {
-	if mode != "swimlanes" && mode != "backlog" {
+// UpdateBoardConfigObserved saves an explicit CLI configuration edit in one
+// carrier write, including combined name/query/view-mode changes.
+func (c *Client) UpdateBoardConfigObserved(ctx context.Context, board *BoardRecord, changes BoardChanges, mode *string, actor string) (*BoardRecord, error) {
+	if mode == nil {
+		return c.UpdateBoardObserved(ctx, board, changes, actor)
+	}
+	if *mode != "swimlanes" && *mode != "backlog" {
 		return nil, &WorkflowInputError{Reason: "board view mode must be swimlanes or backlog"}
 	}
-	return c.writeBoardObserved(ctx, board, BoardChanges{}, false, actor, "", &boardConfigMutation{action: "set_view_mode", apply: func(d *BoardDetails) error { d.ViewMode = mode; return nil }})
+	return c.writeBoardObserved(ctx, board, changes, false, actor, "", &boardConfigMutation{action: "set_view_mode", apply: func(d *BoardDetails) error { d.ViewMode = *mode; return nil }})
+}
+
+func (c *Client) SetBoardViewModeObserved(ctx context.Context, board *BoardRecord, mode, actor string) (*BoardRecord, error) {
+	return c.UpdateBoardConfigObserved(ctx, board, BoardChanges{}, &mode, actor)
 }
 
 func (c *Client) MarkBoardViewedObserved(ctx context.Context, board *BoardRecord, actor string) (*BoardRecord, error) {

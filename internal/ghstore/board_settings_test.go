@@ -231,3 +231,30 @@ func TestBoardObservedBuiltinMaterializationRejectsAppearedCarrier(t *testing.T)
 		t.Fatal("missing actor")
 	}
 }
+
+func TestBoardCombinedEditOneWriteAndBuiltinBoundaries(t *testing.T) {
+	ctx := context.Background()
+	c, _, writes := hierarchyFixture(t)
+	b, err := c.CreateBoard(ctx, "First", "status = open", "actual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, expression, mode := "Renamed", "priority = P0", "backlog"
+	before := *writes
+	updated, err := c.UpdateBoardConfigObserved(ctx, b, BoardChanges{Name: &name, Query: &expression}, &mode, "actual")
+	if err != nil || *writes != before+1 || updated.Name != name || updated.Query != expression || updated.ViewMode != mode {
+		t.Fatal(updated, err, *writes)
+	}
+	builtin, err := c.EnsureBuiltinBoard(ctx, "actual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before = *writes
+	if _, err = c.UpdateBoardConfigObserved(ctx, builtin, BoardChanges{Name: &name}, &mode, "actual"); err == nil || *writes != before {
+		t.Fatal("builtin mixed edit wrote", err)
+	}
+	invalid := "invalid"
+	if _, err = c.UpdateBoardConfigObserved(ctx, updated, BoardChanges{Name: &name}, &invalid, "actual"); err == nil || *writes != before {
+		t.Fatal("invalid mode wrote", err)
+	}
+}

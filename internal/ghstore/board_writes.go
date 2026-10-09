@@ -146,7 +146,7 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 	if before.ID != observed.ID {
 		return nil, &WorkflowInputError{Reason: "board observation identity is inconsistent"}
 	}
-	if before.IsBuiltin && mutation == nil {
+	if before.IsBuiltin && (mutation == nil || changes.Name != nil || changes.Query != nil || deleted) {
 		return nil, &PolicyError{Reason: "cannot rename, filter or delete the builtin All Issues board"}
 	}
 	if before.Details.DeletedAt != nil {

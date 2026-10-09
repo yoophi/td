@@ -89,3 +89,14 @@ func TestGitHubBoardCandidatesCancellationAndDuplicateListing(t *testing.T) {
 		t.Fatal("duplicate listing accepted")
 	}
 }
+
+func TestGitHubBoardCallerActorIsScoped(t *testing.T) {
+	f := &boardReaderFixture{expression: "implementer = @me", records: []ghstore.Record{
+		{Issue: models.Issue{ID: "gh-1", Status: models.StatusOpen, ImplementerSession: "real-actor"}},
+		{Issue: models.Issue{ID: "gh-2", Status: models.StatusOpen, ImplementerSession: "other"}},
+	}}
+	got, err := ReadGitHubBoardSnapshotForActor(context.Background(), f, &ghstore.BoardRecord{}, "real-actor", true)
+	if err != nil || len(got.Candidates) != 1 || got.Candidates[0].ID != "gh-1" {
+		t.Fatal(got, err)
+	}
+}
