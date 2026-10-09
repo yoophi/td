@@ -96,7 +96,7 @@ func TestGitHubEventsHTTPInitialReconnectFailuresAndQuery(t *testing.T) {
 		t.Run(last, func(t *testing.T) {
 			srv := NewGitHubServer(t.TempDir(), "web", "owner/repo", ServeConfig{})
 			srv.EnableGitHubEvents(&GitHubReadStore{})
-			if srv.githubEvents.interval != 30*time.Second {
+			if srv.githubEvents.interval != 5*time.Minute {
 				t.Fatal("unbounded poll frequency")
 			}
 			srv.githubEvents.read = func(context.Context) (string, error) { return "gh-current", nil }

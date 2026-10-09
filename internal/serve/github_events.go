@@ -164,8 +164,10 @@ func (h *githubEventHub) run(ctx context.Context) {
 }
 func (s *Server) EnableGitHubEvents(store *GitHubReadStore) {
 	interval := s.config.PollInterval
-	if interval < 30*time.Second {
-		interval = 30 * time.Second
+	// A complete token reads every issue's comments. At 44 issues a 30s
+	// interval alone exceeds the 5,000/hour REST allowance, even when idle.
+	if interval < 5*time.Minute {
+		interval = 5 * time.Minute
 	}
 	s.githubEvents = newGitHubEventHub(func(ctx context.Context) (string, error) {
 		client, err := store.open(ctx)

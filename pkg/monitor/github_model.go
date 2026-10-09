@@ -79,6 +79,9 @@ func NewGitHubModelForWorktree(ctx context.Context, baseDir, worktreeDir string,
 		value := current.Focus
 		return &value, nil
 	}
+	// Each complete refresh visits task histories; SQLite's 2s default would
+	// exhaust GitHub's REST quota. Longer caller intervals remain respected.
+	interval = max(interval, 5*time.Minute)
 	m := NewModel(nil, actor, interval, ver, baseDir)
 	m.preferences = preferences
 	m.PaneHeights = prefs.PaneHeights

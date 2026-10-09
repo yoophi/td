@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -34,6 +35,8 @@ type GitHubDataSource struct {
 	branch         string
 	open           func(context.Context) (GitHubMonitorReader, error)
 	focus          func(context.Context) (*string, error)
+	rateLimit      error
+	retryAt        time.Time
 }
 
 func NewGitHubDataSource(ctx context.Context, baseDir string, selected models.GitHubStoreConfig, actor, branch string, focus func(context.Context) (*string, error)) *GitHubDataSource {
@@ -48,9 +51,24 @@ func (s *GitHubDataSource) Fetch(search string, includeClosed bool, sort SortMod
 	s.refreshing.Store(true)
 	defer s.refreshing.Store(false)
 	defer func() { result.remoteFilter = &monitorRefreshFilter{search, includeClosed, sort} }()
-	fail := func(err error) RefreshDataMsg { return RefreshDataMsg{Error: err} }
+	fail := func(err error) RefreshDataMsg {
+		var limit *ghstore.RateLimitError
+		if errors.As(err, &limit) {
+			s.rateLimit = err
+			s.retryAt = limit.RetryAt
+			if s.retryAt.IsZero() {
+				s.retryAt = time.Now().Add(limit.MinimumWait())
+			}
+		}
+		return RefreshDataMsg{Error: err}
+	}
 	if err := s.ctx.Err(); err != nil {
 		return fail(err)
+	}
+	// Preserve the original diagnostic while suppressing repeated sweeps until
+	// the observed reset deadline. This never retries a write or clears data.
+	if s.rateLimit != nil && time.Now().Before(s.retryAt) {
+		return RefreshDataMsg{Error: s.rateLimit}
 	}
 	if s.actor == "" || s.focus == nil {
 		return fail(fmt.Errorf("GitHub monitor requires actual session and focus reader"))

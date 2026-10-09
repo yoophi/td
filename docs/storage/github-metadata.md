@@ -648,9 +648,12 @@ this explicitly. Follow-up #44 depends on #20 and is an implementation task,
 not an impossible-work exception. Runtime verification and the #6 acceptance
 audit are recorded on that issue. Complete dashboard refreshes read retained
 activity for every task, including deleted tasks, and can take minutes on a
-repository with substantial history. Use `td monitor --interval 1m` or a longer
-interval to reduce repeated API sweeps; overlapping dashboard sweeps are skipped,
-and rate-limit/read errors retain the prior display. No atomic repository
+repository with substantial history. GitHub monitor and server event polling
+have a minimum interval of five minutes; longer configured intervals are respected.
+Overlapping dashboard sweeps are skipped. A monitor rate-limit response suppresses
+further dashboard requests until its observed reset deadline (one minute when no
+deadline was supplied), preserving the original error and the prior display.
+No atomic repository
 snapshot or immediate refresh guarantee is provided.
 
 ## Notes

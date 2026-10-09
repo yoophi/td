@@ -83,6 +83,30 @@ func TestGitHubMonitorDataSourceRejectsMissingSessionAndFocusFailure(t *testing.
 	}
 }
 
+func TestGitHubMonitorRateLimitPreservesOriginalAndStopsCallsUntilReset(t *testing.T) {
+	original := errors.New("gh: API rate limit exceeded (HTTP 403); request ID D352:CDDF; timestamp 2026-10-09 15:03:27 UTC")
+	limit := &ghstore.RateLimitError{Cause: original, RetryAt: time.Now().Add(time.Hour), WaitSource: "x-ratelimit-reset"}
+	opens := 0
+	s := &GitHubDataSource{ctx: context.Background(), baseDir: t.TempDir(), actor: "actual", focus: func(context.Context) (*string, error) { return nil, nil }, open: func(context.Context) (GitHubMonitorReader, error) {
+		opens++
+		return nil, limit
+	}}
+	for i := 0; i < 3; i++ {
+		msg := s.Fetch("", false, SortByPriority)
+		if !errors.Is(msg.Error, original) || msg.Error.Error() != limit.Error() || msg.HasIssues {
+			t.Fatalf("lost diagnostic or exposed partial dashboard: %+v", msg)
+		}
+	}
+	if opens != 1 {
+		t.Fatalf("retried before reset: opens=%d", opens)
+	}
+	s.retryAt = time.Now().Add(-time.Second)
+	s.Fetch("", false, SortByPriority)
+	if opens != 2 {
+		t.Fatal("read did not resume after reset")
+	}
+}
+
 type waitingMonitorRefresh struct {
 	monitorDataFixture
 	entered chan struct{}

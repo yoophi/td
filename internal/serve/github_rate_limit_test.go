@@ -85,3 +85,12 @@ func TestGitHubObservedRateDeadlineHTTPAndPolling(t *testing.T) {
 	}
 	h.stop()
 }
+
+func TestGitHubRateLimitPreservesOriginalDiagnostic(t *testing.T) {
+	original := "gh: API rate limit exceeded (HTTP 403); request ID D352:CDDF:3F8B1:54D38:6AC9023F; timestamp 2026-10-09 15:03:27 UTC"
+	limit := &ghstore.RateLimitError{Cause: errors.New(original), RetryAt: time.Now().Add(time.Hour), WaitSource: "x-ratelimit-reset"}
+	w := httptest.NewRecorder()
+	if !writeGitHubRateLimit(w, limit) || w.Code != 429 || !strings.Contains(w.Body.String(), original) || !strings.Contains(w.Body.String(), "GitHub rate limit reached") || !strings.Contains(w.Body.String(), "x-ratelimit-reset") {
+		t.Fatalf("original error or exception guidance missing: %s", w.Body.String())
+	}
+}
