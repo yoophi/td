@@ -17,7 +17,7 @@ import (
 
 func githubTestCommand(original *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: original.Use, RunE: original.RunE, SilenceErrors: true, SilenceUsage: true}
-	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "epic", "comment", "note", "sprint", "due", "defer", "filter"} {
+	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "epic", "comment", "note", "sprint", "due", "defer", "filter", "implementer", "reviewer", "created", "updated", "closed"} {
 		if (original == listCmd || original == searchCmd) && (name == "type" || name == "status") {
 			continue
 		}
@@ -30,7 +30,7 @@ func githubTestCommand(original *cobra.Command) *cobra.Command {
 		cmd.Flags().StringArray("type", nil, "")
 		cmd.Flags().StringArray("status", nil, "")
 	}
-	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append", "minor", "tree", "children", "render-markdown", "deferred", "overdue", "due-soon", "surfacing", "clear"} {
+	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append", "minor", "tree", "children", "render-markdown", "deferred", "overdue", "due-soon", "surfacing", "clear", "mine", "reviewable", "include-approved"} {
 		cmd.Flags().Bool(name, false, "")
 	}
 	if original == queryCmd {
@@ -41,7 +41,11 @@ func githubTestCommand(original *cobra.Command) *cobra.Command {
 		}
 	}
 	cmd.Flags().Bool("show-score", false, "")
-	cmd.Flags().Int("points", 0, "")
+	if original == listCmd {
+		cmd.Flags().String("points", "", "")
+	} else {
+		cmd.Flags().Int("points", 0, "")
+	}
 	cmd.Flags().Int("limit", 50, "")
 	return cmd
 }

@@ -85,7 +85,7 @@ func SortGitHubIssues(issues []models.Issue, field string, desc bool) error {
 	if mapped, ok := query.SortFieldToColumn[field]; ok {
 		field = mapped
 	}
-	if !slices.Contains([]string{"priority", "id", "title", "status", "type", "points", "sprint", "created_at", "updated_at", "closed_at", "deleted_at"}, field) {
+	if !slices.Contains([]string{"priority", "id", "title", "status", "type", "points", "sprint", "created_at", "updated_at", "closed_at", "deleted_at", "due_date", "defer_until", "defer_count"}, field) {
 		return fmt.Errorf("unsupported sort field %q", field)
 	}
 	date := func(t *time.Time) time.Time {
@@ -93,6 +93,12 @@ func SortGitHubIssues(issues []models.Issue, field string, desc bool) error {
 			return time.Time{}
 		}
 		return *t
+	}
+	calendar := func(s *string) string {
+		if s == nil {
+			return ""
+		}
+		return *s
 	}
 	slices.SortFunc(issues, func(a, b models.Issue) int {
 		n := 0
@@ -119,6 +125,12 @@ func SortGitHubIssues(issues []models.Issue, field string, desc bool) error {
 			n = date(a.ClosedAt).Compare(date(b.ClosedAt))
 		case "deleted_at":
 			n = date(a.DeletedAt).Compare(date(b.DeletedAt))
+		case "due_date":
+			n = strings.Compare(calendar(a.DueDate), calendar(b.DueDate))
+		case "defer_until":
+			n = strings.Compare(calendar(a.DeferUntil), calendar(b.DeferUntil))
+		case "defer_count":
+			n = cmp.Compare(a.DeferCount, b.DeferCount)
 		}
 		if desc {
 			n = -n

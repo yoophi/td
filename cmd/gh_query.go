@@ -46,28 +46,28 @@ func init() {
 }
 
 func openGitHubQuerySnapshot(cmd *cobra.Command, cfg *models.Config) (*issuestore.GitHubQuerySnapshot, *ghcontext.State, error) {
-	client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
-	if err != nil {
-		return nil, nil, err
-	}
-	dir, err := gitHubContextDirectory()
-	if err != nil {
-		return nil, nil, err
-	}
-	scope, err := ghcontext.Resolve(cmd.Context(), dir, cfg.GitHub.Repo)
-	if err != nil {
-		return nil, nil, err
-	}
-	state, err := scope.Update(cmd.Context(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	rows, err := client.List(cmd.Context(), true)
+	client, state, rows, err := openGitHubQueryData(cmd, cfg)
 	if err != nil {
 		return nil, nil, err
 	}
 	snapshot, err := issuestore.NewGitHubQuerySnapshot(cmd.Context(), rows, client)
 	return snapshot, state, err
+}
+
+func openGitHubQueryData(cmd *cobra.Command, cfg *models.Config) (*ghstore.Client, *ghcontext.State, []ghstore.Record, error) {
+	client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	state, err := resolveGitHubListState(cmd, cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	rows, err := client.List(cmd.Context(), true)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return client, state, rows, nil
 }
 
 func validateGitHubQuery(expression string) error {

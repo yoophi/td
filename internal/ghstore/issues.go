@@ -161,7 +161,15 @@ func (item apiIssue) record() (*Record, error) {
 	for _, label := range item.Labels {
 		labels = append(labels, label.Name)
 	}
-	snapshot, err := json.Marshal(item)
+	// GitHub PATCH and GET can return the same labels in different orders.
+	// Treat labels as a set for revision comparison, without changing their
+	// presentation order or hiding edits to names/membership/other fields.
+	revisionItem := item
+	revisionItem.Labels = slices.Clone(item.Labels)
+	slices.SortFunc(revisionItem.Labels, func(a, b struct {
+		Name string `json:"name"`
+	}) int { return strings.Compare(a.Name, b.Name) })
+	snapshot, err := json.Marshal(revisionItem)
 	if err != nil {
 		return nil, err
 	}

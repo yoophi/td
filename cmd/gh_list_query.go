@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/marcus/td/internal/issuestore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/marcus/td/internal/query"
@@ -46,11 +47,15 @@ func listGitHubTDQ(cmd *cobra.Command, expression string, cfg *models.Config) er
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(jsonList(result.Issues))
 	}
 	long, _ := cmd.Flags().GetBool("long")
+	return printGitHubListIssues(cmd, snapshot, result.Issues, long || format == "long")
+}
+
+func printGitHubListIssues(cmd *cobra.Command, snapshot *issuestore.GitHubQuerySnapshot, issues []models.Issue, long bool) error {
 	// Assemble detailed output before printing: failed activity reads must not
 	// leave a partial listing looking like a complete successful result.
-	lines := make([]string, 0, len(result.Issues))
-	for _, issue := range result.Issues {
-		if long || format == "long" {
+	lines := make([]string, 0, len(issues))
+	for _, issue := range issues {
+		if long {
 			logs, err := snapshot.GetLogs(issue.ID, 5)
 			if err != nil {
 				return err
@@ -67,7 +72,7 @@ func listGitHubTDQ(cmd *cobra.Command, expression string, cfg *models.Config) er
 	for _, line := range lines {
 		cmd.Print(line)
 	}
-	if len(result.Issues) == 0 {
+	if len(issues) == 0 {
 		cmd.Println("No issues found")
 	}
 	return nil

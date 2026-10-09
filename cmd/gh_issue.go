@@ -47,7 +47,7 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 	case "update":
 		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint parent depends-on blocks due defer "
 	case "list":
-		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager parent epic deferred overdue due-soon surfacing filter "
+		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager parent epic deferred overdue due-soon surfacing filter points implementer reviewer mine reviewable include-approved created updated closed "
 	case "show":
 		allowed += "long short format tree children render-markdown "
 	}

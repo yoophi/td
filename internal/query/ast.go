@@ -259,16 +259,21 @@ func (s *SortClause) String() string {
 
 // SortFieldToColumn maps user-facing sort field names to DB columns
 var SortFieldToColumn = map[string]string{
-	"created":  "created_at",
-	"updated":  "updated_at",
-	"closed":   "closed_at",
-	"deleted":  "deleted_at",
-	"priority": "priority",
-	"id":       "id",
-	"title":    "title",
-	"status":   "status",
-	"points":   "points",
-	"sprint":   "sprint",
+	"created":     "created_at",
+	"updated":     "updated_at",
+	"closed":      "closed_at",
+	"deleted":     "deleted_at",
+	"priority":    "priority",
+	"id":          "id",
+	"title":       "title",
+	"status":      "status",
+	"points":      "points",
+	"sprint":      "sprint",
+	"due":         "due_date",
+	"due_date":    "due_date",
+	"defer":       "defer_until",
+	"defer_until": "defer_until",
+	"defer_count": "defer_count",
 }
 
 // NoteSortFieldToColumn maps user-facing sort field names to DB columns for notes

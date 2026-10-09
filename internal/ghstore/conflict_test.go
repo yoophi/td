@@ -49,6 +49,75 @@ func TestUpdateDetectsObservedConcurrentChanges(t *testing.T) {
 	}
 }
 
+func TestRevisionIgnoresLabelOrderButDetectsContentChanges(t *testing.T) {
+	base := map[string]any{"number": 1, "state": "open", "title": "Fixture", "body": "text", "labels": []map[string]string{{"name": "topic"}, {"name": "td:open"}}, "updated_at": "2026-10-09T12:00:00Z"}
+	decode := func(v map[string]any) *Record {
+		t.Helper()
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := decodeIssue(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	original := decode(base)
+	copy := func() map[string]any {
+		r := map[string]any{}
+		for k, v := range base {
+			r[k] = v
+		}
+		return r
+	}
+	reordered := copy()
+	reordered["labels"] = []map[string]string{{"name": "td:open"}, {"name": "topic"}}
+	r := decode(reordered)
+	if original.revision != r.revision || !slices.Equal(r.Labels, []string{"td:open", "topic"}) {
+		t.Fatal("order changed revision or presentation", r.Labels)
+	}
+	for _, change := range []map[string]any{{"title": "Changed"}, {"body": "Changed"}, {"state": "closed"}, {"updated_at": "2026-10-09T12:00:01Z"}, {"labels": []map[string]string{{"name": "td:open"}}}, {"labels": []map[string]string{{"name": "td:open"}, {"name": "renamed"}}}} {
+		v := copy()
+		for k, value := range change {
+			v[k] = value
+		}
+		if decode(v).revision == original.revision {
+			t.Fatal("actual change ignored", change)
+		}
+	}
+}
+
+func TestUpdateAcceptsLabelPermutationInPreAndPostReadback(t *testing.T) {
+	reads, writes := 0, 0
+	current := map[string]any{"number": 1, "state": "open", "title": "Original", "body": "Text"}
+	client := &Client{stateLabels: fixtureStateLabels(), run: func(_ context.Context, _ string, payload []byte, args ...string) ([]byte, error) {
+		if slices.Contains(args, "GET") {
+			reads++
+		} else {
+			writes++
+			var patch map[string]any
+			if err := json.Unmarshal(payload, &patch); err != nil {
+				t.Fatal(err)
+			}
+			for k, v := range patch {
+				current[k] = v
+			}
+		}
+		labels := []map[string]string{{"name": "topic"}, {"name": "td:open"}}
+		if reads%2 == 0 {
+			labels[0], labels[1] = labels[1], labels[0]
+		}
+		current["labels"] = labels
+		return fixtureIssueJSON(current)
+	}}
+	title := "Changed"
+	r, err := client.Update(context.Background(), "1", Changes{Title: &title})
+	if err != nil || r.Title != title || reads != 3 || writes != 1 {
+		t.Fatal(r, err, reads, writes)
+	}
+}
+
 func TestUpdateRejectsIgnoredFieldsAndUnverifiedWrites(t *testing.T) {
 	for _, mode := range []string{"ignored", "read-failed", "write-failed"} {
 		t.Run(mode, func(t *testing.T) {

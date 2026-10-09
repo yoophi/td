@@ -550,6 +550,7 @@ func (l *Lexer) scanSortClause(startPos, startLine, startCol int) Token {
 	}
 
 	validSortFields := map[string]bool{
+		"due": true, "due_date": true, "defer": true, "defer_until": true, "defer_count": true,
 		"created":  true,
 		"updated":  true,
 		"closed":   true,
@@ -559,12 +560,13 @@ func (l *Lexer) scanSortClause(startPos, startLine, startCol int) Token {
 		"title":    true,
 		"status":   true,
 		"points":   true,
+		"sprint":   true,
 	}
 
 	if !validSortFields[fieldName] {
 		return Token{
 			Type:   TokenError,
-			Value:  fmt.Sprintf("invalid sort field: %s (valid: created, updated, closed, deleted, priority, id, title, status, points)", fieldName),
+			Value:  fmt.Sprintf("invalid sort field: %s (valid: created, updated, closed, deleted, priority, id, title, status, points, sprint, due, defer, defer_count)", fieldName),
 			Pos:    startPos,
 			Line:   startLine,
 			Column: startCol,

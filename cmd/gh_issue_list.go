@@ -31,19 +31,34 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 	if expression != "" {
 		return listGitHubTDQ(cmd, expression, cfg)
 	}
+	extra, err := readGitHubListFilters(cmd)
+	if err != nil {
+		return err
+	}
+	reviewable, _ := cmd.Flags().GetBool("reviewable")
+	includeApproved, _ := cmd.Flags().GetBool("include-approved")
 	all, _ := cmd.Flags().GetBool("all")
 	open, _ := cmd.Flags().GetBool("open")
 	statuses, _ := cmd.Flags().GetStringArray("status")
 	statuses = mergeMultiValueFlag(statuses)
-	includeDeferred := all || slices.Contains(statuses, "all")
-	for _, status := range statuses {
-		if !slices.Contains([]string{"open", "in_progress", "blocked", "in_review", "closed", "all"}, status) {
+	for i, status := range statuses {
+		if strings.EqualFold(status, "all") {
+			statuses[i] = "all"
+			continue
+		}
+		normalized := models.NormalizeStatus(status)
+		if !models.IsValidStatus(normalized) {
 			return fmt.Errorf("gh-issue status must be open, in_progress, blocked, in_review, closed or all")
 		}
+		statuses[i] = string(normalized)
+	}
+	includeDeferred := all || slices.Contains(statuses, "all")
+	for _, status := range statuses {
 		if status == "closed" || status == "all" {
 			all = true
 		}
 	}
+	statuses = slices.DeleteFunc(statuses, func(s string) bool { return s == "all" })
 	if open {
 		all = false
 		statuses = []string{"open"}
@@ -76,12 +91,12 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 	labels, _ := cmd.Flags().GetStringArray("labels")
 	labels = mergeMultiValueFlag(labels)
 	search, _ := cmd.Flags().GetString("search")
-	search = strings.ToLower(search)
+	searchMatch := issuestore.SQLiteLIKE("%" + search + "%")
 	sortBy, _ := cmd.Flags().GetString("sort")
 	if sortBy == "" {
 		sortBy = "priority"
 	}
-	if !slices.Contains([]string{"id", "title", "status", "type", "priority", "points", "created_at", "updated_at"}, sortBy) {
+	if !slices.Contains([]string{"id", "title", "status", "type", "priority", "points", "created_at", "updated_at", "closed_at", "deleted_at", "due_date", "defer_until", "defer_count"}, sortBy) {
 		return fmt.Errorf("unsupported gh-issue sort field %q", sortBy)
 	}
 	limit, _ := cmd.Flags().GetInt("limit")
@@ -105,6 +120,17 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 	if err != nil {
 		return err
 	}
+	actor := ""
+	if extra.mine || reviewable {
+		state, err := resolveGitHubListState(cmd, cfg)
+		if err != nil {
+			return err
+		}
+		actor = state.Session.ID
+		if extra.mine {
+			extra.implementer = actor
+		}
+	}
 	hierarchyRequested := strings.TrimSpace(parentRaw) != "" || strings.TrimSpace(epicRaw) != ""
 	rows, err := client.List(cmd.Context(), all || hierarchyRequested)
 	if err != nil {
@@ -125,6 +151,7 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 			return err
 		}
 	}
+	awaiting, ready := map[string]bool{}, map[string]bool{}
 	records := make([]issuestore.Record, 0, len(rows))
 	for _, r := range rows {
 		records = append(records, issuestore.Record{Issue: r.Issue, Number: r.Number, URL: r.URL, StateLabelDiagnostic: r.StateLabelDiagnostic})
@@ -133,13 +160,16 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 	today := time.Now()
 	schedule := gitHubScheduleFilterFromFlags(cmd, includeDeferred)
 	for _, record := range records {
+		if !extra.matches(record.Issue) {
+			continue
+		}
 		if !all && record.Status == models.StatusClosed {
 			continue
 		}
 		if !schedule.matches(record.Issue, today) {
 			continue
 		}
-		if len(statuses) > 0 && !slices.Contains(statuses, "all") && !slices.Contains(statuses, string(record.Status)) {
+		if len(statuses) > 0 && !slices.Contains(statuses, string(record.Status)) {
 			continue
 		}
 		if len(types) > 0 && !slices.Contains(types, string(record.Type)) {
@@ -151,12 +181,12 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 		if len(ids) > 0 && !slices.Contains(ids, record.ID) {
 			continue
 		}
-		if search != "" && !strings.Contains(strings.ToLower(record.Title+"\n"+record.Description), search) {
+		if search != "" && !searchMatch(record.ID) && !searchMatch(record.Title) && !searchMatch(record.Description) {
 			continue
 		}
 		matches := true
 		for _, label := range labels {
-			if !slices.Contains(record.Labels, label) {
+			if !gitHubListLabelMatches(record.Labels, label) {
 				matches = false
 				break
 			}
@@ -164,6 +194,23 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 		if matches {
 			filtered = append(filtered, record)
 		}
+	}
+	if reviewable {
+		candidates := map[string]bool{}
+		for _, r := range filtered {
+			candidates[r.ID] = true
+		}
+		reviewRows := []ghstore.Record{}
+		for _, r := range rows {
+			if candidates[r.ID] {
+				reviewRows = append(reviewRows, r)
+			}
+		}
+		awaiting, ready, err = gitHubListReviewBuckets(cmd, client, reviewRows, actor)
+		if err != nil {
+			return err
+		}
+		filtered = slices.DeleteFunc(filtered, func(r issuestore.Record) bool { return !awaiting[r.ID] && (!includeApproved || !ready[r.ID]) })
 	}
 	reverse, _ := cmd.Flags().GetBool("reverse")
 	slices.SortFunc(filtered, func(a, b issuestore.Record) int {
@@ -185,6 +232,16 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 			order = a.CreatedAt.Compare(b.CreatedAt)
 		case "updated_at":
 			order = a.UpdatedAt.Compare(b.UpdatedAt)
+		case "closed_at":
+			order = compareGitHubOptionalTime(a.ClosedAt, b.ClosedAt)
+		case "deleted_at":
+			order = compareGitHubOptionalTime(a.DeletedAt, b.DeletedAt)
+		case "due_date":
+			order = cmp.Compare(optionalString(a.DueDate), optionalString(b.DueDate))
+		case "defer_until":
+			order = cmp.Compare(optionalString(a.DeferUntil), optionalString(b.DeferUntil))
+		case "defer_count":
+			order = cmp.Compare(a.DeferCount, b.DeferCount)
 		}
 		if order == 0 {
 			order = cmp.Compare(a.Number, b.Number)
@@ -206,12 +263,22 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(filtered)
 	}
 	long, _ := cmd.Flags().GetBool("long")
-	for _, record := range filtered {
-		if long || format == "long" {
-			cmd.Print(output.FormatIssueLong(output.SanitizedForDisplay(&record.Issue), nil, nil))
-		} else {
-			cmd.Println(output.FormatIssueShort(&record.Issue))
+	if long || format == "long" {
+		snapshot, err := issuestore.NewGitHubQuerySnapshot(cmd.Context(), rows, client)
+		if err != nil {
+			return err
 		}
+		issues := []models.Issue{}
+		for _, r := range filtered {
+			issues = append(issues, r.Issue)
+		}
+		return printGitHubListIssues(cmd, snapshot, issues, true)
+	}
+	if reviewable {
+		return printGitHubReviewList(cmd, filtered, awaiting, ready, includeApproved)
+	}
+	for _, record := range filtered {
+		cmd.Println(output.FormatIssueShort(&record.Issue))
 	}
 	if len(filtered) == 0 {
 		cmd.Println("No issues found")

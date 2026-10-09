@@ -511,6 +511,49 @@ short/long/JSON formatting retain list semantics. Detailed TDQ listings fetch
 shared logs and handoffs before emitting output, so activity failures cannot
 leave an apparently successful partial list.
 
+Ordinary list mode supports points (`N`, `>=N`, `<=N`, `N-N`), implementer,
+reviewer, `--mine`, reviewable queues, created/updated/closed ranges, normalized
+status aliases, ID/type/label/search filters, hierarchy and calendar filters.
+All predicates apply before sorting and limit. Points zero is an actual filter
+in both stores; malformed numbers, invalid dates and reversed ranges fail
+explicitly. Types, IDs and labels accept repeated or comma-separated values.
+`--status all,open` includes deferred issues but retains the explicit open
+condition. `--mine` uses this repository/worktree/branch/device's actual session;
+use TDQ `@me` for predicates expressed in query syntax.
+
+Created/updated/closed flags retain SQLite list's UTC timestamp bounds:
+`after:DATE`, `before:DATE`, `DATE..`, `..DATE`, `DATE..DATE`, or a single date.
+Both bounds are inclusive; a single date runs from its UTC midnight through
+the following UTC midnight. This legacy list contract differs from local-day
+TDQ and due/defer calendar predicates. An absent closure timestamp does not
+match a closure date filter. Sort fields include timestamps, points, due_date,
+defer_until and defer_count; null dates sort before populated dates ascending.
+Long listings read shared logs and the latest handoff, failing before output
+if an activity read fails.
+
+`blocked`, `in-review`/`ir`, `ready` and `next` read GitHub issues directly.
+Ready/next select open issues without a nonclosed, nondeleted dependency.
+They retain SQLite shortcuts' deferral scope: they do not implicitly exclude
+future deferrals. JSON is a bare issue array, except next is one issue or `null`.
+`task list` and `epic list` use the same common list path and options.
+
+`reviewable` returns separate `awaiting` and `ready_to_close` arrays in JSON;
+`--include-approved` enables the close bucket. `list --reviewable` keeps a bare
+list, with approved issues excluded unless `--include-approved` is set, in
+both human and JSON output. Approval classification precedes limit in both
+stores. Trusted mode can surface your implemented issue, but an eventual
+approval still needs honest attribution or self-review acknowledgement.
+Other modes enforce their existing implementation/history/creator policy.
+GitHub queue reads verify the review snapshot and the observed revision;
+stale, missing, conflicting or failed review observations abort explicitly.
+Queue membership is informational and never authorizes a later mutation.
+
+Revision hashing compares label names in sorted order because GitHub PATCH and
+GET responses can return an identical label set in different orders. Display
+order is preserved. Membership/name changes and every other revision field
+(including metadata body and timestamps) still participate in conflict checks;
+normalizing order does not make PATCH atomic or add automatic retries.
+
 `search` searches IDs, titles, descriptions, shared logs and all historical
 handoffs. Native comments and structured user comments are excluded; use
 `query 'comment.text ~ text'` for comments. Search retains SQLite LIKE semantics

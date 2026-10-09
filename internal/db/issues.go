@@ -38,6 +38,7 @@ type ListIssuesOptions struct {
 	EpicID             string // Filter by epic (parent_id matches epic, recursively)
 	PointsMin          int
 	PointsMax          int
+	PointsZero         bool // Explicit zero upper bound; zero-valued Min/Max mean unset.
 	CreatedAfter       time.Time
 	CreatedBefore      time.Time
 	UpdatedAfter       time.Time
@@ -737,6 +738,9 @@ func (db *DB) ListIssues(opts ListIssuesOptions) ([]models.Issue, error) {
 		query += " AND points <= ?"
 		args = append(args, opts.PointsMax)
 	}
+	if opts.PointsZero {
+		query += " AND points = 0"
+	}
 
 	// Date filters
 	if !opts.CreatedAfter.IsZero() {
@@ -794,7 +798,7 @@ func (db *DB) ListIssues(opts ListIssuesOptions) ([]models.Issue, error) {
 	// Sorting - validate column name to prevent SQL injection
 	allowedSortCols := map[string]bool{
 		"id": true, "title": true, "status": true, "type": true,
-		"priority": true, "points": true, "created_at": true,
+		"priority": true, "points": true, "sprint": true, "created_at": true,
 		"updated_at": true, "closed_at": true, "deleted_at": true,
 		"defer_until": true, "due_date": true, "defer_count": true,
 	}

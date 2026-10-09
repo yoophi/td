@@ -144,7 +144,7 @@ var listCmd = &cobra.Command{
 
 		// Parse type filter (accepts "story" as alias for "feature")
 		if typeStr, _ := cmd.Flags().GetStringArray("type"); len(typeStr) > 0 {
-			for _, t := range typeStr {
+			for _, t := range mergeMultiValueFlag(typeStr) {
 				typ := models.NormalizeType(t)
 				if !models.IsValidType(typ) {
 					output.Error("invalid type: %s (valid: bug, feature, task, epic, chore)", t)
@@ -156,12 +156,12 @@ var listCmd = &cobra.Command{
 
 		// Parse ID filter
 		if ids, _ := cmd.Flags().GetStringArray("id"); len(ids) > 0 {
-			opts.IDs = ids
+			opts.IDs = mergeMultiValueFlag(ids)
 		}
 
 		// Parse labels filter
 		if labels, _ := cmd.Flags().GetStringArray("labels"); len(labels) > 0 {
-			opts.Labels = labels
+			opts.Labels = mergeMultiValueFlag(labels)
 		}
 
 		// Priority filter
@@ -169,7 +169,17 @@ var listCmd = &cobra.Command{
 
 		// Points filter
 		if pointsStr, _ := cmd.Flags().GetString("points"); pointsStr != "" {
-			opts.PointsMin, opts.PointsMax = parsePointsFilter(pointsStr)
+			r, err := parseListPointsRange(pointsStr)
+			if err != nil {
+				return err
+			}
+			if r.min != nil {
+				opts.PointsMin = *r.min
+			}
+			if r.max != nil {
+				opts.PointsMax = *r.max
+				opts.PointsZero = *r.max == 0
+			}
 		}
 
 		// Search filter
@@ -238,13 +248,25 @@ var listCmd = &cobra.Command{
 
 		// Date filters
 		if created, _ := cmd.Flags().GetString("created"); created != "" {
-			opts.CreatedAfter, opts.CreatedBefore = parseDateFilter(created)
+			r, err := parseListDateRange(created)
+			if err != nil {
+				return err
+			}
+			opts.CreatedAfter, opts.CreatedBefore = r.after, r.before
 		}
 		if updated, _ := cmd.Flags().GetString("updated"); updated != "" {
-			opts.UpdatedAfter, opts.UpdatedBefore = parseDateFilter(updated)
+			r, err := parseListDateRange(updated)
+			if err != nil {
+				return err
+			}
+			opts.UpdatedAfter, opts.UpdatedBefore = r.after, r.before
 		}
 		if closed, _ := cmd.Flags().GetString("closed"); closed != "" {
-			opts.ClosedAfter, opts.ClosedBefore = parseDateFilter(closed)
+			r, err := parseListDateRange(closed)
+			if err != nil {
+				return err
+			}
+			opts.ClosedAfter, opts.ClosedBefore = r.after, r.before
 		}
 
 		// Sorting
@@ -275,7 +297,17 @@ var listCmd = &cobra.Command{
 			opts.ExcludeDeferred = true
 		}
 
-		issues, err := database.ListIssues(opts)
+		var issues []models.Issue
+		if reviewableMode {
+			issues, err = listSQLiteReviewableIssues(database, opts, reviewableIncludeApproved)
+			// Keep the later human bucket pass within the selected output set.
+			opts.IDs = nil
+			for _, issue := range issues {
+				opts.IDs = append(opts.IDs, issue.ID)
+			}
+		} else {
+			issues, err = database.ListIssues(opts)
+		}
 		if err != nil {
 			output.Error("failed to list issues: %v", err)
 			return err

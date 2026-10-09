@@ -29,6 +29,8 @@ func TestGitHubTypeShortcuts(t *testing.T) {
 		t.Skip("fake gh uses POSIX shell")
 	}
 	dir := storeTestDir(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("TD_CONTEXT_ID", "synthetic-type-list-test")
 	runGit(t, dir, "init")
 	runGit(t, dir, "remote", "add", "origin", "https://github.com/owner/repo.git")
 	if err := config.SetStore(dir, "gh-issue", &models.GitHubStoreConfig{Repo: "owner/repo", Remote: "origin"}); err != nil {
@@ -109,9 +111,9 @@ fi
 		}
 	}
 	for _, original := range []*cobra.Command{taskListCmd, epicListCmd} {
-		_, err := executeGitHubTest(shortcutTestCommand(original, false), "--mine")
-		if err == nil || !strings.Contains(err.Error(), "does not support --mine") {
-			t.Fatalf("unsupported filter: %v", err)
+		out, err := executeGitHubTest(shortcutTestCommand(original, false), "--mine", "--json")
+		if err != nil || strings.TrimSpace(out) != "[]" {
+			t.Fatalf("unowned fixture should not match mine: %s %v", out, err)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
