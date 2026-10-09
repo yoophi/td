@@ -302,3 +302,31 @@ func TestCloseRecordedApprovalRejectsStaleContentAndPolicyMode(t *testing.T) {
 		})
 	}
 }
+
+func TestRecordOnlyRejectsMinorAndDuplicateApprovalWithoutWrites(t *testing.T) {
+	for _, minor := range []bool{false, true} {
+		t.Run(fmt.Sprintf("minor=%v", minor), func(t *testing.T) {
+			f := newReviewFixture(t)
+			worker := TransitionOptions{SessionID: "fixture-worker", Mode: reviewpolicy.ModeTrusted, Minor: minor}
+			f.transition(t, "review", worker)
+			reviewer := TransitionOptions{SessionID: "fixture-worker", Mode: reviewpolicy.ModeTrusted, SelfReview: true, RecordOnly: true, Reason: "Fixture honest self-review"}
+			if !minor {
+				f.transition(t, "approve", reviewer)
+			}
+			writes, posts := f.writes, f.posts
+			_, _, err := f.client.Transition(context.Background(), "1", "approve", reviewer)
+			if err == nil || f.writes != writes || f.posts != posts {
+				t.Fatalf("record-only invalid mutation: %v writes %d/%d posts %d/%d", err, f.writes, writes, f.posts, posts)
+			}
+			if minor {
+				if _, ok := err.(*WorkflowInputError); !ok {
+					t.Fatalf("minor input error type: %T", err)
+				}
+			} else {
+				if _, ok := err.(*WorkflowStateError); !ok {
+					t.Fatalf("duplicate conflict type: %T", err)
+				}
+			}
+		})
+	}
+}

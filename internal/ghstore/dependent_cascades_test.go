@@ -140,7 +140,7 @@ func TestCloseCascadeRejectsStaleRootAndChangedDependency(t *testing.T) {
 func TestRecordOnlyApprovalDoesNotUnblock(t *testing.T) {
 	f := newReviewFixture(t)
 	ctx := context.Background()
-	if _, _, err := f.client.TransitionWithCascades(ctx, "1", "review", TransitionOptions{SessionID: "fixture-implementer", Mode: reviewpolicy.ModeTrusted, Minor: true}); err != nil {
+	if _, _, err := f.client.TransitionWithCascades(ctx, "1", "review", TransitionOptions{SessionID: "fixture-implementer", Mode: reviewpolicy.ModeTrusted}); err != nil {
 		t.Fatal(err)
 	}
 	result, _, err := f.client.TransitionWithCascades(ctx, "1", "approve", TransitionOptions{SessionID: "fixture-implementer", Mode: reviewpolicy.ModeTrusted, RecordOnly: true, SelfReview: true, Reason: "Fixture honest self-review"})

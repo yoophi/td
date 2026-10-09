@@ -50,7 +50,7 @@ func TestAvailabilityMirrorsReviewAndClosePolicyWithoutWrites(t *testing.T) {
 func TestAvailabilityRecordedApprovalStalenessAndTransportErrors(t *testing.T) {
 	f := newReviewFixture(t)
 	ctx := context.Background()
-	o := TransitionOptions{SessionID: "fixture-worker", Mode: reviewpolicy.ModeTrusted, Minor: true}
+	o := TransitionOptions{SessionID: "fixture-worker", Mode: reviewpolicy.ModeTrusted}
 	if _, _, err := f.client.Transition(ctx, "1", "review", o); err != nil {
 		t.Fatal(err)
 	}

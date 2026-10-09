@@ -301,7 +301,14 @@ and check `If-Match` plus observed GitHub revisions before an update.
 Conflict checks are best-effort; uncertain writes are never retried automatically. Issue reads
 support filters, pagination, TDQ and shared activity. GitHub issue listings and
 comments are separate reads, not an atomic snapshot. Workflow HTTP endpoints are connected to the shared CLI policy,
-including record-only and acknowledged self-review. In trusted/delegated
+including record-only and acknowledged self-review. The nine supported actions
+are `start`, `review`, `approve`, `reviews`, `reject`, `block`, `unblock`,
+`close`, and `reopen` under `POST /v1/issues/{id}/`. The `reviews` endpoint
+returns `201 Created` with the persisted `review` and, for an approved decision,
+`active_review`; other transitions return `200 OK`. Record-only review rejects
+minor issues and a second active approval. Requests reject unknown
+fields and options that do not apply to the chosen action, and use the actual
+web session rather than a caller-supplied identity. In trusted/delegated
 mode, `close` can consume an existing valid recorded approval without replacing
 the reviewer; another closing session must supply a reason. Changed issue
 content, handoff, or native close/reopen history invalidates that approval. Review submits open/in_progress descendants and reports the changed children.

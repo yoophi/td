@@ -124,5 +124,17 @@ func (s *GitHubWriteStore) transition(w http.ResponseWriter, r *http.Request, en
 	for _, dependent := range result.AutoUnblocked {
 		unblocked = append(unblocked, IssueToDTO(&dependent.Issue))
 	}
-	WriteSuccess(w, map[string]any{"reviewed_descendants": reviewed, "issue": dto, "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: parents, AutoUnblocked: unblocked}}, 200)
+	payload := map[string]any{"reviewed_descendants": reviewed, "issue": dto, "noop": noop, "cascades": transitionCascadeResult{ParentStatusUpdates: parents, AutoUnblocked: unblocked}}
+	status := http.StatusOK
+	if endpoint == "reviews" {
+		status = http.StatusCreated
+		if result.Details != nil && len(result.Details.Reviews) > 0 {
+			review := result.Details.Reviews[len(result.Details.Reviews)-1]
+			payload["review"] = IssueReviewToDTO(&review)
+			if review.SupersededAt == nil && review.Decision == "approved" && result.ReviewedAt != nil && result.ReviewerSession == review.ReviewerSession {
+				payload["active_review"] = &IssueReviewSummary{ID: review.ID, Decision: review.Decision, ReviewerSession: review.ReviewerSession, RequestedBySession: review.RequestedBySession, Summary: review.Summary, CreatedAt: review.CreatedAt, SelfReview: review.SelfReview, ReviewedBy: review.ReviewedBy}
+			}
+		}
+	}
+	WriteSuccess(w, payload, status)
 }

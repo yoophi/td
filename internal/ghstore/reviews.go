@@ -375,6 +375,9 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		d.ReviewBasis = reviewBasis(observed, d)
 		d.ReviewEvents = checkedEvents
 	case "approve":
+		if o.RecordOnly && observed.Minor {
+			return nil, false, &WorkflowInputError{Reason: fmt.Sprintf("minor issues do not require reviews: %s", id)}
+		}
 		if from != models.StatusInReview {
 			return nil, false, workflowStateError("cannot approve %s: status is %s", id, from)
 		}
@@ -383,6 +386,9 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 			return nil, false, err
 		}
 		active := activeApproval(&d)
+		if active != nil && o.RecordOnly && (o.Decision == "" || o.Decision == reviewpolicy.DecisionApproved) {
+			return nil, false, workflowStateError("%s already has an active approval (review %s by %s); use approve to close", id, active.ID, active.ReviewerSession)
+		}
 		if active != nil && !o.RecordOnly && (o.Mode == reviewpolicy.ModeTrusted || o.Mode == reviewpolicy.ModeDelegated) {
 			if err := validateRecordedClose(active, o); err != nil {
 				return nil, false, err
