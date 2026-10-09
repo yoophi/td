@@ -2,7 +2,6 @@ package ghstore
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/marcus/td/internal/models"
@@ -135,11 +134,20 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 			if entry == nil {
 				return fail("archive destination", row.TargetID, fmt.Errorf("destination missing from checked snapshot"))
 			}
-			data, err := json.Marshal(importDestinationArchive{Repository: c.repo, Issue: entry.Issue, Comments: entry.Comments})
-			if err != nil {
-				return fail("archive destination", row.TargetID, err)
+			var parts []importProvenancePart
+			if row.capture != nil {
+				parts, err = recoverImportDestinationCapture(*row.capture, c.repo, *row, *entry)
+			} else {
+				var capture importCapture
+				capture, parts, err = newImportCapture(c.repo, *row, *entry)
+				if err == nil {
+					var body string
+					body, err = renderImportCapture(capture)
+					if err == nil {
+						err = c.publishImportCheckpoint(ctx, row.TargetID, row.basis, body, "destination capture")
+					}
+				}
 			}
-			parts, err := importProvenanceParts(row.SourceKey, row.Digest, row.TargetID, "destination", data)
 			if err != nil {
 				return fail("archive destination", row.TargetID, err)
 			}

@@ -130,6 +130,24 @@ PATCH, and binds that archive digest to the prepared intent and completion
 receipt. Resuming a prepared overwrite verifies the original archive instead
 of replacing it with the already-modified destination.
 
+Before writing destination archive pieces, the executor publishes a passive
+`td:import-capture:v1` comment. It binds source/version/target, the before-content
+basis, original native clocks, original comment count/ID boundary, archive digest
+and part count. A lost capture response is recovered from the bulk snapshot;
+lost early or middle archive-piece responses reuse that capture. Canonical label
+and comment ordering and the saved clocks reconstruct identical archive bytes,
+so only missing parts are posted. Backup/capture comments written by the import
+are outside the captured original comment set and do not recursively expand it.
+
+A pending capture requires its original source version and destination content,
+even with `--force`; it cannot be replaced by a changed input. Missing or edited
+original comments fail count/digest verification before further archive/field
+writes. Original edits are not silently ignored. The capture is historical
+evidence, not a current approval, impersonated author or atomic transaction.
+Tests cover multi-part original histories with changing native issue clocks,
+lost capture/first/middle/source responses, one capture, one archive set and no
+duplicate field PATCH on resume.
+
 Inventory is built from one complete bulk comment observation. The writer
 posts only missing pieces, checks destination content before/after the set,
 reports earlier successful parts and preserves the underlying failure cause.

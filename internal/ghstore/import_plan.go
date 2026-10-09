@@ -25,6 +25,7 @@ type ImportPlanRow struct {
 	basis                    string
 	destinationArchiveDigest string
 	destinationArchiveBasis  string
+	capture                  *importCapture
 }
 
 // The creation operation is stored atomically with the issue body. Using the
@@ -68,6 +69,10 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 		return nil, err
 	}
 	intents, err := snapshotImportIntents(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	captures, err := snapshotImportCaptures(snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +130,20 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 		}
 		receipt, completed := receipts[row.SourceKey]
 		intent, prepared := intents[row.SourceKey]
-		if prepared && (!completed || intent.commentID > receipt.commentID) {
+		activeIntent := prepared && (!completed || intent.commentID > receipt.commentID)
+		if capture, exists := captures[row.SourceKey]; exists && (!completed || capture.commentID > receipt.commentID) {
+			if capture.Repository != c.repo || capture.TargetID != row.TargetID || capture.SourceDigest != row.Digest {
+				return nil, fmt.Errorf("pending destination capture for %s requires its original source and destination", row.SourceKey)
+			}
+			if !activeIntent && capture.BeforeBasis != bases[row.TargetID] {
+				return nil, &ConflictError{ID: row.TargetID}
+			}
+			if activeIntent && (capture.BeforeBasis != intent.BeforeBasis || capture.ArchiveDigest != intent.DestinationArchiveDigest) {
+				return nil, fmt.Errorf("pending destination capture and prepared intent disagree for %s", row.SourceKey)
+			}
+			row.capture = &capture
+		}
+		if activeIntent {
 			if row.TargetID == "" || intent.TargetID != row.TargetID {
 				return nil, fmt.Errorf("prepared intent for %s disagrees with its target mapping", row.SourceKey)
 			}
@@ -135,6 +153,8 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 			}
 			row.Action, row.ResumeState = "resume", state
 			row.intent = &intent
+		} else if row.capture != nil {
+			row.Action, row.ResumeState = "overwrite", "before_backup"
 		} else if completed {
 			if row.TargetID == "" || receipt.TargetID != row.TargetID {
 				return nil, fmt.Errorf("completion receipt for %s disagrees with its target mapping; no import writes attempted", row.SourceKey)
