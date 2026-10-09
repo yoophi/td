@@ -55,12 +55,17 @@ func githubImport(cmd *cobra.Command, base, file string) (bool, error) {
 	if err := ghstore.SetImportSourceNamespace(items, source); err != nil {
 		return true, err
 	}
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	if !dryRun {
+		if err := ghstore.RequireImportSourceNamespaces(items); err != nil {
+			return true, err
+		}
+	}
 	client, err := ghstore.Open(cmd.Context(), base, cfg.GitHub)
 	if err != nil {
 		return true, err
 	}
 	force, _ := cmd.Flags().GetBool("force")
-	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	if !dryRun {
 		result, err := client.Import(cmd.Context(), items, force)
 		if err != nil {

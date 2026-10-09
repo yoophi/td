@@ -12,6 +12,18 @@ import (
 	"github.com/marcus/td/internal/models"
 )
 
+func TestPublicImportRequiresEveryLegacySourceBeforeAPI(t *testing.T) {
+	// A nil client proves rejection does not observe or mutate remote state.
+	var c *Client
+	items := []ImportItem{
+		{SourceNamespace: "project-a", Issue: models.Issue{ID: "td-one"}},
+		{Issue: models.Issue{ID: "td-two"}},
+	}
+	if _, err := c.Import(context.Background(), items, true); err == nil || !strings.Contains(err.Error(), "td-two requires a source namespace") {
+		t.Fatal("force bypassed mixed-source identity validation", err)
+	}
+}
+
 func importBatchFixture(t *testing.T) (*Client, map[int]map[string]any, *int, *[]apiComment) {
 	t.Helper()
 	c, issues, writes := hierarchyFixture(t)

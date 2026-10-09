@@ -118,6 +118,17 @@ func ParseImportJSON(data []byte) ([]ImportItem, error) {
 var importIDPattern = regexp.MustCompile(`^(td-[A-Za-z0-9]+|gh-[1-9][0-9]*)$`)
 var importNamespacePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
 
+// RequireImportSourceNamespaces prevents unrelated legacy projects from sharing
+// durable creation identities. Read-only previews may retain unnamed sources.
+func RequireImportSourceNamespaces(items []ImportItem) error {
+	for _, item := range items {
+		if item.GitHub == nil && item.SourceNamespace == "" {
+			return fmt.Errorf("import %s requires a source namespace; use --source NAME or source_namespace in JSON", item.Issue.ID)
+		}
+	}
+	return nil
+}
+
 // SetImportSourceNamespace qualifies legacy identities, without altering
 // repository-qualified GitHub identities. Never override a declared source.
 func SetImportSourceNamespace(items []ImportItem, namespace string) error {

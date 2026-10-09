@@ -113,8 +113,10 @@ letters/digits and `.`, `_`, `/`, `-`, starting with a letter or digit.
 GitHub exports keep their repository-qualified identity and cannot declare a
 legacy namespace. `--source` on GitHub-only input or a SQLite destination is an
 explicit error. For compatibility, unnamed legacy previews retain the original
-identity format; actual cross-project application must require a source name
-before it is enabled. Names identify public import provenance, not credentials.
+identity format; execution requires a source name for every legacy item before
+any GitHub call. Use `--source` or per-item `source_namespace`. GitHub exports
+already identify their source repository. Names identify public import provenance,
+not credentials.
 
 Markdown imports summary fields and descriptions. Anonymous headings receive
 deterministic IDs for an unchanged document; explicit td/gh headings retain

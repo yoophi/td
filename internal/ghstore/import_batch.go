@@ -23,6 +23,9 @@ type ImportResult struct {
 type importBatchResult = ImportResult
 
 func (c *Client) Import(ctx context.Context, items []ImportItem, force bool) (*ImportResult, error) {
+	if err := RequireImportSourceNamespaces(items); err != nil {
+		return nil, err
+	}
 	return c.executeImport(ctx, items, force)
 }
 

@@ -85,6 +85,34 @@ func TestGitHubImportSourceValidationBeforeGHAndSQLite(t *testing.T) {
 	}
 }
 
+func TestGitHubImportUnnamedLegacyExecutionFailsBeforeGH(t *testing.T) {
+	dir := storeTestDir(t)
+	if err := config.SetStore(dir, "gh-issue", &models.GitHubStoreConfig{Repo: "owner/repo", Remote: "origin"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	for _, input := range []struct{ format, data string }{
+		{"json", `[{"issue":{"id":"td-one","title":"Task"}}]`},
+		{"md", "## Task\n\nDescription\n"},
+	} {
+		c := &cobra.Command{Use: importCmd.Use, RunE: importCmd.RunE, SilenceErrors: true, SilenceUsage: true}
+		c.Flags().String("source", "", "")
+		c.Flags().String("format", "json", "")
+		c.Flags().Bool("dry-run", false, "")
+		c.SetIn(strings.NewReader(input.data))
+		var out bytes.Buffer
+		c.SetOut(&out)
+		c.SetArgs([]string{"-", "--format", input.format})
+		err := c.Execute()
+		if err == nil || !strings.Contains(err.Error(), "requires a source namespace") || out.Len() != 0 {
+			t.Fatal(input.format, "unnamed source reached gh or emitted output", err, out.String())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("unnamed import opened SQLite", err)
+	}
+}
+
 func TestSQLiteImportRejectsGitHubSourceFlagBeforeOpeningDatabase(t *testing.T) {
 	dir := storeTestDir(t)
 	c := &cobra.Command{Use: importCmd.Use, RunE: importCmd.RunE, SilenceErrors: true, SilenceUsage: true}
