@@ -93,7 +93,7 @@ fi
 		{taskListCmd, []string{"--all"}, []string{"gh-1", "gh-4"}},
 		{epicListCmd, []string{"--all"}, []string{"gh-2"}},
 		{taskListCmd, []string{"--all", "--limit", "1", "--reverse", "--sort", "id"}, []string{"gh-4"}},
-		{taskListCmd, []string{"--type", "bug"}, []string{"gh-1"}},
+		{taskListCmd, []string{"--type", "task"}, []string{"gh-1"}},
 	} {
 		cmd := shortcutTestCommand(tc.cmd, false)
 		out, err := executeGitHubTest(cmd, append(tc.args, "--json")...)

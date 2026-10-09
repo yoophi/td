@@ -136,3 +136,14 @@ and EOF cancellation in both feature modes. Successful selection creates only
 configuration; it does not enumerate issues/comments or start an issue session.
 The fixtures emulate `gh api --include` HTTP headers; they are CLI contract
 validation, not acceptance against a live GitHub repository.
+
+`task create/list` and `epic create/list` share the base create/list flag
+registrations and fix issue type to task/epic. Their hidden `--type` remains
+accepted for compatible invocations, but conflicting or empty explicit values
+fail in argument validation before command execution/autosync/backend access.
+List accepts repeated/comma-separated copies of the fixed type; mixed types
+must use `td list`. Create accepts a single matching type; other types must
+use `td create`. This replaces the previous silent overwrite of explicit flags.
+Tests cover pre-execution rejection, actual CLI JSON errors in both feature
+modes with gh unavailable for any call, retained GitHub create/list behavior
+and rich SQLite create behavior.
