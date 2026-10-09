@@ -52,6 +52,31 @@ func TestStandaloneModalDoesNotRewrapLogLines(t *testing.T) {
 	assertLogLinesIntact(t, m, m.renderModal())
 }
 
+func TestImportedHistoryLabelsAndWrappingInIssueModal(t *testing.T) {
+	m := NewModel(nil, "test", 0, "dev", t.TempDir())
+	m.Width, m.Height = 200, 50
+	entry := wrapTestIssue()
+	entry.Logs[0].Historical = true
+	entry.Handoff = &models.Handoff{Historical: true, SessionID: "old-worker", Timestamp: time.Now(), Done: []string{"Archived work"}}
+	m.ModalStack = []ModalEntry{entry}
+	view := m.renderModal()
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, "IMPORTED HANDOFF (HISTORY)") || !strings.Contains(plain, "[history]") || strings.Contains(plain, "LATEST HANDOFF") {
+		t.Fatal("historical data appeared current", plain)
+	}
+	assertLogLinesIntact(t, m, view)
+	if !strings.Contains(ansi.Strip(strings.Join(renderLogLines(entry.Logs[0], 80), "\n")), "[history]") {
+		t.Fatal("legacy renderer omitted historical label")
+	}
+	entry.Logs[0].Historical = false
+	entry.Handoff.Historical = false
+	m.ModalStack = []ModalEntry{entry}
+	plain = ansi.Strip(m.renderModal())
+	if !strings.Contains(plain, "LATEST HANDOFF") || strings.Contains(plain, "[history]") || strings.Contains(plain, "IMPORTED HANDOFF") {
+		t.Fatal("current data was labeled historical", plain)
+	}
+}
+
 func TestEmbeddedModalDoesNotRewrapLogLines(t *testing.T) {
 	m := NewModel(nil, "test", 0, "dev", t.TempDir())
 	m.Width, m.Height = 200, 50

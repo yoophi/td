@@ -162,7 +162,10 @@ func (m Model) modalSignature(modal *ModalEntry) uint64 {
 	}
 
 	if h := modal.Handoff; h != nil {
-		write("handoff", formatTimeSig(h.Timestamp))
+		write("handoff", h.SessionID, formatTimeSig(h.Timestamp))
+		if h.Historical {
+			write("historical-handoff")
+		}
 		for _, item := range h.Done {
 			write(item)
 		}
@@ -177,6 +180,9 @@ func (m Model) modalSignature(modal *ModalEntry) uint64 {
 	writeInt(h, len(modal.Logs))
 	for _, l := range modal.Logs {
 		write(l.ID, l.Message, string(l.Type), l.SessionID, formatTimeSig(l.Timestamp))
+		if l.Historical {
+			write("historical-log")
+		}
 	}
 
 	writeInt(h, len(modal.Comments))

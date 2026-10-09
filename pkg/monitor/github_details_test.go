@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -31,6 +32,37 @@ func (f *detailFixture) ObserveMonitorReview(_ context.Context, _ *ghstore.Recor
 func detailSource(t *testing.T, f *detailFixture) *GitHubDataSource {
 	t.Helper()
 	return &GitHubDataSource{ctx: context.Background(), baseDir: t.TempDir(), actor: "actual-monitor", open: func(context.Context) (GitHubMonitorReader, error) { return f, nil }}
+}
+
+func TestGitHubMonitorImportedHistoryDetailsRemainPassive(t *testing.T) {
+	now := time.Now().UTC()
+	item := ghstore.ImportItem{SourceNamespace: "project", Issue: models.Issue{ID: "td-source", Title: "Source", Type: models.TypeTask, Priority: models.PriorityP2, Status: models.StatusOpen}, Logs: []models.Log{{ID: "old-log", SessionID: "old-worker", Message: "Archived progress", Type: models.LogTypeProgress, Timestamp: now}}, Handoffs: []models.Handoff{{ID: "old-handoff", SessionID: "old-worker", Done: []string{"Archived work"}, Timestamp: now}}}
+	data, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := item.Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &detailFixture{root: &ghstore.Record{Issue: models.Issue{ID: "gh-1", Title: "Target", Type: models.TypeTask, Priority: models.PriorityP2, Status: models.StatusOpen}}}
+	f.records = []ghstore.Record{*f.root}
+	f.activity = map[string][]models.Activity{"gh-1": {{ID: "ghc-100", IssueID: "gh-1", Kind: "comment", Native: true, CreatedAt: now, PreservedHistory: &models.PreservedHistory{Kind: "source", SourceKey: item.SourceKey(), SourceDigest: digest, ContentDigest: digest, PartsPresent: 1, PartsExpected: 1, Complete: true, Data: data}}}}
+	s := detailSource(t, f)
+	msg := s.Details("gh-1")
+	if msg.Error != nil || len(msg.Logs) != 1 || !msg.Logs[0].Historical || msg.Handoff == nil || !msg.Handoff.Historical || msg.HasActiveApproval || f.activityReads != 1 {
+		t.Fatalf("historical detail projection failed: %+v", msg)
+	}
+	s.focus = func(context.Context) (*string, error) { return nil, nil }
+	refresh := s.Fetch("", true, SortByPriority)
+	if refresh.Error != nil || len(refresh.RecentHandoffs) != 0 || len(refresh.ActiveSessions) != 0 {
+		t.Fatalf("archived handoff became current: %+v", refresh)
+	}
+	for _, activity := range refresh.Activity {
+		if activity.SessionID == "old-worker" || activity.Message == "Archived progress" {
+			t.Fatal("archive became native activity", activity)
+		}
+	}
 }
 func TestGitHubMonitorDetailsRelationshipsActivitiesAndReviewFreshness(t *testing.T) {
 	root := &ghstore.Record{Issue: models.Issue{ID: "gh-1", Title: "Direct root", Status: models.StatusInReview, ParentID: "gh-2"}, Details: &ghstore.IssueDetails{Dependencies: []string{"gh-3"}, Reviews: []models.IssueReview{{ID: "review-1", Decision: "approved"}}}}

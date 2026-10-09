@@ -263,9 +263,12 @@ snapshot reimport, restore portable rows into temporary SQLite, and resume after
 an explicit denied PATCH without recreating allocated targets. Original log/
 handoff content and historical session keys survive SQLite restoration. The
 configured GitHub project never opens a SQLite DB during these operations.
-Native validation remains pending. Monitor activity/work-context projections remain
-native-only; their historical display needs a separate audit to avoid marking
-old imported work as current activity.
+Native validation remains pending. Monitor detail views project preserved logs
+and handoffs through the shared reader and label them as history. The activity
+feed and active-session/recent-handoff summaries use native events only; imported
+history does not become current activity. Tests exercise detail projection and
+summary exclusion, plus historical labels and line wrapping. Work-context
+projections still need a separate audit.
 
 `TD_GH_CONTEXT_ROOT` optionally selects an absolute base directory for local
 GitHub work-context files; repository hashing/isolation is unchanged. The default

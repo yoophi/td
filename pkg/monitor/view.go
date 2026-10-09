@@ -1345,7 +1345,11 @@ func (m Model) buildIssueModalView(modal *ModalEntry) string {
 
 	// Latest handoff
 	if modal.Handoff != nil {
-		lines = append(lines, styles.sectionHeader.Render("LATEST HANDOFF"))
+		header := "LATEST HANDOFF"
+		if modal.Handoff.Historical {
+			header = "IMPORTED HANDOFF (HISTORY)"
+		}
+		lines = append(lines, styles.sectionHeader.Render(header))
 		lines = append(lines, styles.timestamp.Render(formatLocalTime(modal.Handoff.Timestamp, "2006-01-02 15:04"))+" "+
 			styles.subtle.Render(truncateSession(modal.Handoff.SessionID)))
 		if len(modal.Handoff.Done) > 0 {
@@ -2225,6 +2229,9 @@ func renderLogLines(log models.Log, contentWidth int) []string {
 	styles := newMonitorStyles(DefaultTheme())
 	prefix := styles.timestamp.Render(formatLocalTime(log.Timestamp, "01-02 15:04")) + " " +
 		styles.subtle.Render(truncateSession(log.SessionID)) + " "
+	if log.Historical {
+		prefix += styles.subtle.Render("[history]") + " "
+	}
 	prefixWidth := lipgloss.Width(prefix)
 	messageWidth := contentWidth - prefixWidth
 	if messageWidth < 1 {
@@ -2251,6 +2258,9 @@ func (m Model) renderLogLines(log models.Log, contentWidth int) []string {
 	styles := m.renderStyles()
 	prefix := styles.timestamp.Render(formatLocalTime(log.Timestamp, "01-02 15:04")) + " " +
 		styles.subtle.Render(truncateSession(log.SessionID)) + " "
+	if log.Historical {
+		prefix += styles.subtle.Render("[history]") + " "
+	}
 	prefixWidth := lipgloss.Width(prefix)
 	messageWidth := contentWidth - prefixWidth
 	if messageWidth < 1 {
