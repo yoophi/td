@@ -5,14 +5,23 @@ import (
 	"time"
 
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/features"
 	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
 )
 
 var syncConflictsCmd = &cobra.Command{
 	Use:   "conflicts",
+	Args:  cobra.NoArgs,
 	Short: "Show recent sync conflicts",
+	Long:  "Show recent sync conflicts. GitHub mode reads device-local typed CLI conflict diagnostics for the configured repository; it is not a repository-wide conflict registry.",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncConflicts(cmd); handled {
+			return err
+		}
+		if !features.IsEnabledForProcess(features.SyncCLI.Name) {
+			return fmt.Errorf("SQLite sync conflicts requires the sync_cli feature")
+		}
 		limit, _ := cmd.Flags().GetInt("limit")
 		if limit <= 0 || limit > 1000 {
 			output.Error("limit must be between 1 and 1000")
@@ -67,5 +76,4 @@ var syncConflictsCmd = &cobra.Command{
 func init() {
 	syncConflictsCmd.Flags().Int("limit", 20, "Max conflicts to show")
 	syncConflictsCmd.Flags().String("since", "", "Show conflicts from the last duration (e.g. 24h, 1h30m)")
-	syncCmd.AddCommand(syncConflictsCmd)
 }

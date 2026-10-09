@@ -875,7 +875,7 @@ func init() {
 	parent := wireSyncCommands(
 		features.IsEnabledForProcess(features.SyncCLI.Name),
 		syncCmd, syncAlwaysOnCmd,
-		syncEnableCmd, syncDisableCmd, syncStatusCmd, syncTailCmd,
+		syncEnableCmd, syncDisableCmd, syncStatusCmd, syncTailCmd, syncConflictsCmd,
 	)
 	rootCmd.AddCommand(parent)
 }

@@ -11,16 +11,29 @@ const agentErrorsFile = ".todos/agent_errors.jsonl"
 
 // AgentError represents a failed command invocation
 type AgentError struct {
-	Timestamp time.Time `json:"ts"`
-	Args      []string  `json:"args"`
-	Error     string    `json:"error"`
-	SessionID string    `json:"session,omitempty"`
+	Timestamp      time.Time                 `json:"ts"`
+	Args           []string                  `json:"args"`
+	Error          string                    `json:"error"`
+	SessionID      string                    `json:"session,omitempty"`
+	GitHubConflict *GitHubConflictDiagnostic `json:"github_conflict,omitempty"`
+}
+
+// GitHubConflictDiagnostic is device-local evidence of a typed command error,
+// not a remote conflict registry or proof that an uncertain write did not apply.
+type GitHubConflictDiagnostic struct {
+	Repository string `json:"repository"`
+	EntityID   string `json:"entity_id"`
+	AfterWrite bool   `json:"after_write"`
 }
 
 // LogAgentError appends a failed command to the agent errors file.
 // baseDir is the project root. If the .todos directory doesn't exist,
 // the error is silently dropped (project not initialized).
 func LogAgentError(baseDir string, args []string, errMsg string, sessionID string) error {
+	return LogAgentErrorWithConflict(baseDir, args, errMsg, sessionID, nil)
+}
+
+func LogAgentErrorWithConflict(baseDir string, args []string, errMsg string, sessionID string, conflict *GitHubConflictDiagnostic) error {
 	errPath := filepath.Join(baseDir, agentErrorsFile)
 
 	// Check if .todos directory exists - if not, project not initialized
@@ -30,10 +43,11 @@ func LogAgentError(baseDir string, args []string, errMsg string, sessionID strin
 	}
 
 	entry := AgentError{
-		Timestamp: time.Now().UTC(),
-		Args:      args,
-		Error:     errMsg,
-		SessionID: sessionID,
+		Timestamp:      time.Now().UTC(),
+		Args:           args,
+		Error:          errMsg,
+		SessionID:      sessionID,
+		GitHubConflict: conflict,
 	}
 
 	data, err := json.Marshal(entry)

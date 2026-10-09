@@ -116,7 +116,7 @@ func Execute() {
 		}
 
 		// Log agent error for analysis
-		logAgentError(args, err.Error())
+		logAgentFailure(args, err)
 
 		// JSON callers always get a JSON error envelope. Check the parsed
 		// persistent flag, falling back to a raw os.Args scan in case flag
@@ -195,6 +195,29 @@ func firstNonFlagArg(args []string) string {
 
 // logAgentError logs a failed command for agent UX analysis
 func logAgentError(args []string, errMsg string) {
+	logAgentErrorDetails(args, errMsg, nil)
+}
+
+func logAgentFailure(args []string, err error) {
+	var conflict *ghstore.ConflictError
+	var diagnostic *db.GitHubConflictDiagnostic
+	if errors.As(err, &conflict) {
+		dir := getBaseDir()
+		if dir == "" {
+			dir, _ = os.Getwd()
+		}
+		cfg, loadErr := config.Load(dir)
+		if loadErr == nil && cfg.GitHub != nil {
+			kind, storeErr := config.Store(cfg)
+			if storeErr == nil && kind == config.StoreGitHub {
+				diagnostic = &db.GitHubConflictDiagnostic{Repository: cfg.GitHub.Repo, EntityID: conflict.ID, AfterWrite: conflict.AfterWrite}
+			}
+		}
+	}
+	logAgentErrorDetails(args, err.Error(), diagnostic)
+}
+
+func logAgentErrorDetails(args []string, errMsg string, conflict *db.GitHubConflictDiagnostic) {
 	dir := getBaseDir()
 	if dir == "" {
 		// Fallback: get cwd directly (OnInitialize may not have run for unknown commands)
@@ -209,7 +232,7 @@ func logAgentError(args []string, errMsg string) {
 	sessionID := diagnosticSessionID(dir)
 
 	// Log the error (silently fails if project not initialized)
-	_ = db.LogAgentError(dir, args, errMsg, sessionID)
+	_ = db.LogAgentErrorWithConflict(dir, args, errMsg, sessionID, conflict)
 }
 
 // handleUnknownFlagError checks if error is an unknown flag and suggests alternatives

@@ -51,7 +51,18 @@ and metadata history limits can lose changes. Imported history remains passive
 provenance rather than a newly active log/handoff. There are no push/pull records
 or server sequence numbers to fabricate.
 
-The #30 implementation remains incomplete: conflicts and sync settings
+`td sync conflicts [--limit N] [--since 24h]` reads device-local CLI diagnostics
+without requiring gh/authentication, opening SQLite or contacting any server.
+New top-level typed `ConflictError` failures record repository, entity ID and
+whether the conflict was detected after a write. Wrapped original error text
+is retained. JSON declares `coverage=device-local-cli`; records are scoped to
+the configured repository and returned newest first. Plain legacy error strings
+and other repositories are excluded. An empty list does not prove that remote
+state has no conflicts. Other devices, HTTP/TUI failures and errors already
+handled inside a command are outside this recorded CLI coverage. After-write
+conflicts may have applied and require fresh state inspection before retrying.
+
+The #30 implementation remains incomplete: sync settings
 still need their own GitHub contracts and implementation. SQLite snapshot bootstrap, action-log replay and
 FK repair are store-specific operations; they cannot be reported as successful
 GitHub transfers. Native repository checks and task review are still pending.
