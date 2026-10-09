@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -17,7 +18,28 @@ import (
 	"github.com/marcus/td/internal/serve"
 	"github.com/marcus/td/internal/session"
 	"github.com/marcus/td/pkg/monitor"
+	"github.com/spf13/cobra"
 )
+
+func TestGitHubWorkContextImportedHistoryCannotClaimCurrentOwnership(t *testing.T) {
+	history := serve.GitHubImportedHistory{Logs: []models.Log{{Historical: true, SessionID: "actor", WorkSessionID: "ws-current", Message: "Archived progress"}}, Handoffs: []models.Handoff{{Historical: true, SessionID: "actor", Done: []string{"Archived handoff"}}}}
+	snapshot := &serve.GitHubContextSnapshot{Data: &monitor.RefreshDataMsg{}, Records: []ghstore.Record{{Issue: models.Issue{ID: "gh-1", Status: models.StatusOpen}}}, Activities: map[string][]models.Activity{"gh-1": {{Kind: "comment", Native: true}}}, ImportedHistory: map[string]serve.GitHubImportedHistory{"gh-1": history}}
+	state := &ghcontext.State{Session: session.Session{ID: "actor"}, ActiveWorkSession: "ws-current", WorkSessions: []ghcontext.WorkSession{{WorkSession: models.WorkSession{ID: "ws-current", SessionID: "actor"}}}}
+	payload := githubWorkContextPayload(state, snapshot)
+	if len(payload["issues_touched"].([]string)) != 0 || len(payload["history"].(map[string][]models.Activity)) != 0 || len(payload["handoffs"].(map[string][]models.Activity)) != 0 || len(payload["work_session_activities"].([]models.Activity)) != 0 {
+		t.Fatal("imported matching actor/work bundle gained current authority", payload)
+	}
+	if len(payload["imported_history"].(map[string]serve.GitHubImportedHistory)["gh-1"].Logs) != 1 {
+		t.Fatal("reference history missing", payload)
+	}
+	cmd := &cobra.Command{}
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	printGitHubImportedHistory(cmd, history)
+	if !strings.Contains(out.String(), "IMPORTED LOG (history)") || !strings.Contains(out.String(), "IMPORTED HANDOFF (history)") {
+		t.Fatal("reference output appeared current", out.String())
+	}
+}
 
 func TestGitHubWorkContextTouchedDeletedHistory(t *testing.T) {
 	now := time.Now()

@@ -267,8 +267,12 @@ Native validation remains pending. Monitor detail views project preserved logs
 and handoffs through the shared reader and label them as history. The activity
 feed and active-session/recent-handoff summaries use native events only; imported
 history does not become current activity. Tests exercise detail projection and
-summary exclusion, plus historical labels and line wrapping. Work-context
-projections still need a separate audit.
+summary exclusion, plus historical labels and line wrapping. Work context
+keeps projected logs/handoffs in a separate `imported_history` map.
+`resume` labels these references explicitly in text; JSON context exposes their
+historical provenance. Native session ownership, work-bundle activity and review
+classification never consume that map. Projection reuses already observed
+comments and adds no GitHub requests.
 
 `TD_GH_CONTEXT_ROOT` optionally selects an absolute base directory for local
 GitHub work-context files; repository hashing/isolation is unchanged. The default

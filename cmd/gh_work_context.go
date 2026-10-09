@@ -130,6 +130,7 @@ func runGitHubWorkContext(original, cmd *cobra.Command, args []string, cfg *mode
 	}
 	if original == resumeCmd {
 		cmd.Print(output.FormatIssueLong(output.SanitizedForDisplay(snapshot.Data.FocusedIssue), nil, nil))
+		printGitHubImportedHistory(cmd, snapshot.ImportedHistory[candidate.Focus])
 		for _, record := range snapshot.Records {
 			if record.ID == candidate.Focus && record.Details != nil {
 				for _, event := range record.Details.Transitions {
@@ -180,6 +181,15 @@ func runGitHubWorkContext(original, cmd *cobra.Command, args []string, cfg *mode
 		cmd.Println("Issues/history are shared; identity/focus are device-local. Review queues are observations; trusted self-review needs acknowledgement. Use handoff, review, then approve.")
 	}
 	return nil
+}
+
+func printGitHubImportedHistory(cmd *cobra.Command, history serve.GitHubImportedHistory) {
+	for _, log := range history.Logs {
+		cmd.Printf("IMPORTED LOG (history) %s (%s): %s\n", log.Timestamp.Format("2006-01-02T15:04:05Z07:00"), output.SanitizeIssueText(log.SessionID), output.SanitizeIssueText(log.Message))
+	}
+	for _, handoff := range history.Handoffs {
+		cmd.Printf("IMPORTED HANDOFF (history) %s (%s): done=%v remaining=%v decisions=%v uncertain=%v\n", handoff.Timestamp.Format("2006-01-02T15:04:05Z07:00"), output.SanitizeIssueText(handoff.SessionID), sanitizeContextItems(handoff.Done), sanitizeContextItems(handoff.Remaining), sanitizeContextItems(handoff.Decisions), sanitizeContextItems(handoff.Uncertain))
+	}
 }
 
 func sanitizeContextItems(items []string) []string {
@@ -255,7 +265,13 @@ func githubWorkContextPayload(state *ghcontext.State, snapshot *serve.GitHubCont
 		}
 		return 0
 	})
-	return map[string]any{"session": state.Session.ID, "name": state.Session.Name, "branch": state.Session.Branch, "agent": state.Session.AgentType, "started": state.Session.StartedAt, "previous_session": state.Session.PreviousSessionID, "storage": "device-local", "saved_focus": state.Focus, "focused": d.FocusedIssue, "focus": d.FocusedIssue, "focus_missing": state.Focus != "" && d.FocusedIssue == nil, "issues_touched": touched, "issues": visible, "history": history, "workflow_history": workflowHistory, "review_history": reviewHistory, "handoffs": handoffs, "local_session_history": jsonList(state.History), "in_progress": myProgress, "all_in_progress": jsonList(d.InProgress), "reviewable": jsonList(d.TaskList.Reviewable), "ready_to_close": jsonList(d.TaskList.ReadyToClose), "pending_review": jsonList(d.TaskList.PendingReview), "pending_other": jsonList(d.TaskList.PendingOther), "needs_rework": jsonList(d.TaskList.NeedsRework), "blocked": jsonList(d.TaskList.Blocked), "ready": jsonList(d.TaskList.Ready), "ready_to_start": jsonList(d.TaskList.Ready), "review_workflows_supported": true, "work_sessions_supported": true, "work_session": currentGitHubWorkBundle(state), "work_session_history": jsonList(state.WorkSessions), "work_session_activities": githubWorkBundleSnapshotActivities(state, snapshot), "work_session_missing_issues": githubWorkBundleMissingIssues(state, snapshot)}
+	payload := map[string]any{"session": state.Session.ID, "name": state.Session.Name, "branch": state.Session.Branch, "agent": state.Session.AgentType, "started": state.Session.StartedAt, "previous_session": state.Session.PreviousSessionID, "storage": "device-local", "saved_focus": state.Focus, "focused": d.FocusedIssue, "focus": d.FocusedIssue, "focus_missing": state.Focus != "" && d.FocusedIssue == nil, "issues_touched": touched, "issues": visible, "history": history, "workflow_history": workflowHistory, "review_history": reviewHistory, "handoffs": handoffs, "local_session_history": jsonList(state.History), "in_progress": myProgress, "all_in_progress": jsonList(d.InProgress), "reviewable": jsonList(d.TaskList.Reviewable), "ready_to_close": jsonList(d.TaskList.ReadyToClose), "pending_review": jsonList(d.TaskList.PendingReview), "pending_other": jsonList(d.TaskList.PendingOther), "needs_rework": jsonList(d.TaskList.NeedsRework), "blocked": jsonList(d.TaskList.Blocked), "ready": jsonList(d.TaskList.Ready), "ready_to_start": jsonList(d.TaskList.Ready), "review_workflows_supported": true, "work_sessions_supported": true, "work_session": currentGitHubWorkBundle(state), "work_session_history": jsonList(state.WorkSessions), "work_session_activities": githubWorkBundleSnapshotActivities(state, snapshot), "work_session_missing_issues": githubWorkBundleMissingIssues(state, snapshot)}
+	historyView := snapshot.ImportedHistory
+	if historyView == nil {
+		historyView = map[string]serve.GitHubImportedHistory{}
+	}
+	payload["imported_history"] = historyView
+	return payload
 }
 
 func currentGitHubWorkBundle(state *ghcontext.State) *ghcontext.WorkSession {

@@ -14,9 +14,17 @@ import (
 // GitHubContextSnapshot retains the complete observed history, including deleted
 // tasks, alongside the same classified queues used by the HTTP monitor.
 type GitHubContextSnapshot struct {
-	Data       *monitor.RefreshDataMsg
-	Records    []ghstore.Record
-	Activities map[string][]models.Activity
+	Data            *monitor.RefreshDataMsg
+	Records         []ghstore.Record
+	Activities      map[string][]models.Activity
+	ImportedHistory map[string]GitHubImportedHistory
+}
+
+// GitHubImportedHistory is passive reference data, separate from native events
+// used for session ownership, current work bundles and review classification.
+type GitHubImportedHistory struct {
+	Logs     []models.Log     `json:"logs"`
+	Handoffs []models.Handoff `json:"handoffs"`
 }
 
 type contextCapture struct {
@@ -78,5 +86,15 @@ func ReadGitHubContext(ctx context.Context, client githubMonitorClient, actor st
 	if err != nil {
 		return nil, err
 	}
-	return &GitHubContextSnapshot{Data: data, Records: c.records, Activities: c.activities}, nil
+	history := map[string]GitHubImportedHistory{}
+	for _, record := range c.records {
+		logs, handoffs, err := ghstore.ProjectImportedHistory(c.activities[record.ID], record.ID)
+		if err != nil {
+			return nil, fmt.Errorf("context imported history on %s: %w", record.ID, err)
+		}
+		if len(logs) != 0 || len(handoffs) != 0 {
+			history[record.ID] = GitHubImportedHistory{Logs: logs, Handoffs: handoffs}
+		}
+	}
+	return &GitHubContextSnapshot{Data: data, Records: c.records, Activities: c.activities, ImportedHistory: history}, nil
 }
