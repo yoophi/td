@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,11 @@ import (
 	"github.com/marcus/td/internal/workdir"
 	"github.com/spf13/cobra"
 )
+
+// Keep the device-local persistence boundary injectable without changing HOME
+// or redirecting the user's global settings during command contract tests.
+var loadDirectoryAssociations = workdir.LoadAssociations
+var saveDirectoryAssociations = workdir.SaveAssociations
 
 func init() {
 	configCmd.AddCommand(associateCmd)
@@ -68,15 +74,18 @@ Associations are stored in ~/.config/td/associations.json.`,
 		}
 
 		// Load, update, save
-		assoc, err := workdir.LoadAssociations()
+		assoc, err := loadDirectoryAssociations()
 		if err != nil {
 			return fmt.Errorf("loading associations: %w", err)
 		}
 
 		assoc[dir] = target
 
-		if err := workdir.SaveAssociations(assoc); err != nil {
+		if err := saveDirectoryAssociations(assoc); err != nil {
 			return fmt.Errorf("saving associations: %w", err)
+		}
+		if jsonMode(cmd) {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{"action": "associate", "directory": dir, "project": target})
 		}
 
 		fmt.Printf("Associated %s → %s\n", dir, target)
@@ -88,10 +97,23 @@ var associationsCmd = &cobra.Command{
 	Use:     "associations",
 	Aliases: []string{"assoc"},
 	Short:   "List directory associations",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		assoc, err := workdir.LoadAssociations()
+		assoc, err := loadDirectoryAssociations()
 		if err != nil {
 			return fmt.Errorf("loading associations: %w", err)
+		}
+		if jsonMode(cmd) {
+			entries := []map[string]string{}
+			keys := make([]string, 0, len(assoc))
+			for dir := range assoc {
+				keys = append(keys, dir)
+			}
+			sort.Strings(keys)
+			for _, dir := range keys {
+				entries = append(entries, map[string]string{"directory": dir, "project": assoc[dir]})
+			}
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(entries)
 		}
 
 		if len(assoc) == 0 {
@@ -143,7 +165,7 @@ the current directory is used.`,
 		}
 		dir = filepath.Clean(dir)
 
-		assoc, err := workdir.LoadAssociations()
+		assoc, err := loadDirectoryAssociations()
 		if err != nil {
 			return fmt.Errorf("loading associations: %w", err)
 		}
@@ -154,8 +176,11 @@ the current directory is used.`,
 
 		delete(assoc, dir)
 
-		if err := workdir.SaveAssociations(assoc); err != nil {
+		if err := saveDirectoryAssociations(assoc); err != nil {
 			return fmt.Errorf("saving associations: %w", err)
+		}
+		if jsonMode(cmd) {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{"action": "dissociate", "directory": dir})
 		}
 
 		fmt.Printf("Removed association for %s\n", dir)
