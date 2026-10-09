@@ -218,3 +218,31 @@ unchanged local revision. JSON emits null for no active bundle and arrays for
 empty histories; unavailable remote history fails rather than masquerading as an
 empty result. All paths validate gh authentication, the configured repository and
 remote before proceeding, with no SQLite fallback.
+
+## Shared activity and exit checks
+
+`log`, `comment`, `comments add`, `handoff`, and update's comment/note options
+append versioned activity comments through gh. Native comments retain their
+GitHub author and timestamps and are never rewritten as td records. Readers
+paginate current comments, identify edits and duplicate operation IDs, omit
+comments deleted on GitHub, and fail explicitly on corrupted or unknown metadata.
+The operation ID in an uncertain write error identifies the comment to inspect;
+it is not an idempotency guarantee and writes are never retried automatically.
+
+Issue-level `log` and `handoff` carry the active local bundle ID, including when
+the target issue is not tagged. Its historical reference is retained locally so
+bundle readers can discover the authoritative shared comment. If that association
+cannot be saved after a successful comment, the error states that the comment
+was already written. Explicit issue/task flags compare canonical GitHub numbers.
+
+`check-handoff` checks the current actor's effective in-progress issues and the
+active local bundle. A focus alone, another actor's claim, closed/deleted issues
+or an ended bundle does not require handoff. A recorded handoff does not release
+a claim: the check remains conservative until work leaves in-progress or the
+bundle ends. Both stores return 0 when clear and 1 when handoff is needed,
+including `--json`; JSON is one result object with an unconditional
+`in_progress_issues` array. `--quiet` suppresses reminder text while preserving
+that exit status. Repository/authentication/read failures remain explicit errors,
+including in quiet mode, and are never converted to a clear check or SQLite
+fallback. Latest handoffs remain readable in shared context/review consumers;
+complete `show` detail parity is tracked separately in #17.

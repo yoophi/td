@@ -64,6 +64,7 @@ func TestGitHubActivityLogTargetsAndTypes(t *testing.T) {
 		{[]string{"message", "#3", "--type", "orchestration"}, "", "#3", "message", models.LogTypeOrchestration},
 		{[]string{"--task", "9"}, "piped\n", "9", "piped", models.LogTypeProgress},
 		{[]string{"gh-10"}, "piped\n", "gh-10", "piped", models.LogTypeProgress},
+		{[]string{"gh-001", "message", "--issue", "1"}, "", "1", "message", models.LogTypeProgress},
 	} {
 		store := &memoryActivities{}
 		cmd := activityTestCommand(logCmd, store, "")

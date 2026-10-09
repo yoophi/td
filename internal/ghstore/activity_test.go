@@ -30,7 +30,7 @@ func TestActivityRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Native || !got.Edited || got.Author != "actual-author" || got.ID != "ghc-42" || got.IssueID != "gh-9" || got.Kind != input.Kind || got.OperationID != input.OperationID || got.Message != input.Message || !reflect.DeepEqual(got.Done, input.Done) || !reflect.DeepEqual(got.Snapshot, input.Snapshot) {
+		if got.Native || !got.Edited || got.Author != "actual-author" || got.ID != "ghc-42" || got.IssueID != "gh-9" || got.Kind != input.Kind || got.OperationID != input.OperationID || got.Message != input.Message || !reflect.DeepEqual(got.Done, input.Done) || !reflect.DeepEqual(got.Remaining, input.Remaining) || !reflect.DeepEqual(got.Decisions, input.Decisions) || !reflect.DeepEqual(got.Uncertain, input.Uncertain) || got.SessionID != input.SessionID || got.WorkSessionID != input.WorkSessionID || got.LogType != input.LogType || !got.CreatedAt.Equal(comment.CreatedAt) || !got.UpdatedAt.Equal(comment.UpdatedAt) || !reflect.DeepEqual(got.Snapshot, input.Snapshot) {
 			t.Fatalf("bad roundtrip: %+v", got)
 		}
 	}
@@ -140,5 +140,28 @@ func TestActivityWriteFailureNeverRetries(t *testing.T) {
 				t.Fatalf("writes=%d", writes)
 			}
 		})
+	}
+}
+
+func TestActivityDeletedCommentsAreNotReturnedFromOldState(t *testing.T) {
+	body, err := renderActivity(activityData{Kind: "handoff", SessionID: "ses", OperationID: "op", Done: []string{"saved"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pages := [][]apiComment{{{ID: 1, Body: body}}}
+	client := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
+		if slices.Contains(args, "repos/owner/repo/issues/9") {
+			return []byte(`{"number":9,"state":"open"}`), nil
+		}
+		return json.Marshal(pages)
+	}}
+	first, err := client.ListActivity(context.Background(), "9")
+	if err != nil || len(first) != 1 {
+		t.Fatal(first, err)
+	}
+	pages = [][]apiComment{{}}
+	second, err := client.ListActivity(context.Background(), "9")
+	if err != nil || second == nil || len(second) != 0 {
+		t.Fatal("deleted comment retained", second, err)
 	}
 }

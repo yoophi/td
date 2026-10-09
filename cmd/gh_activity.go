@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -56,7 +55,7 @@ func init() {
 			if err != nil {
 				return err
 			}
-			return runGitHubActivity(original, cmd, args, client, state, scope.Worktree)
+			return runGitHubActivity(original, cmd, args, &gitHubActivityTracker{ActivityStore: client, Scope: scope}, state, scope.Worktree)
 		}
 	}
 }
@@ -76,6 +75,7 @@ func gitHubContextDirectory() (string, error) {
 }
 
 func runGitHubActivity(original, cmd *cobra.Command, args []string, store issuestore.ActivityStore, state *ghcontext.State, worktree string) error {
+	cmd.SetOut(cmd.OutOrStdout())
 	// Reject any newly introduced option until its semantics have been wired.
 	allowed := []string{"json", "work-dir", "help"}
 	if original == logCmd {
@@ -123,6 +123,12 @@ func runGitHubActivity(original, cmd *cobra.Command, args []string, store issues
 		return nil
 	}
 	input := models.Activity{SessionID: state.Session.ID}
+	if (original == logCmd || original == handoffCmd) && state.ActiveWorkSession != "" {
+		if _, err := state.CurrentWorkSession(); err != nil {
+			return err
+		}
+		input.WorkSessionID = state.ActiveWorkSession
+	}
 	id, action := "", ""
 	switch original {
 	case commentCmd, commentsAddCmd:
@@ -193,9 +199,8 @@ func runGitHubActivity(original, cmd *cobra.Command, args []string, store issues
 }
 
 func isGitHubIssueID(value string) bool {
-	value = strings.TrimPrefix(strings.TrimPrefix(value, "gh-"), "#")
-	n, err := strconv.Atoi(value)
-	return err == nil && n > 0
+	_, err := ghstore.Number(value)
+	return err == nil
 }
 
 func gitHubActivityTarget(args []string, cmd *cobra.Command, focus string, log bool) (id, message string, err error) {
@@ -217,7 +222,12 @@ func gitHubActivityTarget(args []string, cmd *cobra.Command, focus string, log b
 	if log {
 		for _, name := range []string{"issue", "task"} {
 			if value, _ := cmd.Flags().GetString(name); value != "" {
-				if id != "" && strings.TrimPrefix(strings.TrimPrefix(id, "gh-"), "#") != strings.TrimPrefix(strings.TrimPrefix(value, "gh-"), "#") {
+				left, leftErr := ghstore.Number(id)
+				right, rightErr := ghstore.Number(value)
+				if rightErr != nil {
+					return "", "", rightErr
+				}
+				if id != "" && (leftErr != nil || left != right) {
 					return "", "", fmt.Errorf("conflicting issue IDs")
 				}
 				id = value

@@ -101,6 +101,8 @@ var unfocusCmd = &cobra.Command{
 
 // Note: currentCmd moved to status.go (with "current" as alias)
 
+var errHandoffNeeded = fmt.Errorf("handoff needed: %w", errSilentExit)
+
 var checkHandoffCmd = &cobra.Command{
 	Use:   "check-handoff",
 	Short: "Check if handoff is needed before exiting (returns error if yes)",
@@ -161,7 +163,13 @@ Example in bash: td check-handoff || echo "Don't forget to run td handoff!"`,
 				issueIDs = append(issueIDs, issue.ID)
 			}
 			result["in_progress_issues"] = jsonList(issueIDs)
-			return output.JSON(result)
+			if err := output.JSON(result); err != nil {
+				return err
+			}
+			if needsHandoff {
+				return errHandoffNeeded
+			}
+			return nil
 		}
 
 		if needsHandoff {
@@ -185,7 +193,7 @@ Example in bash: td check-handoff || echo "Don't forget to run td handoff!"`,
 			// Use SilentErr to suppress Cobra's error output while still returning exit code 1
 			cmd.SilenceErrors = true
 			cmd.SilenceUsage = true
-			return fmt.Errorf("handoff needed")
+			return errHandoffNeeded
 		}
 
 		if !quiet {
