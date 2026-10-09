@@ -39,6 +39,7 @@ method=args[args.index('--method')+1] if '--method' in args else 'GET'
 f=pathlib.Path(os.environ['TD_BATCH_STATE'])
 issues=json.loads(f.read_text()) if f.exists() else {str(n):{'number':n,'title':'Fixture','state':'open','body':'','labels':[]} for n in [1,2]}
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
+elif '/comments?' in path:data=[[]]
 elif '/labels?' in path:data=[[{'name':'td:'+s} for s in ['open','in_progress','blocked','in_review','closed']]]
 elif path.startswith('repos/owner/repo/issues?'):data=[list(issues.values())]
 else:

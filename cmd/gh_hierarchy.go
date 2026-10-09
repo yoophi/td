@@ -205,7 +205,7 @@ func resolveGitHubHierarchyFilter(cmd *cobra.Command, raw, name string, cfg *mod
 }
 
 type gitHubIssueWithChildren struct {
-	ghstore.Record
+	gitHubShowDetail
 	Children []ghstore.Record `json:"children"`
 }
 
@@ -247,6 +247,16 @@ func showGitHubHierarchy(cmd *cobra.Command, args []string, client *ghstore.Clie
 			cmd.PrintErrln("Warning:", warning)
 		}
 	}
+	short, _ := cmd.Flags().GetBool("short")
+	detailed := jsonMode(cmd) || format == "json" || (!short && format != "short")
+	details := map[string]gitHubShowDetail{}
+	if detailed {
+		var err error
+		details, err = loadGitHubShowDetails(cmd, client, records)
+		if err != nil {
+			return err
+		}
+	}
 	byParent := map[string][]ghstore.Record{}
 	if needChildren {
 		rows, err := client.List(cmd.Context(), true)
@@ -276,7 +286,7 @@ func showGitHubHierarchy(cmd *cobra.Command, args []string, client *ghstore.Clie
 		if children {
 			enriched := []gitHubIssueWithChildren{}
 			for _, r := range records {
-				enriched = append(enriched, gitHubIssueWithChildren{r, append([]ghstore.Record{}, byParent[r.ID]...)})
+				enriched = append(enriched, gitHubIssueWithChildren{details[r.ID], append([]ghstore.Record{}, byParent[r.ID]...)})
 			}
 			if len(enriched) == 1 {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(enriched[0])
@@ -284,16 +294,25 @@ func showGitHubHierarchy(cmd *cobra.Command, args []string, client *ghstore.Clie
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(enriched)
 		}
 		if len(records) == 1 {
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(records[0])
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(details[records[0].ID])
 		}
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(records)
+		enriched := []gitHubShowDetail{}
+		for _, r := range records {
+			enriched = append(enriched, details[r.ID])
+		}
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(enriched)
 	}
-	short, _ := cmd.Flags().GetBool("short")
 	for _, r := range records {
 		if short || format == "short" {
 			cmd.Println(output.FormatIssueShort(&r.Issue))
 		} else {
-			cmd.Print(output.FormatIssueLong(output.SanitizedForDisplay(&r.Issue), nil, nil))
+			issue := output.SanitizedForDisplay(&r.Issue)
+			if render, _ := cmd.Flags().GetBool("render-markdown"); render {
+				issue = renderIssueMarkdown(issue, output.TerminalWidth(80))
+			}
+			detail := details[r.ID]
+			cmd.Print(output.FormatIssueLong(issue, detail.modelLogs, detail.modelHandoff))
+			printGitHubShowDetails(cmd, detail)
 			cmd.Println(r.URL)
 		}
 		if children || (!short && format != "short" && r.Type == models.TypeEpic) {

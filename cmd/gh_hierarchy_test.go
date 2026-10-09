@@ -34,6 +34,10 @@ def issue(n):
  if os.environ.get('TD_HIER_CYCLE') and n==1:parent='gh-2'
  if os.environ.get('TD_HIER_MISSING') and n==1:parent='gh-99'
  details={'parent_id':parent}
+ if os.environ.get('TD_HIER_RICH'):
+  if n==3:
+   details.update(files=[{'file_path':'example.go','role':'implementation'}],dependencies=['gh-2'],reviews=[{'id':'fixture-review-'+str(k),'reviewer_session':'synthetic-reviewer','decision':'approved','created_at':'2026-10-09T00:00:0'+str(k)+'Z','summary':'review '+str(k),'self_review':True} for k in range(4)])
+  if n==5:details['dependencies']=['gh-3']
  if n==2 and os.environ.get('TD_HIER_OWNER'):details.update(status=os.environ.get('TD_HIER_STATUS','in_progress'),implementer_session=os.environ['TD_HIER_OWNER'])
  return {'number':n,'title':'Fixture '+str(n),'state':'closed' if n in [1,6] else 'open','body':'<!-- td:issue:v1\n'+json.dumps({'type':'epic' if n in [1,4] else 'task','priority':'P2','points':0,'details':details})+'\n-->','labels':[{'name':'td:closed' if n in [1,6] else 'td:open'}]}
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
@@ -43,6 +47,11 @@ elif '/comments?' in path:
  if os.environ.get('TD_HIER_FAIL_COMMENTS'):sys.stderr.write('HTTP 403 comment read denied');sys.exit(1)
  body='progress\n\n<!-- td:activity:v1\n'+json.dumps({'kind':'log','operation_id':'td-op-fixture-'+str(n),'session_id':actor,'message':'progress','log_type':'progress'},separators=(',',':'))+'\n-->'
  data=[[{'id':100+n,'body':body,'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'synthetic-fixture'}}]] if actor else [[]]
+ if os.environ.get('TD_HIER_RICH') and n==3:
+  handoff={'kind':'handoff','operation_id':'td-op-handoff-fixture','session_id':'synthetic-actor','done':['implemented'],'remaining':['next'],'decisions':['decision'],'uncertain':['question']}
+  visible='## Done\n- implemented\n\n## Remaining\n- next\n\n## Decisions\n- decision\n\n## Uncertain\n- question\n'
+  data[0].append({'id':203,'body':visible+'\n\n<!-- td:activity:v1\n'+json.dumps(handoff,separators=(',',':'))+'\n-->','created_at':'2026-10-09T00:00:01Z','updated_at':'2026-10-09T00:00:01Z'})
+  data[0].append({'id':303,'body':'native comment','created_at':'2026-10-09T00:00:02Z','updated_at':'2026-10-09T00:00:02Z'})
 else:
  n=int(path.split('/issues/')[1])
  if n==7:data=dict(issue(n),pull_request={'url':'https://example.test/pr'})
@@ -192,6 +201,57 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 	t.Setenv("TD_HIER_MISSING", "1")
 	if _, err := executeGitHubTest(githubTestCommand(showCmd), "1", "--children", "--json"); err == nil {
 		t.Fatal("missing parent hidden")
+	}
+	t.Setenv("TD_HIER_MISSING", "")
+	t.Setenv("TD_HIER_RICH", "1")
+	t.Setenv("TD_HIER_LOG_3", "synthetic-actor")
+	var detail struct {
+		Logs          []map[string]any     `json:"logs"`
+		Handoff       map[string]any       `json:"handoff"`
+		Comments      []models.Comment     `json:"comments"`
+		ReviewHistory []models.IssueReview `json:"review_history"`
+		Files         []models.IssueFile   `json:"files"`
+		Dependencies  []string             `json:"dependencies"`
+		Blocks        []string             `json:"blocks"`
+	}
+	if err := json.Unmarshal([]byte(execute(showCmd, "3")), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Logs) != 1 || detail.Handoff["session"] != "synthetic-actor" || len(detail.Handoff["uncertain"].([]any)) != 1 || len(detail.Comments) != 1 || len(detail.ReviewHistory) != 3 || detail.ReviewHistory[0].ID != "fixture-review-1" || len(detail.Files) != 1 || strings.Join(detail.Dependencies, ",") != "gh-2" || strings.Join(detail.Blocks, ",") != "gh-5" {
+		t.Fatalf("incomplete details: %+v", detail)
+	}
+	human, err = executeGitHubTest(githubTestCommand(showCmd), "3", "--render-markdown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"progress", "implemented", "RECENT REVIEWS", "LINKED FILES", "BLOCKED BY", "BLOCKS"} {
+		if !strings.Contains(human, want) {
+			t.Fatal(want, human)
+		}
+	}
+	t.Setenv("TD_HIER_FAIL_COMMENTS", "1")
+	if out, err := executeGitHubTest(githubTestCommand(showCmd), "3", "--json"); err == nil || out != "" {
+		t.Fatal("activity failure emitted incomplete details", out, err)
+	}
+	if _, err := executeGitHubTest(githubTestCommand(showCmd), "3", "--short"); err != nil {
+		t.Fatal("short fetched unused history", err)
+	}
+	t.Setenv("TD_HIER_FAIL_COMMENTS", "")
+	if _, err := scope.Update(context.Background(), func(s *ghcontext.State) error { s.Focus = "gh-3"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if out := execute(showCmd); !strings.Contains(out, `"id":"gh-3"`) {
+		t.Fatal("no-ID focus", out)
+	}
+	if _, err := scope.Update(context.Background(), func(s *ghcontext.State) error { s.Focus = ""; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := executeGitHubTest(githubTestCommand(showCmd), "--json"); err == nil {
+		t.Fatal("no-context show accepted")
+	}
+	t.Setenv("TD_HIER_OWNER", state.Session.ID)
+	if out := execute(showCmd); !strings.Contains(out, `"id":"gh-2"`) {
+		t.Fatal("unique in-progress selection", out)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("SQLite created")

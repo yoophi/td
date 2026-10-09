@@ -30,7 +30,7 @@ func githubTestCommand(original *cobra.Command) *cobra.Command {
 		cmd.Flags().StringArray("type", nil, "")
 		cmd.Flags().StringArray("status", nil, "")
 	}
-	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append", "minor", "tree", "children"} {
+	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append", "minor", "tree", "children", "render-markdown"} {
 		cmd.Flags().Bool(name, false, "")
 	}
 	cmd.Flags().Int("points", 0, "")
@@ -92,6 +92,8 @@ if [ "$4" = repos/owner/repo ]; then
   printf '%s' '{"full_name":"owner/repo","has_issues":true}'
 elif [ "$6" = 'repos/owner/repo/issues?state=all&per_page=100' ]; then
   printf '%s' '[[{"number":1,"title":"Open issue","state":"open"},{"number":2,"title":"Closed issue","state":"closed"}]]'
+elif [ "$6" = 'repos/owner/repo/issues/1/comments?per_page=100' ]; then
+  printf '%s' '[[]]'
 elif [ "$6" = repos/owner/repo/issues/1 ]; then
   printf '%s' '{"number":1,"title":"Open issue","state":"open","body":"Native GitHub description","html_url":"https://github.com/owner/repo/issues/1"}'
 else

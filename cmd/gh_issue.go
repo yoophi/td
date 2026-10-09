@@ -48,7 +48,7 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 	case "list":
 		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager parent epic "
 	case "show":
-		allowed += "long short format tree children "
+		allowed += "long short format tree children render-markdown "
 	}
 	var invalid []string
 	cmd.Flags().Visit(func(flag *pflag.Flag) {
@@ -89,7 +89,7 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	if operation == "create" {
 		created, err = newGitHubIssue(cmd, args)
 	} else {
-		if len(args) == 0 {
+		if len(args) == 0 && operation != "show" {
 			return fmt.Errorf("gh-issue requires an issue ID (gh-123, #123 or 123)")
 		}
 		for _, id := range args {
@@ -169,6 +169,12 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		return emitGitHubMutation(cmd, "created", record)
 	}
 	if operation == "show" {
+		if len(args) == 0 {
+			args, err = resolveGitHubShowSelection(cmd, cfg, client)
+			if err != nil {
+				return err
+			}
+		}
 		return showGitHubHierarchy(cmd, args, client, format)
 	}
 

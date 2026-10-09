@@ -427,3 +427,30 @@ without a usable active bundle and no usable context both return explicit
 errors. Authentication, activity-read and hierarchy errors do not silently
 substitute another store or context. Current context reads may span multiple
 GitHub requests, so they remain best-effort rather than an atomic snapshot.
+
+### Detailed issue display
+
+`show` (and `context`/`view`/`get`) displays shared logs, the latest structured
+handoff, the last three reviews in chronological order, linked files, outgoing
+and incoming dependencies, reviewer/closer attribution, and the latest start
+snapshot. `--render-markdown` renders the sanitized description and acceptance.
+`--short` avoids fetching unused activity history. Activity read failures abort
+full output rather than silently presenting missing history as an empty result.
+
+JSON preserves the existing GitHub record fields and adds `logs`, `handoff`,
+`comments`, `review_history`, `files`, `dependencies`, and `blocks`. Empty lists
+are `[]`; an absent handoff is `null`. `--children` adds direct children to the
+same detailed record. Multiple IDs produce an array, and `--tree` retains its
+hierarchical output contract.
+
+With no ID, show uses this worktree/branch/device's focus first, then a unique
+in-progress issue, then a unique in-review issue, matching SQLite's selection
+order. Ambiguity, stale focus, and no available context are explicit errors.
+
+The shared start snapshot is compared with the current local clone. A commit
+not available locally (including a repository without its first commit) yields
+`git.comparison_available=false` with an explicit warning; unavailable diff or
+commit counts are omitted, not reported as zero. Available comparisons include
+current commit/branch, dirty files, commits since start and committed diff totals.
+These are observations of local Git state, not a remote snapshot or a transaction
+with GitHub issue/history reads.
