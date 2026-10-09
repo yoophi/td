@@ -125,3 +125,39 @@ the subsequent include_closed issue list excluded gh-109/110/111. The sample
 browser tab, SSE capture and test GUI/backend were stopped. Native response
 artifacts are stored in the tracking checkout under
 `artifacts/td-gui-compatibility/native-sample/`.
+
+## Review latency follow-up (2026-10-10 KST, #55 remains in progress)
+
+The currently installed unmodified GUI reports `td-gui dev`; earlier checks
+called it v0.18.8. This follow-up verifies this installed binary, not an
+unverified release identity. It used a separately owned GUI on port 7778 and
+`yoophi/td-sample`; existing user servers were left running.
+
+With installed td f46d479, an ordinary child review with one epic parent
+reproduced the frontend cancellation boundary using `curl --max-time 20`
+against the GUI proxy. It returned curl exit 28 after 20.003 seconds; the
+backend recorded HTTP 502 after 20.024 seconds, 23 API invocations and 28
+observed HTTP responses. Fresh reads confirmed both gh-118 and parent gh-117
+were already in_review. No review write was retried.
+
+Parent and descendant discovery performed two consecutive full listings
+before any write. They now derive their initial graphs from one fresh
+listing. This is explicit per-operation reuse, not the display cache; all
+subsequent graph, native-event, revision and review checks remain fresh. The
+regression `TestReviewCascadeSharesInitialHierarchyObservation` failed before
+the change (two initial listings) and passes afterward (one). Existing graph
+conflict tests and the full ghstore race suite pass.
+
+A second sample (parent gh-119, child gh-120) with the modified binary still
+exceeded 20 seconds: curl exit 28 after 20.006 seconds, backend HTTP 502 after
+20.008 seconds. At cancellation it had made 24 API invocations and observed
+28 HTTP responses, including three readbacks versus two in the earlier
+interrupted run. These are different interruption points, not comparable
+completed-operation totals; this evidence does not establish a latency fix.
+Fresh reads again confirmed both child and parent in_review.
+
+All four fixtures were logically deleted and this owned GUI/backend stopped.
+The next work is reducing duplicate post-write graph observations without
+removing membership/revision conflict detection, then repeating the original
+20-second reproduction. Approval/rejection and other outstanding acceptance
+checks remain required before #55 closes.

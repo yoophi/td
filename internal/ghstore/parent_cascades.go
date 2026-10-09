@@ -18,6 +18,10 @@ func (c *Client) parentGraph(ctx context.Context, root string) (map[string]Recor
 	if err != nil {
 		return nil, nil, err
 	}
+	return c.parentGraphFromRecords(ctx, root, records)
+}
+
+func (c *Client) parentGraphFromRecords(ctx context.Context, root string, records []Record) (map[string]Record, []string, error) {
 	all := make(map[string]Record, len(records))
 	for _, record := range records {
 		if _, exists := all[record.ID]; exists {
@@ -81,7 +85,11 @@ func (c *Client) transitionWithParents(ctx context.Context, id, action string, o
 		return nil, false, err
 	}
 	rootID := fmt.Sprintf("gh-%d", n)
-	graph, parents, err := c.parentGraph(ctx, rootID)
+	records, err := c.listWithRoot(ctx, rootID)
+	if err != nil {
+		return nil, false, err
+	}
+	graph, parents, err := c.parentGraphFromRecords(ctx, rootID, records)
 	if err != nil {
 		return nil, false, err
 	}
@@ -90,7 +98,13 @@ func (c *Client) transitionWithParents(ctx context.Context, id, action string, o
 		return nil, false, &ConflictError{ID: rootID}
 	}
 	o.expectedRevision = &root.revision
-	result, noop, err := c.transitionWithLocalCascades(ctx, rootID, action, o)
+	var result *Record
+	var noop bool
+	if action == "review" {
+		result, noop, err = c.transitionReviewWithRecords(ctx, rootID, o, records)
+	} else {
+		result, noop, err = c.transitionWithLocalCascades(ctx, rootID, action, o)
+	}
 	if err != nil {
 		return nil, false, err
 	}

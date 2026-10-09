@@ -35,6 +35,13 @@ func (c *Client) transitionWithLocalCascades(ctx context.Context, id, action str
 	if action != "review" {
 		return c.Transition(ctx, id, action, o)
 	}
+	return c.transitionReviewWithRecords(ctx, id, o, nil)
+}
+
+// Initial hierarchy records may be shared with parent discovery only when no
+// remote write intervened. Every subsequent graph verification remains fresh.
+func (c *Client) transitionReviewWithRecords(ctx context.Context, id string, o TransitionOptions, records []Record) (*Record, bool, error) {
+	const action = "review"
 	if err := ValidateReviewOptions(action, o); err != nil {
 		return nil, false, err
 	}
@@ -43,7 +50,13 @@ func (c *Client) transitionWithLocalCascades(ctx context.Context, id, action str
 		return nil, false, err
 	}
 	rootID := fmt.Sprintf("gh-%d", n)
-	graph, descendants, err := c.reviewGraph(ctx, rootID)
+	if records == nil {
+		records, err = c.listWithRoot(ctx, rootID)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	graph, descendants, err := reviewGraphFromRecords(records, rootID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -91,6 +104,10 @@ func (c *Client) reviewGraph(ctx context.Context, root string) (map[string]Recor
 	if err != nil {
 		return nil, nil, err
 	}
+	return reviewGraphFromRecords(records, root)
+}
+
+func reviewGraphFromRecords(records []Record, root string) (map[string]Record, []Record, error) {
 	descendants, err := descendantsFromRecords(records, root)
 	if err != nil {
 		return nil, nil, err
