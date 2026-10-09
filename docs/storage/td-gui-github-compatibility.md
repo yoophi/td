@@ -59,3 +59,69 @@ A plain `go build` without version ldflags still reports Go's available VCS
 development identity; Go build info does not contain the ancestor release tag.
 Use the installation targets for td-gui, or inject the output of
 `sh scripts/dev-version.sh` via `-X main.Version=...` when building manually.
+
+## Native sample verification (#55, 2026-10-10)
+
+Unmodified installed td-gui v0.18.8 started on port 7778 using the default
+`/opt/homebrew/bin/td`, version
+`v0.66.0+devel.feat-gh-all-tasks.8c539a6.dirty`. Its owned backend used the
+existing sample web session. This was a separate test instance; the user's
+7777 project dashboard was left running.
+
+| Contract | Observed result |
+|---|---|
+| Issue list, labels, board list, CLI TDQ query | HTTP 200 |
+| Create epic and two tasks | HTTP 201, gh-109/110/111 |
+| Edit task parent, acceptance, points | HTTP 200; subsequent detail matched |
+| Add/delete comment | HTTP 201/200 |
+| Add/delete dependency | HTTP 201/200 using returned `dep_id` for DELETE |
+| Create/edit/delete board | HTTP 201/200/200, bd-gh-112 |
+| Pin/unpin task | HTTP 200/200; board detail included pinned task |
+| Set/clear focus | HTTP 200/200 |
+| Start via REST and actual browser Start button | HTTP 200; browser displayed in_progress and td:in_progress |
+| `/gui/status` CLI fallback to open | HTTP 200; fresh detail and board both showed open |
+| Stale If-Match | HTTP 409 with conflict diagnostic; no write |
+| Invalid priority and TDQ field | HTTP 400, field validation/invalid_query diagnostics |
+| Browser Swimlanes and issue detail | Actual cards, status columns, parent and acceptance rendered |
+| SSE through GUI proxy | Initial ping token followed by different refresh token at 16:58:14Z, then ping with new token |
+
+The default issue list excludes closed tasks while a TDQ expression may include
+them. The initial empty list and priority query returning the existing closed
+gh-2 were consistent with those different filters, not missing data.
+
+The SSE source observes GitHub every five minutes. GUI mutations invalidate its
+local query cache, while a separate CLI write can remain invisible until the
+next SSE observation. This run verified a real changed-token event, not just
+an open connection. No per-GitHub-request counter was enabled for this run;
+HTTP response counts here are not evidence of underlying REST call counts.
+
+### Verified failure: review response exceeds GUI deadline
+
+The actual browser Request review action for gh-110 (parent gh-109) displayed:
+`POST /v1/issues/gh-110/review timed out after 20s — td serve is not responding`.
+The backend logged HTTP 502 after 19.991 seconds with cancellation. Fresh reads
+then proved **both child and parent were already in_review**. The request was
+not retried. A timeout is therefore an uncertain/partially completed write,
+not proof that no write happened.
+
+`web/src/api/client.ts` uses `AbortSignal.timeout(20_000)`; the proxy reports
+cancellation after that browser deadline. td's review path performs fresh
+graph checks, comment/handoff writes, parent cascades and read-side availability
+verification. The exact expensive stage still needs request instrumentation.
+Optimize td's redundant observations without removing mutation policy or graph
+conflict checks, then repeat with a fresh disposable fixture. Longer arbitrary
+cascades may also require an upstream GUI timeout/uncertain-write improvement;
+this evidence does not justify declaring full unchanged-GUI compatibility.
+
+Approval/rejection/reopen, independent review attribution, precise drag/drop
+gestures, owned-backend reuse/auth, native API request budgets and all cache
+policies remain unverified in this run. #55 stays in progress; #48/#52 remain
+required for the broader review-display/cache work. `go test ./internal/serve
+-run TestGitHub` passed, including existing simulated errors and conflicts; it
+does not replace native approval or SQLite regression verification.
+
+All four created fixtures were logically deleted through the same GUI proxy;
+the subsequent include_closed issue list excluded gh-109/110/111. The sample
+browser tab, SSE capture and test GUI/backend were stopped. Native response
+artifacts are stored in the tracking checkout under
+`artifacts/td-gui-compatibility/native-sample/`.
