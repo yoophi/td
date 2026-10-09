@@ -5,10 +5,10 @@ URLs, and server timestamps. A trailing `td:issue:v1` HTML comment stores the
 remaining fields. Native issues without the block use task/P2 defaults.
 
 The v1 envelope supports `operation_id`, `type`, `priority`, `points`,
-`acceptance`, `last_state_reason`, optional `entity_kind`, and optional `details`.
+`acceptance`, `last_state_reason`, optional `entity_kind`, and separate `details`, `board`, or `note` payloads.
 Omitted `entity_kind` means `issue`. Reserved `board` and `note` entities are
 excluded from issue lists and rejected by issue Get/update/activity operations.
-Their feature-specific payloads and commands remain separate work.
+Their feature-specific payloads and commands are described below.
 
 `details` holds minor/sprint, parent, creator/implementer/reviewer/requester/closer
 session attribution, creation branch, reviewed/deleted timestamps, due/defer dates
@@ -652,3 +652,61 @@ repository with substantial history. Use `td monitor --interval 1m` or a longer
 interval to reduce repeated API sweeps; overlapping dashboard sweeps are skipped,
 and rate-limit/read errors retain the prior display. No atomic repository
 snapshot or immediate refresh guarantee is provided.
+
+## Notes
+
+`td note add/list` (`ls`)/`show/edit/delete/restore/pin/unpin/archive/unarchive`
+select the configured store. GitHub notes have canonical `nt-gh-N` IDs, native
+issue titles and visible Markdown bodies, with `entity_kind: "note"` and a
+separate `note` payload (`version: 1`). The payload stores pin/archive flags,
+optional logical `deleted_at`, and actor/operation/time-stamped history. Normal
+task and board lists, lifecycle and review operations exclude these carriers;
+task `gh-N` IDs and SQLite `nt-*` IDs cannot substitute for a GitHub note ID.
+Native GitHub close/reopen and labels do not change note flags. Note writes
+preserve native state and labels. Delete is logical; restore preserves the other
+flags. Repeating an already-applied flag operation does not append history.
+
+Search matches SQLite LIKE semantics (ASCII case folding, `%` and `_`
+wildcards), across title and content, after complete pagination. Lists sort
+pinned first, then newest native update time, with ID as a deterministic tie
+breaker. Filters run before limit; nonpositive limit is unlimited. Normal
+lists exclude deleted notes and, unless `--all`, archived notes. `--deleted`
+returns only deleted notes; `show --include-deleted` explicitly reads one.
+Empty JSON lists are `[]`. Titles/content support Unicode.
+
+Notes and their flags/history are shared repository data. Actor/session state
+is device-local and worktree-scoped; no SQLite database is opened in GitHub
+mode. The public `pkg/notes.OpenWithContext` API accepts the actual worktree,
+validates the selected GitHub remote/authentication before opening an editor,
+and revalidates the remote/session on each operation. Close/cancellation stops
+subsequent GitHub work. Changing the active session requires reopening the store.
+
+Editors and UI clients should retain the returned Note and use `UpdateObserved`
+(or the corresponding flag/delete/restore observed method). Private observations
+preserve the revision originally shown to the user. The ID-only update API reads
+at call time and cannot detect a change made during an earlier external editor.
+Writes compare the original revision before PATCH and confirm returned payload
+and a subsequent read. These are best-effort checks; GitHub has no atomic CAS
+or distributed lock. A concurrent writer can still win in the request window.
+A failed/uncertain write or failed readback requires inspecting GitHub before
+retrying; td attempts each write once and reports its operation ID when known.
+Permission, authentication, disabled Issues, rate limit, remote and network
+errors are explicit, with no SQLite fallback. Upgrade older collaborating td
+clients before creating notes with this extended payload: strict old decoders
+reject an unknown `note` field rather than silently rewriting it.
+
+Examples:
+
+```sh
+td note add "API decisions" --content "Use the shared endpoint"
+td note list --search "API" --json
+td note pin nt-gh-107
+td note edit nt-gh-107 --title "Updated API decisions"
+td note archive nt-gh-107
+td note list --archived --output json
+td note delete nt-gh-107
+td note show nt-gh-107 --include-deleted --json
+td note restore nt-gh-107
+```
+
+Monitor notes UI is tracked separately in #44.

@@ -17,6 +17,7 @@ const markerEnd = "\n-->"
 type metadata struct {
 	EntityKind      string          `json:"entity_kind,omitempty"`
 	Board           *BoardDetails   `json:"board,omitempty"`
+	Note            *NoteDetails    `json:"note,omitempty"`
 	Details         *IssueDetails   `json:"details,omitempty"`
 	OperationID     string          `json:"operation_id,omitempty"`
 	Type            models.Type     `json:"type"`
@@ -78,10 +79,18 @@ func validateMetadata(meta metadata) error {
 		return fmt.Errorf("unknown td entity kind %q", meta.EntityKind)
 	}
 	if meta.Board != nil {
-		if meta.EntityKind != "board" || meta.Details != nil {
+		if meta.EntityKind != "board" || meta.Details != nil || meta.Note != nil {
 			return fmt.Errorf("board metadata requires a board entity without issue details")
 		}
 		if err := meta.Board.validate(); err != nil {
+			return err
+		}
+	}
+	if meta.Note != nil {
+		if meta.EntityKind != "note" || meta.Details != nil || meta.Board != nil {
+			return fmt.Errorf("note metadata requires a note entity without issue or board details")
+		}
+		if err := meta.Note.validate(); err != nil {
 			return err
 		}
 	}

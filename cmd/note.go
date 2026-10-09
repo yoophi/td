@@ -1,14 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/marcus/td/internal/db"
-	"github.com/marcus/td/internal/models"
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/output"
+	"github.com/marcus/td/pkg/notes"
 	"github.com/spf13/cobra"
 )
 
@@ -37,6 +38,13 @@ Examples:
 			}
 		}
 
+		store, err := openNoteStore(cmd)
+		if err != nil {
+			emitErr("%v", err)
+			return err
+		}
+		defer func() { _ = store.Close() }()
+
 		title := args[0]
 		content, _ := cmd.Flags().GetString("content")
 
@@ -50,14 +58,7 @@ Examples:
 			content = edited
 		}
 
-		database, err := db.Open(getBaseDir())
-		if err != nil {
-			emitErr("%v", err)
-			return err
-		}
-		defer func() { _ = database.Close() }()
-
-		note, err := database.CreateNote(title, content)
+		note, err := store.Create(title, content)
 		if err != nil {
 			emitErr("failed to create note: %v", err)
 			return err
@@ -89,14 +90,14 @@ Examples:
   td note list --deleted        # show only soft-deleted notes`,
 	Aliases: []string{"ls"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			output.Error("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		opts := db.ListNotesOptions{}
+		opts := notes.ListOptions{}
 		opts.Limit, _ = cmd.Flags().GetInt("limit")
 		opts.Search, _ = cmd.Flags().GetString("search")
 
@@ -126,7 +127,7 @@ Examples:
 			opts.Limit = 0
 		}
 
-		notes, err := database.ListNotes(opts)
+		notes, err := store.List(opts)
 		if err != nil {
 			output.Error("failed to list notes: %v", err)
 			return err
@@ -165,8 +166,9 @@ Examples:
 				pin = "*"
 			}
 			title := n.Title
-			if len(title) > 50 {
-				title = title[:47] + "..."
+			runes := []rune(title)
+			if len(runes) > 50 {
+				title = string(runes[:47]) + "..."
 			}
 			fmt.Printf("%s %s  %-50s  %s  %s\n",
 				pin, n.ID, title,
@@ -188,18 +190,18 @@ Examples:
   td note show nt-abc123 --include-deleted`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			output.Error("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		var note *models.Note
+		var note *notes.Note
 		if includeDeleted, _ := cmd.Flags().GetBool("include-deleted"); includeDeleted {
-			note, err = database.GetNoteIncludingDeleted(args[0])
+			note, err = store.GetAny(args[0])
 		} else {
-			note, err = database.GetNote(args[0])
+			note, err = store.Get(args[0])
 		}
 		if err != nil {
 			output.Error("%v", err)
@@ -245,14 +247,14 @@ Examples:
 			}
 		}
 
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			emitErr("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		note, err := database.GetNote(args[0])
+		note, err := store.Get(args[0])
 		if err != nil {
 			emitErr("%v", err)
 			return err
@@ -278,7 +280,7 @@ Examples:
 			newContent = edited
 		}
 
-		updated, err := database.UpdateNote(note.ID, newTitle, newContent)
+		updated, err := store.UpdateObserved(note, newTitle, newContent)
 		if err != nil {
 			emitErr("failed to update note: %v", err)
 			return err
@@ -308,14 +310,14 @@ var noteDeleteCmd = &cobra.Command{
 			}
 		}
 
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			emitErr("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		if err := database.DeleteNote(args[0]); err != nil {
+		if err := store.Delete(args[0]); err != nil {
 			emitErr("%v", err)
 			return err
 		}
@@ -343,14 +345,14 @@ var noteRestoreCmd = &cobra.Command{
 			}
 		}
 
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			emitErr("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		note, err := database.RestoreNote(args[0])
+		note, err := store.Restore(args[0])
 		if err != nil {
 			emitErr("%v", err)
 			return err
@@ -373,18 +375,21 @@ var notePinCmd = &cobra.Command{
 	Short: "Pin a note",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			output.Error("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		if err := database.PinNote(args[0]); err != nil {
+		if err := store.Pin(args[0]); err != nil {
 			output.Error("%v", err)
 			return err
 		}
 
+		if jsonMode(cmd) {
+			return output.EmitResult("note_pinned", map[string]any{"id": args[0]})
+		}
 		fmt.Printf("PINNED %s\n", args[0])
 		return nil
 	},
@@ -395,18 +400,21 @@ var noteUnpinCmd = &cobra.Command{
 	Short: "Unpin a note",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			output.Error("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		if err := database.UnpinNote(args[0]); err != nil {
+		if err := store.Unpin(args[0]); err != nil {
 			output.Error("%v", err)
 			return err
 		}
 
+		if jsonMode(cmd) {
+			return output.EmitResult("note_unpinned", map[string]any{"id": args[0]})
+		}
 		fmt.Printf("UNPINNED %s\n", args[0])
 		return nil
 	},
@@ -417,18 +425,21 @@ var noteArchiveCmd = &cobra.Command{
 	Short: "Archive a note",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			output.Error("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		if err := database.ArchiveNote(args[0]); err != nil {
+		if err := store.Archive(args[0]); err != nil {
 			output.Error("%v", err)
 			return err
 		}
 
+		if jsonMode(cmd) {
+			return output.EmitResult("note_archived", map[string]any{"id": args[0]})
+		}
 		fmt.Printf("ARCHIVED %s\n", args[0])
 		return nil
 	},
@@ -439,21 +450,48 @@ var noteUnarchiveCmd = &cobra.Command{
 	Short: "Unarchive a note",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := db.Open(getBaseDir())
+		store, err := openNoteStore(cmd)
 		if err != nil {
 			output.Error("%v", err)
 			return err
 		}
-		defer func() { _ = database.Close() }()
+		defer func() { _ = store.Close() }()
 
-		if err := database.UnarchiveNote(args[0]); err != nil {
+		if err := store.Unarchive(args[0]); err != nil {
 			output.Error("%v", err)
 			return err
 		}
 
+		if jsonMode(cmd) {
+			return output.EmitResult("note_unarchived", map[string]any{"id": args[0]})
+		}
 		fmt.Printf("UNARCHIVED %s\n", args[0])
 		return nil
 	},
+}
+
+// Select and validate the configured store before opening an editor or SQLite.
+func openNoteStore(cmd *cobra.Command) (*notes.Store, error) {
+	baseDir := getBaseDir()
+	cfg, err := config.Load(baseDir)
+	if err != nil {
+		return nil, err
+	}
+	kind, err := config.Store(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if kind == config.StoreGitHub {
+		baseDir, err = gitHubContextDirectory()
+		if err != nil {
+			return nil, err
+		}
+	}
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return notes.OpenWithContext(ctx, baseDir)
 }
 
 // openEditorForContent opens the user's default editor with the given initial

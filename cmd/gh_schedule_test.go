@@ -115,7 +115,9 @@ elif path.endswith('/comments') and method=='POST':
  if os.environ.get('TD_SCHEDULE_FAIL_LOG'):sys.stderr.write('HTTP 403 log denied');sys.exit(1)
  body=json.load(sys.stdin)['body'];data={'id':len(state['comments'])+1,'body':body,'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z'};state['comments'].append(data);f.write_text(json.dumps(state))
 elif path=='repos/owner/repo/issues' and method=='POST':
- n=str(max(map(int,issues))+1);data=issue(int(n));patch=json.load(sys.stdin);patch['labels']=[{'name':v} for v in patch['labels']];data.update(patch);issues[n]=data;f.write_text(json.dumps(state))
+ n=str(max(map(int,issues))+1);data=issue(int(n));patch=json.load(sys.stdin)
+ if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]
+ data.update(patch);issues[n]=data;f.write_text(json.dumps(state))
 else:
  n=path.split('/issues/')[1]
  if n not in issues:sys.stderr.write('HTTP 404 missing');sys.exit(1)
