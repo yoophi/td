@@ -219,10 +219,16 @@ var syncStatusCmd = &cobra.Command{
 	Long: `Show a one-stop diagnosis of local sync state: the autosync gate state and
 the source of that decision, whether the project is configured for sync, auth
 status, the server URL, pending unsynced events, and the last sync time.
+For gh-issue, validate GitHub origin/authentication and report reusable snapshot
+freshness. GitHub uses gh directly, with no local event queue or td-sync server.
 
 This read-only command is always available, even when the sync CLI feature is
 otherwise off, so a stranded project can always be diagnosed.`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncStatus(cmd); handled {
+			return err
+		}
 		report := gatherSyncStatus(getBaseDir())
 		if jsonMode(cmd) {
 			return output.JSON(report)
