@@ -14,7 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func listGitHubIssues(cmd *cobra.Command, args []string, _ *models.Config) error {
+func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) error {
+	cmd.SetOut(cmd.OutOrStdout())
 	if len(args) > 0 {
 		return fmt.Errorf("gh-issue does not support positional TDQ queries; use --search or supported filter flags")
 	}
@@ -78,14 +79,42 @@ func listGitHubIssues(cmd *cobra.Command, args []string, _ *models.Config) error
 	if !slices.Contains([]string{"", "short", "long", "json"}, format) {
 		return fmt.Errorf("unsupported output format %q", format)
 	}
-	client, err := issuestore.OpenReader(cmd.Context(), getBaseDir())
+	parentRaw, _ := cmd.Flags().GetString("parent")
+	epicRaw, _ := cmd.Flags().GetString("epic")
+	for _, raw := range []string{parentRaw, epicRaw} {
+		if raw != "" && strings.TrimSpace(raw) != "." {
+			if _, err := canonicalGitHubID(raw); err != nil {
+				return err
+			}
+		}
+	}
+	client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = client.Close() }()
-	records, err := client.List(cmd.Context(), all)
+	hierarchyRequested := strings.TrimSpace(parentRaw) != "" || strings.TrimSpace(epicRaw) != ""
+	rows, err := client.List(cmd.Context(), all || hierarchyRequested)
 	if err != nil {
 		return err
+	}
+	if hierarchyRequested {
+		h := newGitHubHierarchy(cmd.Context(), client, rows)
+		parent, err := resolveGitHubHierarchyFilter(cmd, parentRaw, "parent", cfg, h, rows)
+		if err != nil {
+			return err
+		}
+		epic, err := resolveGitHubHierarchyFilter(cmd, epicRaw, "epic", cfg, h, rows)
+		if err != nil {
+			return err
+		}
+		rows, err = filterGitHubHierarchy(h, rows, parent, epic, all)
+		if err != nil {
+			return err
+		}
+	}
+	records := make([]issuestore.Record, 0, len(rows))
+	for _, r := range rows {
+		records = append(records, issuestore.Record{Issue: r.Issue, Number: r.Number, URL: r.URL, StateLabelDiagnostic: r.StateLabelDiagnostic})
 	}
 	filtered := make([]issuestore.Record, 0)
 	for _, record := range records {

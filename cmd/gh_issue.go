@@ -46,9 +46,9 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 	case "update":
 		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint parent depends-on blocks "
 	case "list":
-		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager "
+		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager parent epic "
 	case "show":
-		allowed += "long short format "
+		allowed += "long short format tree children "
 	}
 	var invalid []string
 	cmd.Flags().Visit(func(flag *pflag.Flag) {
@@ -169,34 +169,9 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		return emitGitHubMutation(cmd, "created", record)
 	}
 	if operation == "show" {
-		records := make([]ghstore.Record, 0, len(args))
-		for _, id := range args {
-			record, err := client.Get(cmd.Context(), id)
-			if err != nil {
-				return err
-			}
-			records = append(records, *record)
-			if warning := record.StateLabelWarning(); warning != "" && !jsonMode(cmd) && format != "json" {
-				cmd.PrintErrln("Warning:", warning)
-			}
-		}
-		if jsonMode(cmd) || format == "json" {
-			if len(records) == 1 {
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(records[0])
-			}
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(records)
-		}
-		short, _ := cmd.Flags().GetBool("short")
-		for _, record := range records {
-			if short || format == "short" {
-				cmd.Println(output.FormatIssueShort(&record.Issue))
-			} else {
-				cmd.Print(output.FormatIssueLong(output.SanitizedForDisplay(&record.Issue), nil, nil))
-				cmd.Println(record.URL)
-			}
-		}
-		return nil
+		return showGitHubHierarchy(cmd, args, client, format)
 	}
+
 	action := "updated"
 	var activity models.Activity
 	if comment != "" {

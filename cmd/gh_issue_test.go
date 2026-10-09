@@ -30,7 +30,7 @@ func githubTestCommand(original *cobra.Command) *cobra.Command {
 		cmd.Flags().StringArray("type", nil, "")
 		cmd.Flags().StringArray("status", nil, "")
 	}
-	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append", "minor"} {
+	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append", "minor", "tree", "children"} {
 		cmd.Flags().Bool(name, false, "")
 	}
 	cmd.Flags().Int("points", 0, "")

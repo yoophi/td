@@ -329,7 +329,7 @@ earlier writes remain. Each write uses the observed source and validates the
 reachable target graph before/after PATCH. These remain best-effort checks,
 without rollback, distributed locking or automatic retries. No SQLite database
 is opened. File commands and create/update relationship options are described below.
-Show/list relationship options remain tracked in #4.
+Show/list hierarchy options are described below.
 
 ## Linked file commands
 
@@ -366,8 +366,7 @@ there is no distributed atomicity guarantee. A shared activity log is appended
 afterward with the real session. If that comment fails, the command returns
 nonzero and explicitly reports that the file changes are already saved; it does
 not retry or roll back. Inspect `files` and activity before taking recovery
-steps. These paths never open SQLite. Show/list relationship flags remain tracked
-in #4.
+steps. These paths never open SQLite. Show/list hierarchy options are described below.
 
 ## Create/update relationship options
 
@@ -398,5 +397,33 @@ also reports earlier completed issue IDs when a subsequent issue fails.
 For `update --status` combined with relation changes, field/relation edits
 precede policy evaluation. An old review cannot approve changed dependencies.
 If the transition fails, saved edits remain and the error says so. The current
-status can be inspected through show. `show --tree/--children` and list
-`--parent/--epic` are the remaining relationship options tracked in #4.
+status can be inspected through show. Hierarchy display/filter options are
+described below.
+
+## Hierarchy display and list filters
+
+`show --tree` uses the same recursive parent/child view as `tree`, with explicit
+`children: []` for leaves. It requires one issue ID; `--json` and `--format json`
+produce the tree object. `show --children` preserves the normal issue fields
+and adds a direct `children` array in JSON, including `[]` for a leaf. Multiple
+IDs produce an array of enriched records. Human output includes direct children,
+and epics show children by default in long output. Closed children remain
+visible. Stored terminal text is sanitized and command data goes to stdout.
+
+`list --parent ID` selects direct children. `list --epic ID` selects descendants
+at every depth, excluding the selected root. The two filters intersect when
+combined. They retain normal status/type/priority/label/search/sort/limit filters.
+Closed ancestors are included when resolving hierarchy, even when closed issues
+are excluded from the results. Missing ancestors and detected parent cycles are
+explicit errors. Targets are repository-local issue IDs; PRs and other
+repositories are rejected. No SQLite issue database is opened.
+
+For `--parent .` / `--epic .`, the current local context resolves a saved focus
+first. A missing/deleted saved focus is an error, not a silently substituted
+choice. Without focus, current-session in_progress/in_review work resolves to a
+common root; then shared session logs/handoffs/transitions are tried; finally an
+active work session's tagged issues can supply a common root. Multiple roots
+without a usable active bundle and no usable context both return explicit
+errors. Authentication, activity-read and hierarchy errors do not silently
+substitute another store or context. Current context reads may span multiple
+GitHub requests, so they remain best-effort rather than an atomic snapshot.

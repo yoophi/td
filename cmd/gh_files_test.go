@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/marcus/td/internal/config"
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 	"github.com/spf13/cobra"
 )
@@ -147,5 +148,32 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("SQLite created")
+	}
+}
+
+func TestGitHubFilesUnlinkedRenameUsesDestinationWithSpaces(t *testing.T) {
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	oldPath := filepath.Join(dir, "old name.go")
+	if err := os.WriteFile(oldPath, []byte("tracked\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", "old name.go")
+	runGit(t, dir, "-c", "user.name=Test Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", "Synthetic file fixture")
+	runGit(t, dir, "mv", "old name.go", "new name.go")
+	c := githubFilesCommand(filesCmd)
+	c.RunE = func(cmd *cobra.Command, _ []string) error {
+		return listGitHubFiles(cmd, &ghstore.Record{Issue: models.Issue{ID: "gh-1"}, Details: &ghstore.IssueDetails{Files: []models.IssueFile{{IssueID: "gh-1", FilePath: "old name.go", Role: models.FileRoleImplementation, LinkedSHA: "old"}}}}, dir)
+	}
+	out, err := executeGitHubTest(c, "gh-1", "--untracked", "--json")
+	if err != nil {
+		t.Fatal(out, err)
+	}
+	var rows []gitHubFileStatus
+	if err := json.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].FilePath != "old name.go" || rows[0].Status != "deleted" || rows[1].FilePath != "new name.go" || !rows[1].Unlinked {
+		t.Fatal(rows)
 	}
 }
