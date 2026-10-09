@@ -7,8 +7,10 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
@@ -43,6 +45,21 @@ func TestTopLevelErrorCodeMapping(t *testing.T) {
 		err  error
 		want string
 	}{
+		{
+			name: "wrapped GitHub rate limit is operational",
+			err:  fmt.Errorf("repository preflight: %w", &ghstore.RateLimitError{Cause: errors.New("HTTP 403; request ID original"), RetryAt: time.Now().Add(time.Hour), WaitSource: "x-ratelimit-reset"}),
+			want: output.ErrCodeRateLimited,
+		},
+		{
+			name: "typed rate limit overrides a generic command wrapper",
+			err:  withErrorCode(output.ErrCodeDatabaseError, &ghstore.RateLimitError{Cause: errors.New("HTTP 429"), WaitSource: "retry-after"}),
+			want: output.ErrCodeRateLimited,
+		},
+		{
+			name: "permission denial is not a rate limit",
+			err:  errors.New("HTTP 403 permission denied"),
+			want: output.ErrCodeInvalidInput,
+		},
 		{
 			name: "database failure keeps database_error",
 			err:  withErrorCode(output.ErrCodeDatabaseError, errors.New("database not found: run 'td init' first")),
@@ -118,6 +135,7 @@ func TestEmitTopLevelJSONErrorEnvelope(t *testing.T) {
 	}{
 		{"database", withErrorCode(output.ErrCodeDatabaseError, errors.New("database not found: run 'td init' first")), output.ErrCodeDatabaseError},
 		{"usage", cobraUnknownFlagError(t), output.ErrCodeInvalidInput},
+		{"GitHub rate limit", fmt.Errorf("cannot access repository: %w", &ghstore.RateLimitError{Cause: errors.New("gh: API rate limit exceeded (HTTP 403); request ID ORIGINAL"), RetryAt: time.Now().Add(time.Hour), WaitSource: "x-ratelimit-reset"}), output.ErrCodeRateLimited},
 	}
 
 	for _, tt := range tests {

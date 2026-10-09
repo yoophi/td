@@ -142,6 +142,7 @@ func EmitResult(action string, extra map[string]any) error {
 const (
 	ErrCodeNotFound          = "not_found"
 	ErrCodeInvalidInput      = "invalid_input"
+	ErrCodeRateLimited       = "rate_limited"
 	ErrCodeConflict          = "conflict"
 	ErrCodeCannotSelfApprove = "cannot_self_approve"
 	ErrCodeHandoffRequired   = "handoff_required"

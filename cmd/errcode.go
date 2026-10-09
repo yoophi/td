@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/output"
 )
 
@@ -92,7 +93,8 @@ func errorCode(err error) (string, bool) {
 // topLevelErrorCode resolves the error code for the JSON envelope Execute emits
 // for an error that reached the top level.
 //
-// A coded error reports its own code. Failures the store itself classifies are
+// A typed GitHub rate limit takes precedence over generic command wrappers.
+// Otherwise a coded error reports its own code. Failures the store classifies are
 // recognised next: an unopenable database and a missing issue are the two most
 // common operational failures, and they reach the top level uncoded from most
 // of the ~150 RunE returns that simply pass db.Open's or GetIssue's error up.
@@ -106,6 +108,10 @@ func errorCode(err error) (string, bool) {
 // flag) plus the hand-written "issue ID required. Usage: ..." validations. A
 // call site that fails for some other reason should say so with withErrorCode.
 func topLevelErrorCode(err error) string {
+	var limited *ghstore.RateLimitError
+	if errors.As(err, &limited) {
+		return output.ErrCodeRateLimited
+	}
 	if code, ok := errorCode(err); ok && code != "" {
 		return code
 	}

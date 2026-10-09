@@ -111,3 +111,9 @@ used one preflight; updating its title invalidated the cache and the next contex
 used four responses with the new title. Selected detail still made fresh reads.
 The fixture was logically deleted and absent from the subsequent context.
 Evidence: tracking checkout `artifacts/gh-api-n-plus-one-plan/gh-52/`.
+
+#57 now classifies typed GitHub rate-limit errors as `rate_limited` in the CLI
+JSON envelope, including through generic command wrappers. It preserves the
+message/reset guidance and nonzero exit; ordinary input errors retain their code.
+Native warm-cache preflight simulation and JSON envelope regression tests verify
+this correction.
