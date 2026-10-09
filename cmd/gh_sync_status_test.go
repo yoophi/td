@@ -13,21 +13,7 @@ import (
 
 func TestGitHubSyncStatusReportsDirectStoreWithoutSQLiteOrTaskFetch(t *testing.T) {
 	dir := githubScheduleTestDir(t)
-	calls := filepath.Join(t.TempDir(), "calls.jsonl")
-	t.Setenv("TD_SYNC_STATUS_CALLS", calls)
-	ghPath := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "gh")
-	script, err := os.ReadFile(ghPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := "args=sys.argv[1:]\n"
-	if !strings.Contains(string(script), old) {
-		t.Fatal("fixture invocation parser changed")
-	}
-	script = []byte(strings.Replace(string(script), old, old+"with open(os.environ['TD_SYNC_STATUS_CALLS'],'a') as log: log.write(json.dumps(args)+'\\n')\n", 1))
-	if err := os.WriteFile(ghPath, script, 0755); err != nil {
-		t.Fatal(err)
-	}
+	calls := recordScheduleGHCalls(t)
 	for _, enabled := range []string{"false", "true"} {
 		t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
 		cmd := &cobra.Command{Use: syncStatusCmd.Use, Args: syncStatusCmd.Args, RunE: syncStatusCmd.RunE}
@@ -77,6 +63,26 @@ func TestGitHubSyncStatusReportsDirectStoreWithoutSQLiteOrTaskFetch(t *testing.T
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("status opened SQLite", err)
 	}
+}
+
+func recordScheduleGHCalls(t *testing.T) string {
+	t.Helper()
+	calls := filepath.Join(t.TempDir(), "calls.jsonl")
+	t.Setenv("TD_SYNC_STATUS_CALLS", calls)
+	ghPath := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "gh")
+	script, err := os.ReadFile(ghPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := "args=sys.argv[1:]\n"
+	if !strings.Contains(string(script), old) {
+		t.Fatal("fixture invocation parser changed")
+	}
+	script = []byte(strings.Replace(string(script), old, old+"with open(os.environ['TD_SYNC_STATUS_CALLS'],'a') as log: log.write(json.dumps(args)+'\\n')\n", 1))
+	if err := os.WriteFile(ghPath, script, 0755); err != nil {
+		t.Fatal(err)
+	}
+	return calls
 }
 
 func TestGitHubSyncStatusMissingGHReturnsExplicitFailure(t *testing.T) {

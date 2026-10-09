@@ -64,6 +64,9 @@ var syncCmd = &cobra.Command{
 	Short:   "Sync local data with remote server",
 	GroupID: "system",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSync(cmd, args); handled {
+			return err
+		}
 		pushOnly, _ := cmd.Flags().GetBool("push")
 		pullOnly, _ := cmd.Flags().GetBool("pull")
 		statusOnly, _ := cmd.Flags().GetBool("status")
@@ -818,6 +821,12 @@ var syncAlwaysOnCmd = &cobra.Command{
 	Short:   "Sync local data with remote server",
 	GroupID: "system",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSync(cmd, args); handled {
+			return err
+		}
+		if cmd.Flags().Changed("push") || cmd.Flags().Changed("pull") || cmd.Flags().Changed("status") {
+			return fmt.Errorf("SQLite sync flags require the sync_cli feature; use td sync status for diagnostics")
+		}
 		return cmd.Help()
 	},
 }
@@ -853,6 +862,9 @@ func init() {
 	syncCmd.Flags().Bool("push", false, "Push only")
 	syncCmd.Flags().Bool("pull", false, "Pull only")
 	syncCmd.Flags().Bool("status", false, "Show sync status only")
+	syncAlwaysOnCmd.Flags().Bool("push", false, "Push only (SQLite; GitHub has no pending queue)")
+	syncAlwaysOnCmd.Flags().Bool("pull", false, "Refresh remote GitHub observations")
+	syncAlwaysOnCmd.Flags().Bool("status", false, "Show sync status only")
 
 	parent := wireSyncCommands(
 		features.IsEnabledForProcess(features.SyncCLI.Name),
