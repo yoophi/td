@@ -330,3 +330,100 @@ func TestRecordOnlyRejectsMinorAndDuplicateApprovalWithoutWrites(t *testing.T) {
 		})
 	}
 }
+
+func TestLifecycleRepeatedCommandsHaveExplicitNoopOrError(t *testing.T) {
+	for _, action := range []string{"start", "unstart", "block", "unblock", "review", "approve", "reject", "close", "reopen"} {
+		t.Run(action, func(t *testing.T) {
+			f := newReviewFixture(t)
+			o := TransitionOptions{SessionID: "fixture-worker", Mode: reviewpolicy.ModeTrusted, SelfReview: false, Reason: "Fixture repeated lifecycle"}
+			switch action {
+			case "unstart":
+				f.transition(t, "start", o)
+			case "review", "approve", "reject":
+				f.transition(t, "start", o)
+			case "close":
+				o.AdminReason = "Fixture administrative cleanup"
+			case "reopen":
+				closeOptions := o
+				closeOptions.AdminReason = "Fixture cleanup"
+				f.transition(t, "close", closeOptions)
+			}
+			if action == "approve" || action == "reject" {
+				f.transition(t, "review", o)
+			}
+			if action == "approve" {
+				o.SelfReview = true
+			}
+			f.transition(t, action, o)
+			writes, posts := f.writes, f.posts
+			record, noop, err := f.client.Transition(context.Background(), "1", action, o)
+			if action == "review" {
+				if err == nil || noop {
+					t.Fatal("review should require an explicit new review cycle", record, err)
+				}
+			} else if err != nil || !noop {
+				t.Fatalf("repeat %s: record=%+v noop=%v err=%v", action, record, noop, err)
+			}
+			if f.writes != writes || f.posts != posts {
+				t.Fatal("repeated command wrote extra history or handoffs")
+			}
+		})
+	}
+}
+
+func TestLifecycleAllowedStateMatrix(t *testing.T) {
+	// Synthetic fixtures cover every action/state pair without claiming that an
+	// independent person reviewed any real project work.
+	allowed := map[string]map[models.Status]bool{
+		"start":   {models.StatusOpen: true, models.StatusInProgress: true, models.StatusInReview: true},
+		"unstart": {models.StatusOpen: true, models.StatusInProgress: true},
+		"block":   {models.StatusOpen: true, models.StatusInProgress: true, models.StatusBlocked: true},
+		"unblock": {models.StatusOpen: true, models.StatusBlocked: true},
+		"review":  {models.StatusOpen: true, models.StatusInProgress: true},
+		"approve": {models.StatusInReview: true},
+		"reject":  {models.StatusOpen: true, models.StatusInReview: true},
+		"close":   {models.StatusOpen: true, models.StatusInProgress: true, models.StatusBlocked: true, models.StatusInReview: true, models.StatusClosed: true},
+		"reopen":  {models.StatusOpen: true, models.StatusClosed: true},
+	}
+	states := []models.Status{models.StatusOpen, models.StatusInProgress, models.StatusBlocked, models.StatusInReview, models.StatusClosed}
+	for action, accepted := range allowed {
+		for _, state := range states {
+			t.Run(action+"/"+string(state), func(t *testing.T) {
+				f := newReviewFixture(t)
+				o := TransitionOptions{SessionID: "fixture-actor", Mode: reviewpolicy.ModeTrusted, Minor: true}
+				var setup string
+				switch state {
+				case models.StatusInProgress:
+					setup = "start"
+				case models.StatusBlocked:
+					setup = "block"
+				case models.StatusInReview:
+					setup = "review"
+				case models.StatusClosed:
+					setup = "close"
+					o.AdminReason = "synthetic fixture setup"
+				}
+				if setup != "" {
+					if _, _, err := f.client.Transition(context.Background(), "gh-1", setup, o); err != nil {
+						t.Fatal("setup", err)
+					}
+				}
+				o.AdminReason = ""
+				if action == "approve" {
+					o.SelfReview, o.Reason = true, "synthetic self-review fixture"
+				}
+				if action == "close" {
+					o.AdminReason = "synthetic fixture cleanup"
+				}
+				writes, posts := f.writes, f.posts
+				_, _, err := f.client.Transition(context.Background(), "gh-1", action, o)
+				if (err == nil) != accepted[state] {
+					t.Fatalf("accepted=%t, err=%v", accepted[state], err)
+				}
+				if err != nil && (f.writes != writes || f.posts != posts) {
+					t.Fatal("rejected state produced side effects")
+				}
+			})
+		}
+	}
+}

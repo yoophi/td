@@ -23,8 +23,8 @@ kinds, or invalid fields produce errors without rewriting the body. Older fork
 builds reject metadata fields they do not understand; upgrade collaborating
 clients before using extended fields. Field updates preserve unrelated metadata.
 The schema does not imply that every corresponding CLI workflow is implemented.
-Review/lifecycle policy integration, board/note payloads, and the complete shared
-writer contracts are still tracked in #3 and #16.
+Lifecycle and review commands use these records and the shared review policy.
+The remaining shared writer contracts are tracked in #16.
 
 Native closed/open state overrides conflicting detailed state. A native state
 change does not grant approval: effective reviewer, implementer, review-requester,
@@ -246,3 +246,58 @@ that exit status. Repository/authentication/read failures remain explicit errors
 including in quiet mode, and are never converted to a clear check or SQLite
 fallback. Latest handoffs remain readable in shared context/review consumers;
 complete `show` detail parity is tracked separately in #17.
+
+## Lifecycle commands and repeated execution
+
+GitHub native state is `open` for td open/in_progress/blocked/in_review and
+`closed` for td closed. Metadata remains authoritative for the open-family
+status, claims, review cycles, and historical participation; labels mirror it.
+
+| Command | Accepted current state | Result / repeated execution |
+| --- | --- | --- |
+| start (begin) | open, in_review, blocked with --force | in_progress; own existing claim is a no-op; another holder is rejected even with --force |
+| unstart (stop) | in_progress, open | open, release claim; already open without claim is a no-op |
+| block | open, in_progress, blocked | blocked; already blocked is a no-op |
+| unblock | blocked, open | open, release claim; already open is a no-op |
+| review (submit/finish) | open, in_progress | in_review; repeated review is an error requiring an explicit new cycle |
+| approve | in_review | closed, or remain in_review with --record-only; already td-approved closed is a verified no-op; native closure alone is rejected |
+| reject | in_review, open | open, clear claim, record changes requested; already open is a no-op |
+| close (done/complete) | open, in_progress, blocked, eligible in_review, closed | closed subject to policy; already closed is a no-op |
+| reopen | closed, open | open, invalidate active review/claim; already open is a no-op |
+
+Other states are rejected before issue writes. `update --status` uses the same
+workflow rather than bypassing review policy. Starting a single issue selects
+focus only when it changes state; a batch start and a no-op retain previous focus.
+Human transition output goes to stdout. Multi-ID `--json` output is one JSON
+object per successful issue (NDJSON), in argument order. A failure stops the
+batch, returns nonzero, names completed IDs, and states that earlier changes
+remain; it does not roll them back or automatically retry.
+
+Non-minor review requires a handoff: the latest valid handoff is captured, or a
+handoff is generated from current activity. Approval verifies its identity and
+edit timestamp, review-relevant content and native close/reopen event history.
+Changing these invalidates the cycle, including a native closed/open round trip.
+Deleted handoffs and transport failures prevent approval. Minor issues skip the
+handoff requirement, but record-only approval is not available for them.
+
+Trusted mode requires truthful `--self-review --reason` or `--reviewed-by` when
+acknowledging participation; the latter is an attestation, not verified identity.
+Delegated/strict enforce their shared independence rules and reject
+`--self-review`. Implementation/session history survives claim release and is
+used for eligibility. A recorded approval retains the actual reviewer when a
+separate actor closes it; another actor must supply a reason. Duplicate
+record-only approval is rejected. `--admin "reason"` and
+`--self-close-exception "reason"` record explicit close exceptions, and do not
+pretend to be review approval. A non-minor in_review issue without a valid
+recorded approval must use approve, not close, even with an exception flag.
+
+A native GitHub close is readable as closed, but grants no td approval. When native state disagrees with metadata, reads clear effective stale
+attribution. A close/reopen round trip can return native state to agreement
+with the stored open-family status (for example in_review); reads do not rewrite
+that metadata. Approval still checks the full native event history and rejects
+the old cycle. Restart and submit a fresh review. Historical reviews cannot
+authorize approval. Authorization errors, concurrent claims and
+observed revision conflicts are explicit failures. Checks around GitHub PATCH
+and comment writes are best-effort: they cannot provide a distributed atomic
+transaction. A post-write failure may have applied a change; operation IDs and
+fresh `td show`/activity reads identify what remains before a manual retry.

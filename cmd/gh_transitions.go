@@ -30,6 +30,7 @@ func init() {
 				return local(cmd, args)
 			}
 			cmd.SilenceUsage = true
+			cmd.SetOut(cmd.OutOrStdout())
 			allowed := []string{"json", "work-dir", "help", "reason"}
 			if command == startCmd {
 				allowed = append(allowed, "force")
@@ -161,7 +162,7 @@ func init() {
 					if current.Session.ID != state.Session.ID {
 						return fmt.Errorf("local session changed during transition")
 					}
-					if command == startCmd {
+					if command == startCmd && len(args) == 1 && !noop {
 						current.Focus = record.ID
 					}
 					if (command == unstartCmd || command == reviewCmd || command == rejectCmd || record.Status == models.StatusClosed) && current.Focus == record.ID {
