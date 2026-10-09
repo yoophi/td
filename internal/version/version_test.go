@@ -18,6 +18,9 @@ func TestIsDevelopmentVersion(t *testing.T) {
 		{"devel+abc+dirty", true},
 		{"devel+git.sha.abc123def", true},
 		{"devel+20240101", true},
+		{"v0.66.0+devel.feat-gh-all-tasks.abcdef.dirty", true},
+		{"v0.0.0+devel.detached.abcdef", true},
+		{"v0.66.0+release.devel", false},
 
 		// Valid release versions (should be false)
 		{"v0.1.0", false},

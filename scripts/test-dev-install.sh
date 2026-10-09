@@ -146,6 +146,22 @@ run() {
 }
 
 # Missing -> canonical main install, with inspectable clean metadata.
+revision=$(git -C "$test_repo" rev-parse --short HEAD)
+output=$(sh "$repo_root/scripts/dev-version.sh" "$test_repo")
+[ "$output" = "v0.0.0+devel.main.$revision" ] || fail 'untagged version is not conservative'
+git -C "$test_repo" tag v0.66.0
+git -C "$test_repo" tag unrelated-tag
+output=$(sh "$repo_root/scripts/dev-version.sh" "$test_repo")
+[ "$output" = "v0.66.0+devel.main.$revision" ] || fail 'ancestor release was not selected'
+git -C "$test_repo" checkout --quiet -b feature/a_b
+touch "$test_repo/untracked"
+output=$(sh "$repo_root/scripts/dev-version.sh" "$test_repo")
+[ "$output" = "v0.66.0+devel.feature-a-b.$revision.dirty" ] || fail 'branch or dirty metadata is not SemVer compatible'
+rm "$test_repo/untracked"
+git -C "$test_repo" checkout --quiet main
+git -C "$test_repo" branch -D feature/a_b >/dev/null
+git -C "$test_repo" tag -d v0.66.0 >/dev/null
+
 output=$(run install-local)
 assert_contains "$output" 'activated local td build'
 assert_contains "$output" 'branch=main'
@@ -168,7 +184,7 @@ second_target=$(readlink "$brew_prefix/bin/td")
 touch "$test_repo/untracked"
 output=$(run install-local)
 assert_contains "$output" 'dirty=true'
-assert_contains "$output" '+dirty'
+assert_contains "$output" '.dirty'
 rm "$test_repo/untracked"
 
 # Build failure leaves the current managed link untouched.
@@ -287,7 +303,7 @@ output=$(run status)
 assert_contains "$output" "managed command directory: $brew_prefix/bin"
 assert_contains "$output" 'link state: local'
 assert_contains "$output" "raw target: $before"
-assert_contains "$output" 'activation version: td version devel+'
+assert_contains "$output" 'activation version: td version v0.0.0+devel.'
 assert_contains "$output" "current shell resolves:
   $fake_bin/td
   td version current-shell"

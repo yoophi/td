@@ -192,9 +192,7 @@ install_local() {
   [ -z "$(git -C "$repo_root" status --porcelain --untracked-files=normal)" ] || dirty=true
   safe_branch=$(printf '%s' "$branch" | tr -cs 'A-Za-z0-9._-' '-')
   checkout_id=$(printf '%s' "$repo_root" | shasum -a 256 | cut -c1-12)
-  dirty_suffix=
-  [ "$dirty" = false ] || dirty_suffix=+dirty
-  version=devel+$safe_branch.$short_commit$dirty_suffix
+  version=$(sh "$(dirname -- "$0")/dev-version.sh" "$repo_root")
   build_id=$(date -u '+%Y%m%dT%H%M%SZ')-$$
   destination=$state_root/$safe_branch-$checkout_id-$short_commit-$build_id
   temporary=$state_root/.build-$checkout_id-$$

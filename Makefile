@@ -13,7 +13,7 @@ SHELL := /bin/sh
 VERSION ?= $(RELEASE_VERSION)
 
 # A helpful dev version string (used by install)
-GIT_DESCRIBE := $(shell git describe --tags --always --dirty 2>/dev/null)
+GIT_DESCRIBE := $(shell sh scripts/dev-version.sh 2>/dev/null)
 
 help:
 	@printf "%s\n" \

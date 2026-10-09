@@ -45,3 +45,17 @@
 기존 조회 최적화 #47, 리뷰 표시 #48, 캐시 #52와 연결한다. 자체 frontend를 새로 만드는 초안은 등록하지 않았고, 현재 GUI 연동을 우선한다.
 
 자료: [td-gui README](https://github.com/madic-creates/td-gui), [설치 버전 parser](https://github.com/madic-creates/td-gui/blob/v0.18.8/internal/tdbin/tdbin.go), [설치 버전 API client](https://github.com/madic-creates/td-gui/blob/v0.18.8/web/src/api/client.ts).
+## Development version compatibility
+
+`make install-worktree`, `make install-local`, and `make install` now use the
+nearest reachable stable release tag as their version base, followed by
+`+devel.<branch>.<commit>[.dirty]`. Branch characters are normalized to SemVer
+metadata characters. With no reachable stable tag the base is `v0.0.0`, so a
+consumer's minimum-version check fails conservatively. Development versions
+still skip release update checks. Explicit release ldflags and module versions
+from `go install module@version` are unchanged.
+
+A plain `go build` without version ldflags still reports Go's available VCS
+development identity; Go build info does not contain the ancestor release tag.
+Use the installation targets for td-gui, or inject the output of
+`sh scripts/dev-version.sh` via `-X main.Version=...` when building manually.

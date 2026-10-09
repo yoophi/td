@@ -77,6 +77,9 @@ func IsDevelopmentVersion(v string) bool {
 	if strings.HasPrefix(v, "devel+") {
 		return true
 	}
+	if _, metadata, ok := strings.Cut(v, "+"); ok && strings.HasPrefix(metadata, "devel.") {
+		return true
+	}
 	return false
 }
 
