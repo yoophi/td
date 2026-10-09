@@ -119,3 +119,32 @@ func TestDiagnosticNestedCommandPath(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestDiagnosticIdentityBeforeCommandInitialization(t *testing.T) {
+	dir := storeTestDir(t)
+	runGit(t, dir, "init")
+	if err := config.SetStore(dir, "gh-issue", &models.GitHubStoreConfig{Remote: "origin", Repo: "owner/repo"}); err != nil {
+		t.Fatal(err)
+	}
+	scope, err := ghcontext.Resolve(context.Background(), dir, "owner/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(scope.Path) })
+	t.Chdir(dir)
+	baseDirOverride = nil
+	baseDir = ""
+	oldCmd, oldStart := executedCmd, cmdStartTime
+	t.Cleanup(func() { executedCmd = oldCmd; cmdStartTime = oldStart })
+	executedCmd = statsErrorsCmd
+	cmdStartTime = time.Now()
+	t.Setenv("TD_ANALYTICS", "true")
+	logAnalytics(errors.New("flag parsing failure"))
+	events, err := db.ReadCommandUsage(dir)
+	if err != nil || len(events) != 1 || !strings.HasPrefix(events[0].SessionID, "ses_") {
+		t.Fatal(events, err)
+	}
+	if _, err = os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("SQLite DB created")
+	}
+}

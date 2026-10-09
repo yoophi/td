@@ -163,6 +163,7 @@ func logAnalytics(err error) {
 
 	// Build event using captured command (set in PersistentPostRun) or args fallback
 	event := buildCommandEvent(executedCmd, err)
+	event.SessionID = diagnosticSessionID(dir)
 
 	// If no command was captured (e.g., unknown command), find first non-flag arg
 	if event.Command == "" {
@@ -463,12 +464,6 @@ func buildCommandEvent(cmd *cobra.Command, err error) db.CommandUsageEvent {
 			event.Subcommand = strings.Join(path[1:], " ")
 		}
 		event.Flags = extractFlags(cmd)
-	}
-
-	// Try to get session ID
-	dir := getBaseDir()
-	if dir != "" {
-		event.SessionID = diagnosticSessionID(dir)
 	}
 
 	return event
