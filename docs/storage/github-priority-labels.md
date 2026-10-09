@@ -65,6 +65,13 @@ cannot run successfully in this sandbox because they write the user-global
 gh-context configuration; their latest failures are permission errors, not
 passing evidence for those paths.
 
+Snapshot tests cover legacy missing mirrors, persisted-cache hits, external
+priority-label edits observed through incremental reads, and matching labels
+clearing diagnostics. Metadata priority stays authoritative and no individual
+issue/label requests are made. Cache schema v2 continues storing raw GitHub
+issue data; diagnostics are recomputed on decode, so no cache migration is
+required for this presentation field.
+
 Before permissions changed, real sample gh-126 was previewed (0 writes),
 applied (1 repair, bug and td:open preserved), and repeated (0 repairs).
 It remains to be cleaned up and the new automatic create/update behavior
