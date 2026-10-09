@@ -54,7 +54,7 @@ func NewGitHubCostFixture(t *testing.T, issueCount, commentCount int) GitHubCost
 	}
 	script := `#!/bin/sh
 case "$*" in
- *'auth token'*) printf 'private-fixture-token\n' ;;
+ *'auth token'*) printf 'private-fixture-token-%s\n' "$TD_COST_FIXTURE_ISSUES" ;;
  *'/issues/comments?'*) cat "$TD_COST_FIXTURE_COMMENTS" ;;
  *'/issues?state='*) cat "$TD_COST_FIXTURE_ISSUES" ;;
  *'repos/owner/repo --include') printf 'HTTP/2 200 OK\r\n\r\n{"full_name":"owner/repo","has_issues":true}\n' ;;

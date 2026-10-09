@@ -21,6 +21,7 @@ import (
 // Client uses only the gh executable; it never opens the local issue database.
 type Client struct {
 	cache       *snapshotCache
+	cooldown    *apiCooldownScope
 	audit       func(auditlog.SecurityEvent) error
 	stateLabels map[string]bool
 	dir, repo   string
@@ -34,8 +35,10 @@ func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Clie
 		return nil, fmt.Errorf("gh-issue repository is not configured; run 'td config set store gh-issue'")
 	}
 	var cache *snapshotCache
+	var cooldown *apiCooldownScope
 	resolved, err := resolveRepositoryCredential(ctx, dir, cfg.Remote, func(token []byte) {
 		cache = newSnapshotCache(cfg.Repo, token)
+		cooldown = newAPICooldown(cfg.Repo, token)
 	})
 	if err != nil {
 		return nil, err
@@ -43,7 +46,7 @@ func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Clie
 	if !strings.EqualFold(resolved.Repo, cfg.Repo) {
 		return nil, fmt.Errorf("git remote %q now resolves to %s, but the configured store is %s; run 'td config set store gh-issue --remote %s' to select it explicitly", cfg.Remote, resolved.Repo, cfg.Repo, cfg.Remote)
 	}
-	return &Client{dir: dir, repo: resolved.Repo, run: runAPI, cache: cache, audit: func(event auditlog.SecurityEvent) error { return auditlog.LogSecurityEvent(dir, event) }}, nil
+	return &Client{dir: dir, repo: resolved.Repo, run: runAPI, cache: cache, cooldown: cooldown, audit: func(event auditlog.SecurityEvent) error { return auditlog.LogSecurityEvent(dir, event) }}, nil
 }
 
 func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
@@ -84,7 +87,7 @@ func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]
 }
 
 func (c *Client) request(ctx context.Context, method, endpoint string, payload any, paginate bool) ([]byte, error) {
-	if err := ctx.Err(); err != nil {
+	if err := c.cooldown.check(ctx, time.Now()); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
@@ -116,6 +119,7 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload a
 	data, err := c.run(ctx, c.dir, body, args...)
 	if err != nil {
 		err = classifyRateLimit(err)
+		c.cooldown.observe(err, time.Now())
 		hint := ""
 		if method != "GET" {
 			hint = "; the write may have reached GitHub: inspect the issue before retrying"

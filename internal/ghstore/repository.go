@@ -115,7 +115,12 @@ func resolveRepositoryWithCredential(ctx context.Context, baseDir, remote string
 	if credential != nil {
 		credential(token)
 	}
+	cooldown := newAPICooldown(repo, token)
+	if err := cooldown.check(ctx, time.Now()); err != nil {
+		return nil, err
+	}
 	data, err = run(ctx, baseDir, "gh", "api", "--hostname", "github.com", "repos/"+repo)
+	cooldown.observe(err, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("cannot access GitHub repository %s: %w; check that it exists, your account has access, and the network is available", repo, err)
 	}

@@ -158,8 +158,10 @@ limits can also apply below the hourly allowance.
 Main dashboard refreshes still skip overlapping sweeps and preserve the original
 error/reset guidance. After a rate-limit response, that data source performs no
 new sweep until its observed reset/retry deadline; a shorter polling interval
-does not bypass this wait. This cooldown is not shared with every detail/board
-reader or process. Writes are never automatically retried. Regression tests cover
+does not bypass this wait. The #50 shared gate now also protects detail/board
+API reads, writes and new preflights within the same repository/credential
+process context. Separate processes remain independent. Writes are never
+automatically retried. Regression tests cover
 overlap suppression, diagnostic preservation, reset waiting and bounded bulk
 review costs alongside the new interval boundaries.
 

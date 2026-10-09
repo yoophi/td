@@ -64,8 +64,24 @@ Concurrent same-context/scope/generation misses are merged within a process.
 Separate processes can still collect simultaneously; the short publication lock
 prevents stale overwrite, not all cross-process network duplication. The initiating
 caller's cancellation can abort a shared collection; waiting callers receive the
-error and a later read can try again. Rate-limit errors remain subject to the
-existing data-source cooldown, not a new cache-wide quota manager.
+error and a later read can try again, subject to rate protection. Rate-limit
+observations now create a process-local repository/credential cooldown shared
+by new repository preflights and all client API reads and writes. This protection
+is independent of `TD_GH_CACHE=off`; missing credentials cannot establish a
+shared identity. Local Git/credential validation still runs on every Open.
+No additional GitHub request is attempted before the observed reset/retry
+deadline (or a conservative one-minute wait without usable headers). The
+original typed error, request diagnostic and reset metadata are retained. A
+shorter subsequent observation does not shorten an active wait. Cancellation
+takes precedence and expired observations are discarded. Already in-flight
+requests cannot be recalled; other td/gh processes do not share this state.
+No write is automatically retried, and after expiry the caller must issue a
+new request. An explicitly blocked write performs no cache invalidation because
+no attempt was made. This is a cooldown gate, not an account-wide quota scheduler.
+
+This is one completed part of #50. Incremental cursors, periodic full comparison
+and further preflight/sweep coordination remain outstanding; the existing full
+collector and 30-second TTL are unchanged.
 
 ## User controls and storage limits
 
@@ -117,3 +133,18 @@ JSON envelope, including through generic command wrappers. It preserves the
 message/reset guidance and nonzero exit; ordinary input errors retain their code.
 Native warm-cache preflight simulation and JSON envelope regression tests verify
 this correction.
+
+### #50 shared cooldown verification (2026-10-10)
+
+Race tests exercise 100 simultaneous cross-client read/write calls after one
+failed write: exactly one underlying attempt, original cause/reset preserved,
+repository and credential isolation, local-auth revalidation, expiry, cancellation
+and no shortening of an active deadline. Consumer GitHub tests and full macOS /
+Linux lint passed.
+
+A separate native server on port 7778 used a simulated gh executable with
+`TD_GH_CACHE=off`. Startup made two preflights and one failed issue collection
+(429 / Retry-After 3600). Subsequent monitor, stats and selected-detail requests
+each returned HTTP 429 / `rate_limited`, original request-id and retry guidance,
+with zero additional API attempts. This is simulated error-path evidence, not a
+claim that the real GitHub account was rate-limited. The server was stopped.
