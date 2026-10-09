@@ -23,7 +23,7 @@ func githubTestCommand(original *cobra.Command) *cobra.Command {
 		}
 		cmd.Flags().String(name, "", "")
 	}
-	for _, name := range []string{"labels", "label", "tags", "tag", "id"} {
+	for _, name := range []string{"labels", "label", "tags", "tag", "id", "depends-on", "blocks"} {
 		cmd.Flags().StringArray(name, nil, "")
 	}
 	if original == listCmd {

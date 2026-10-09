@@ -328,8 +328,8 @@ failure, the command returns nonzero and names targets already completed;
 earlier writes remain. Each write uses the observed source and validates the
 reachable target graph before/after PATCH. These remain best-effort checks,
 without rollback, distributed locking or automatic retries. No SQLite database
-is opened. File commands are described below. Create/update/show/list relationship
-options remain tracked in #4.
+is opened. File commands and create/update relationship options are described below.
+Show/list relationship options remain tracked in #4.
 
 ## Linked file commands
 
@@ -366,5 +366,37 @@ there is no distributed atomicity guarantee. A shared activity log is appended
 afterward with the real session. If that comment fails, the command returns
 nonzero and explicitly reports that the file changes are already saved; it does
 not retry or roll back. Inspect `files` and activity before taking recovery
-steps. These paths never open SQLite. Create/update/show/list relationship flags
-remain tracked in #4.
+steps. These paths never open SQLite. Show/list relationship flags remain tracked
+in #4.
+
+## Create/update relationship options
+
+`create --depends-on/--blocks` accepts repeated flags and comma-separated IDs.
+`update --depends-on/--blocks` replaces the requested set; an explicit empty
+value clears it, and an omitted option preserves existing relationships. IDs
+are canonicalized/deduplicated before writes. `blocks` is the reverse of
+`depends-on`: it edits dependencies on the blocked issues, rather than storing a
+second potentially inconsistent relation on the blocker.
+
+The requested final graph is validated before writing issue fields. Missing,
+deleted, cross-repository, PR, self-reference and detected cyclic targets are
+errors. A source dependency replacement validates the reachable target graph
+and applies the complete set in one observed PATCH, preserving unrelated
+metadata and recording actual actor/add/remove history. Invalid input cannot
+first discard the old set. Approval is invalidated on changed source edges.
+
+Reverse relationships require writes to multiple sources. The plan orders them
+to avoid an intermediate dependency cycle, checks observed blocked membership
+before/after writes, and checks each source revision and reachable targets. A
+failure names completed sources and states that earlier writes remain; there
+is no cross-issue transaction or automatic rollback/retry. Lists and checks
+remain best-effort because GitHub does not expose an atomic relation lock. A
+create that succeeds before relationship attachment fails names the created
+issue explicitly; inspect it rather than repeat creation. A multi-issue update
+also reports earlier completed issue IDs when a subsequent issue fails.
+
+For `update --status` combined with relation changes, field/relation edits
+precede policy evaluation. An old review cannot approve changed dependencies.
+If the transition fails, saved edits remain and the error says so. The current
+status can be inspected through show. `show --tree/--children` and list
+`--parent/--epic` are the remaining relationship options tracked in #4.

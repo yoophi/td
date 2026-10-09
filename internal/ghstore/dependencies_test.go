@@ -213,3 +213,84 @@ func TestDependencyHistoryValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestReplaceDependenciesDoesNotDiscardOldEdgesOnInvalidInput(t *testing.T) {
+	for _, mode := range []string{"replace", "clear", "missing", "cycle", "duplicate", "stale"} {
+		t.Run(mode, func(t *testing.T) {
+			c, issues, writes := hierarchyFixture(t)
+			ctx := context.Background()
+			setFixtureDependencies(t, c, "1", "gh-2")
+			if mode == "cycle" {
+				setFixtureDependencies(t, c, "3", "gh-1")
+			}
+			observed, err := c.Get(ctx, "1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := *writes
+			targets := []string{"gh-3"}
+			switch mode {
+			case "clear":
+				targets = nil
+			case "missing":
+				targets = []string{"gh-99"}
+			case "duplicate":
+				targets = []string{"3", "gh-3"}
+			case "stale":
+				issues[1]["title"] = "Concurrent source edit"
+			}
+			result, noop, err := c.ReplaceDependenciesObserved(ctx, observed, targets, "synthetic-actor")
+			if mode != "replace" && mode != "clear" {
+				if err == nil || *writes != before {
+					t.Fatal("invalid replacement wrote", mode, result, err)
+				}
+				current, _ := c.Get(ctx, "1")
+				if !slices.Equal(current.Details.Dependencies, []string{"gh-2"}) {
+					t.Fatal("lost old dependency")
+				}
+				return
+			}
+			if err != nil || noop || *writes != before+1 || !slices.Equal(result.Details.Dependencies, targets) {
+				t.Fatal(result, noop, err)
+			}
+			if !slices.Equal(observed.Details.Dependencies, []string{"gh-2"}) {
+				t.Fatal("mutated observation")
+			}
+			if result.Details.Transitions[len(result.Details.Transitions)-1].SessionID != "synthetic-actor" {
+				t.Fatal("actor lost")
+			}
+		})
+	}
+}
+
+func TestReplaceDependencyGraphConflictIsExplicitBeforeAndAfterWrite(t *testing.T) {
+	for _, after := range []bool{false, true} {
+		t.Run(map[bool]string{false: "before", true: "after"}[after], func(t *testing.T) {
+			c, issues, writes := hierarchyFixture(t)
+			ctx := context.Background()
+			r, _ := c.Get(ctx, "1")
+			base := c.run
+			reads := 0
+			c.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+				if slices.Contains(args, "GET") && slices.Contains(args, "repos/owner/repo/issues/2") {
+					reads++
+					if (!after && reads == 2) || (after && *writes > 0) {
+						issues[2]["title"] = "Concurrent target edit"
+					}
+				}
+				return base(ctx, dir, payload, args...)
+			}
+			_, _, err := c.ReplaceDependenciesObserved(ctx, r, []string{"2"}, "synthetic-actor")
+			var conflict *ConflictError
+			if !errors.As(err, &conflict) || conflict.AfterWrite != after {
+				t.Fatal(err)
+			}
+			if (!after && *writes != 0) || (after && *writes != 1) {
+				t.Fatal("writes", *writes)
+			}
+			if after && !strings.Contains(err.Error(), "were saved") {
+				t.Fatal("missing applied-state warning", err)
+			}
+		})
+	}
+}

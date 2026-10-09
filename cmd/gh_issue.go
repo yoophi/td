@@ -42,9 +42,9 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 	allowed := " json work-dir help "
 	switch operation {
 	case "create":
-		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file minor parent epic "
+		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file minor parent epic depends-on blocks "
 	case "update":
-		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint parent "
+		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint parent depends-on blocks "
 	case "list":
 		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager "
 	case "show":
@@ -73,9 +73,12 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	if format != "" && format != "json" && format != "short" && format != "long" {
 		return fmt.Errorf("unsupported output format %q", format)
 	}
+	relations, err := readGitHubRelationOptions(cmd)
+	if err != nil {
+		return err
+	}
 	var change ghstore.Changes
 	var created *models.Issue
-	var err error
 	var comment string
 	if operation == "update" {
 		comment, err = gitHubUpdateComment(cmd)
@@ -110,7 +113,7 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	var scope ghcontext.Scope
 	var local *ghcontext.State
 	options := ghstore.TransitionOptions{Reason: comment}
-	if operation == "create" || comment != "" || change.Status != nil {
+	if operation == "create" || comment != "" || change.Status != nil || relations.changed() {
 		dir, scopeErr := gitHubContextDirectory()
 		if scopeErr != nil {
 			return scopeErr
@@ -141,9 +144,27 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	if operation == "create" {
 		created.CreatorSession = local.Session.ID
 		created.CreatedBranch = scope.Branch
+		if relations.changed() {
+			// A synthetic graph node validates the requested final graph before
+			// creation; it is never written or used as review attribution.
+			_, err = prepareGitHubRelations(cmd.Context(), client, &ghstore.Record{Issue: models.Issue{ID: "new-issue"}}, relations)
+			if err != nil {
+				return err
+			}
+		}
 		record, err := client.Create(cmd.Context(), created)
 		if err != nil {
 			return err
+		}
+		if relations.changed() {
+			createdID := record.ID
+			plan, planErr := prepareGitHubRelations(cmd.Context(), client, record, relations)
+			if planErr == nil {
+				record, planErr = applyGitHubRelations(cmd.Context(), client, plan, record, local.Session.ID)
+			}
+			if planErr != nil {
+				return fmt.Errorf("issue %s was created, but relationship attachment failed; earlier changes remain, inspect it before retrying creation: %w", createdID, planErr)
+			}
 		}
 		return emitGitHubMutation(cmd, "created", record)
 	}
@@ -181,9 +202,33 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	if comment != "" {
 		activity = models.Activity{Kind: "comment", SessionID: local.Session.ID, Message: comment}
 	}
+	completedIssues := []string{}
 	for _, id := range args {
+		batchError := func(err error) error {
+			if len(completedIssues) == 0 {
+				return err
+			}
+			return fmt.Errorf("update failed for %s; completed issues=%v; earlier changes remain: %w", id, completedIssues, err)
+		}
 		var record *ghstore.Record
-		if change.Status != nil {
+		var relationPlan *gitHubRelationPlan
+		if relations.changed() {
+			observed, readErr := client.Get(cmd.Context(), id)
+			if readErr != nil {
+				return batchError(readErr)
+			}
+			relationPlan, err = prepareGitHubRelations(cmd.Context(), client, observed, relations)
+			if err != nil {
+				return batchError(err)
+			}
+			fields := change
+			fields.Status = nil
+			if fields.HasFields() {
+				record, err = client.UpdateObserved(cmd.Context(), observed, fields)
+			} else {
+				record = observed
+			}
+		} else if change.Status != nil {
 			record, err = client.UpdateWorkflow(cmd.Context(), id, change, options)
 		} else if hasGitHubChanges(change) {
 			record, err = client.Update(cmd.Context(), id, change)
@@ -191,7 +236,20 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 			record, err = client.Get(cmd.Context(), id)
 		}
 		if err != nil {
-			return fmt.Errorf("%s %s: %w", operation, id, err)
+			return batchError(fmt.Errorf("%s %s: %w", operation, id, err))
+		}
+
+		if relationPlan != nil {
+			record, err = applyGitHubRelations(cmd.Context(), client, relationPlan, record, local.Session.ID)
+			if err != nil {
+				return batchError(err)
+			}
+		}
+		if relationPlan != nil && change.Status != nil {
+			record, err = client.UpdateWorkflowObserved(cmd.Context(), record, ghstore.Changes{Status: change.Status}, options)
+			if err != nil {
+				return batchError(fmt.Errorf("%s field/relation changes were saved, but requested status transition failed; earlier changes remain: %w", id, err))
+			}
 		}
 		if change.Status != nil {
 			_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
@@ -206,21 +264,22 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 				return nil
 			})
 			if err != nil {
-				return fmt.Errorf("%s was updated, but local focus update failed: %w", record.ID, err)
+				return batchError(fmt.Errorf("%s was updated, but local focus update failed: %w", record.ID, err))
 			}
 		}
 
 		if comment != "" {
 			if _, err := client.AppendActivity(cmd.Context(), record.ID, activity); err != nil {
-				if hasGitHubChanges(change) {
-					return fmt.Errorf("issue %s was updated, but its comment failed; do not repeat the entire update: %w", record.ID, err)
+				if hasGitHubChanges(change) || relations.changed() {
+					return batchError(fmt.Errorf("issue %s was updated, but its comment failed; do not repeat the entire update: %w", record.ID, err))
 				}
-				return fmt.Errorf("comment on %s: %w", record.ID, err)
+				return batchError(fmt.Errorf("comment on %s: %w", record.ID, err))
 			}
 		}
 		if err := emitGitHubMutation(cmd, action, record); err != nil {
-			return err
+			return batchError(err)
 		}
+		completedIssues = append(completedIssues, record.ID)
 	}
 	return nil
 }
@@ -395,7 +454,7 @@ func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 			}
 			change.Status = &status
 		}
-		if !hasGitHubChanges(change) && !cmd.Flags().Changed("comment") && !cmd.Flags().Changed("note") {
+		if !hasGitHubChanges(change) && !cmd.Flags().Changed("comment") && !cmd.Flags().Changed("note") && !cmd.Flags().Changed("depends-on") && !cmd.Flags().Changed("blocks") {
 			return change, fmt.Errorf("no issue changes specified")
 		}
 	}
