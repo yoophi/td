@@ -164,10 +164,7 @@ func logAnalytics(err error) {
 		return
 	}
 
-	dir := getBaseDir()
-	if dir == "" {
-		dir, _ = os.Getwd()
-	}
+	dir := diagnosticBaseDir()
 	if dir == "" {
 		return
 	}
@@ -202,10 +199,7 @@ func logAgentFailure(args []string, err error) {
 	var conflict *ghstore.ConflictError
 	var diagnostic *db.GitHubConflictDiagnostic
 	if errors.As(err, &conflict) {
-		dir := getBaseDir()
-		if dir == "" {
-			dir, _ = os.Getwd()
-		}
+		dir := diagnosticBaseDir()
 		cfg, loadErr := config.Load(dir)
 		if loadErr == nil && cfg.GitHub != nil {
 			kind, storeErr := config.Store(cfg)
@@ -218,14 +212,9 @@ func logAgentFailure(args []string, err error) {
 }
 
 func logAgentErrorDetails(args []string, errMsg string, conflict *db.GitHubConflictDiagnostic) {
-	dir := getBaseDir()
+	dir := diagnosticBaseDir()
 	if dir == "" {
-		// Fallback: get cwd directly (OnInitialize may not have run for unknown commands)
-		var err error
-		dir, err = os.Getwd()
-		if err != nil {
-			return
-		}
+		return
 	}
 
 	// Try to get session ID (may fail if not initialized)
@@ -443,6 +432,34 @@ func getBaseDir() string {
 		return *baseDirOverride
 	}
 	return baseDir
+}
+
+// Help/version and parsing failures may bypass Cobra's initialization hook.
+// Resolve their local diagnostic destination with the same project selection
+// precedence, without bootstrapping issue storage or changing command outcome.
+func diagnosticBaseDir() string {
+	if dir := getBaseDir(); dir != "" {
+		return dir
+	}
+	start := workDirFlag
+	if start == "" {
+		start = os.Getenv("TD_WORK_DIR")
+	}
+	if start == "" {
+		var err error
+		start, err = os.Getwd()
+		if err != nil {
+			return ""
+		}
+	}
+	if filepath.Base(start) == ".todos" {
+		start = filepath.Dir(start)
+	}
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return ""
+	}
+	return workdir.ResolveBaseDir(dir)
 }
 
 // ValidateIssueID checks if an issue ID is valid (non-empty, non-whitespace)

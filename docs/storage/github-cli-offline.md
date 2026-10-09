@@ -34,6 +34,13 @@ command execution hooks entirely. Diagnostics also omit session discovery when
 no command executed. Subprocess tests in a real configured SQLite project with
 an existing session cover these paths, including an unknown-flag JSON error;
 they do not rely on an empty database to hide a session lookup.
+When initialization hooks are bypassed, diagnostic files resolve the parsed
+`--work-dir`/`-w`, then `TD_WORK_DIR`, then cwd, including `.todos` suffix
+normalization and ordinary project-root resolution. This avoids writing root
+help/version or parsed-flag errors into an unrelated current directory. Tests
+use different initialized projects for cwd and target and assert that only the
+selected project receives records. A flag that Cobra never parsed after an
+earlier dispatch/parse failure is not inferred from arbitrary raw arguments.
 
 `query --examples`, `query --fields` and `query EXPRESSION --explain` are also
 offline across issue stores. With `--json`, examples return query/description

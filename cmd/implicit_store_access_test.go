@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +49,15 @@ func TestRootMetadataDiagnosticsDoNotResolveExistingSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct {
+	otherDir := t.TempDir()
+	otherDB, err := db.Initialize(otherDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := otherDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
 		args []string
 		want string
 		fail bool
@@ -57,19 +66,29 @@ func TestRootMetadataDiagnosticsDoNotResolveExistingSession(t *testing.T) {
 		{[]string{"--help"}, "Usage:", false},
 		{[]string{"--version"}, "fixture-offline", false},
 		{[]string{"--invalid-root-flag", "--json"}, `"error":`, true},
-	} {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		args := append([]string{"-test.run=^TestRootMetadataHelperProcess$", "--", "--work-dir", dir}, tc.args...)
-		child := exec.CommandContext(ctx, executable, args...)
-		child.Dir = dir
-		output, err := child.CombinedOutput()
-		cancel()
-		if (err != nil) != tc.fail || !strings.Contains(string(output), tc.want) {
-			t.Fatalf("%v: %v %s", tc.args, err, output)
+	}
+	selectors := [][]string{{"--work-dir", dir}, {"-w", dir}, {"--work-dir=" + filepath.Join(dir, ".todos")}, nil}
+	for _, selector := range selectors {
+		if len(selector) == 0 {
+			t.Setenv("TD_WORK_DIR", filepath.Join(dir, ".todos"))
+		} else {
+			t.Setenv("TD_WORK_DIR", otherDir) // The explicit flag must win.
+		}
+		for _, tc := range cases {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			args := append([]string{"-test.run=^TestRootMetadataHelperProcess$", "--"}, selector...)
+			args = append(args, tc.args...)
+			child := exec.CommandContext(ctx, executable, args...)
+			child.Dir = otherDir
+			output, err := child.CombinedOutput()
+			cancel()
+			if (err != nil) != tc.fail || !strings.Contains(string(output), tc.want) {
+				t.Fatalf("%v: %v %s", tc.args, err, output)
+			}
 		}
 	}
 	events, err := db.ReadCommandUsage(dir)
-	if err != nil || len(events) != 4 {
+	if err != nil || len(events) != len(cases)*len(selectors) {
 		t.Fatal(len(events), err)
 	}
 	for _, event := range events {
@@ -78,8 +97,21 @@ func TestRootMetadataDiagnosticsDoNotResolveExistingSession(t *testing.T) {
 		}
 	}
 	records, err := db.ReadAgentErrors(dir)
-	if err != nil || len(records) != 1 || records[0].SessionID != "" {
+	if err != nil || len(records) != len(selectors) {
 		t.Fatal(records, err)
+	}
+	for _, record := range records {
+		if record.SessionID != "" {
+			t.Fatal("root failure resolved issue session", record)
+		}
+	}
+	otherEvents, err := db.ReadCommandUsage(otherDir)
+	if err != nil || len(otherEvents) != 0 {
+		t.Fatal("metadata diagnostics leaked into current directory", otherEvents, err)
+	}
+	otherErrors, err := db.ReadAgentErrors(otherDir)
+	if err != nil || len(otherErrors) != 0 {
+		t.Fatal("failure diagnostics leaked into current directory", otherErrors, err)
 	}
 }
 
