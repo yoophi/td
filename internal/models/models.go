@@ -112,25 +112,33 @@ type Issue struct {
 
 // Log represents a session log entry
 type Log struct {
-	ID            string    `json:"id"`
-	IssueID       string    `json:"issue_id"`
-	SessionID     string    `json:"session_id"`
-	WorkSessionID string    `json:"work_session_id,omitempty"`
-	Message       string    `json:"message"`
-	Type          LogType   `json:"type"`
-	Timestamp     time.Time `json:"timestamp"`
+	OriginalSessionID string    `json:"original_session_id,omitempty"`
+	Historical        bool      `json:"historical,omitempty"`
+	SourceKey         string    `json:"source_key,omitempty"`
+	OriginalID        string    `json:"original_id,omitempty"`
+	ID                string    `json:"id"`
+	IssueID           string    `json:"issue_id"`
+	SessionID         string    `json:"session_id"`
+	WorkSessionID     string    `json:"work_session_id,omitempty"`
+	Message           string    `json:"message"`
+	Type              LogType   `json:"type"`
+	Timestamp         time.Time `json:"timestamp"`
 }
 
 // Handoff represents a structured handoff state
 type Handoff struct {
-	ID        string    `json:"id"`
-	IssueID   string    `json:"issue_id"`
-	SessionID string    `json:"session_id"`
-	Done      []string  `json:"done,omitempty"`
-	Remaining []string  `json:"remaining,omitempty"`
-	Decisions []string  `json:"decisions,omitempty"`
-	Uncertain []string  `json:"uncertain,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	OriginalSessionID string    `json:"original_session_id,omitempty"`
+	Historical        bool      `json:"historical,omitempty"`
+	SourceKey         string    `json:"source_key,omitempty"`
+	OriginalID        string    `json:"original_id,omitempty"`
+	ID                string    `json:"id"`
+	IssueID           string    `json:"issue_id"`
+	SessionID         string    `json:"session_id"`
+	Done              []string  `json:"done,omitempty"`
+	Remaining         []string  `json:"remaining,omitempty"`
+	Decisions         []string  `json:"decisions,omitempty"`
+	Uncertain         []string  `json:"uncertain,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
 }
 
 // GitSnapshot captures git state at a point in time

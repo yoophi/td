@@ -277,6 +277,9 @@ func IssuesToDTOs(issues []models.Issue) []IssueDTO {
 
 // LogDTO is the API representation of a session log entry.
 type LogDTO struct {
+	Historical    bool   `json:"historical,omitempty"`
+	SourceKey     string `json:"source_key,omitempty"`
+	OriginalID    string `json:"original_id,omitempty"`
 	ID            string `json:"id"`
 	IssueID       string `json:"issue_id"`
 	SessionID     string `json:"session_id"`
@@ -289,6 +292,7 @@ type LogDTO struct {
 // LogToDTO converts a models.Log to a LogDTO.
 func LogToDTO(log *models.Log) LogDTO {
 	return LogDTO{
+		Historical: log.Historical, SourceKey: log.SourceKey, OriginalID: log.OriginalID,
 		ID:            log.ID,
 		IssueID:       log.IssueID,
 		SessionID:     log.SessionID,
@@ -347,19 +351,23 @@ func CommentsToDTOs(comments []models.Comment) []CommentDTO {
 
 // HandoffDTO is the API representation of a handoff.
 type HandoffDTO struct {
-	ID        string   `json:"id"`
-	IssueID   string   `json:"issue_id"`
-	SessionID string   `json:"session_id"`
-	Done      []string `json:"done"`
-	Remaining []string `json:"remaining"`
-	Decisions []string `json:"decisions"`
-	Uncertain []string `json:"uncertain"`
-	Timestamp string   `json:"timestamp"`
+	Historical bool     `json:"historical,omitempty"`
+	SourceKey  string   `json:"source_key,omitempty"`
+	OriginalID string   `json:"original_id,omitempty"`
+	ID         string   `json:"id"`
+	IssueID    string   `json:"issue_id"`
+	SessionID  string   `json:"session_id"`
+	Done       []string `json:"done"`
+	Remaining  []string `json:"remaining"`
+	Decisions  []string `json:"decisions"`
+	Uncertain  []string `json:"uncertain"`
+	Timestamp  string   `json:"timestamp"`
 }
 
 // HandoffToDTO converts a models.Handoff to a HandoffDTO.
 func HandoffToDTO(handoff *models.Handoff) HandoffDTO {
 	dto := HandoffDTO{
+		Historical: handoff.Historical, SourceKey: handoff.SourceKey, OriginalID: handoff.OriginalID,
 		ID:        handoff.ID,
 		IssueID:   handoff.IssueID,
 		SessionID: handoff.SessionID,

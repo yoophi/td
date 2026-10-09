@@ -326,7 +326,11 @@ func FormatIssueLong(issue *models.Issue, logs []models.Log, handoff *models.Han
 	// Handoff
 	if handoff != nil {
 		sb.WriteString("\n")
-		fmt.Fprintf(&sb, "CURRENT HANDOFF (%s, %s):\n", handoff.SessionID, FormatTimeAgo(handoff.Timestamp))
+		heading := "CURRENT HANDOFF"
+		if handoff.Historical {
+			heading = "IMPORTED HISTORICAL HANDOFF"
+		}
+		fmt.Fprintf(&sb, "%s (%s, %s):\n", heading, handoff.SessionID, FormatTimeAgo(handoff.Timestamp))
 
 		if len(handoff.Done) > 0 {
 			sb.WriteString("  Done:\n")
@@ -361,6 +365,9 @@ func FormatIssueLong(issue *models.Issue, logs []models.Log, handoff *models.Han
 			typeIndicator := ""
 			if log.Type != models.LogTypeProgress {
 				typeIndicator = fmt.Sprintf(" [%s]", log.Type)
+			}
+			if log.Historical {
+				typeIndicator += " [historical]"
 			}
 			fmt.Fprintf(&sb, "  [%s]%s %s\n",
 				log.Timestamp.Format("15:04"),

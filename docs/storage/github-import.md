@@ -234,10 +234,34 @@ Returned derived payload bytes are copied so readers cannot mutate cached histor
 Formatted JSON export/reparse validates the payload after whitespace compaction,
 its digest/part counts, and passive authority flags before any import writes.
 
-The normal CLI write path remains gated. Human log/handoff views and portable
-top-level log/handoff export still need historical projection; full SQLite/GitHub
-round-trip and CLI execution verification remain required. JSON archival exposure
-does not by itself prove these remaining requirements complete.
+Read-only log/handoff views now decode complete source archives without another
+API call. They retain original content/session/time, mark rows `historical`,
+identify their source/original IDs and use stable qualified IDs. Later source
+versions replace matching historical events rather than duplicating them; native
+GitHub activity wins over mirrored portable arrays for the same original event.
+Already historical portable rows retain their original identity on later imports.
+Current handoffs always outrank historical ones, even if source clocks are ahead.
+CLI detail and HTTP DTOs carry the historical flags; text detail labels imported
+handoffs/logs explicitly. Native activity/review input is not expanded, so old
+handoffs/logs cannot satisfy a new review checkpoint. A regression test submits
+a new review handoff and verifies that it does not borrow archived content.
+
+JSON export includes historical top-level `logs`/`handoffs`. These portable rows
+namespace `session_id` and retain attribution in `original_session_id`, because
+SQLite does not persist the added historical flags. This prevents historical
+rows from impersonating the active source worker when imported into SQLite.
+Read views restore the original attribution from those portable rows. Session
+namespacing and historical event IDs remain stable on repeat export/import.
+
+The normal CLI write path remains gated pending complete SQLite/GitHub round-trip
+and CLI execution verification. Monitor activity/work-context projections remain
+native-only; their historical display needs a separate audit to avoid marking
+old imported work as current activity.
+
+`TD_GH_CONTEXT_ROOT` optionally selects an absolute base directory for local
+GitHub work-context files; repository hashing/isolation is unchanged. The default
+remains the normal user config directory. Tests isolate work-context fixtures
+under a temporary root instead of writing the user's global state.
 
 The shared import envelope keeps SQLite's historical lenient deserialization;
 strict input and semantic validation apply to the GitHub importer. Local import

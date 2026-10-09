@@ -97,3 +97,26 @@ func TestGitHubMarkdownExportDoesNotReadActivity(t *testing.T) {
 		t.Fatal(err, out.String())
 	}
 }
+
+func TestGitHubExportIncludesHistoricalPortableRowsWithSafeSessionIdentity(t *testing.T) {
+	original := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	source := ghstore.ImportItem{SourceNamespace: "project", Issue: models.Issue{ID: "td-source", Title: "Original", Type: models.TypeTask, Priority: models.PriorityP2, Status: models.StatusOpen}, Logs: []models.Log{{ID: "log-old", SessionID: "old-worker", Message: "Original progress", Type: models.LogTypeProgress, Timestamp: original}}, Handoffs: []models.Handoff{{ID: "handoff-old", SessionID: "old-worker", Done: []string{"Original handoff"}, Timestamp: original}}}
+	data, _ := json.Marshal(source)
+	digest, _ := source.Digest()
+	doc := &models.PreservedHistory{Kind: "source", SourceKey: source.SourceKey(), SourceDigest: digest, ContentDigest: digest, PartsPresent: 1, PartsExpected: 1, Complete: true, Data: data}
+	fixture := &exportFixture{rows: []ghstore.ExportedIssue{{Version: 1, Repository: "owner/repo", NativeState: "open", Record: ghstore.Record{Number: 1, Issue: models.Issue{ID: "gh-1", Title: "Imported", Type: models.TypeTask, Priority: models.PriorityP2, Status: models.StatusOpen}}, Activity: []models.Activity{{ID: "ghc-10", IssueID: "gh-1", Kind: "comment", Native: true, PreservedHistory: doc}}}}}
+	command := exportCommand("json", "")
+	var out bytes.Buffer
+	command.SetOut(&out)
+	if err := runGitHubExport(command, fixture); err != nil {
+		t.Fatal(err)
+	}
+	items, err := ghstore.ParseImportJSON(out.Bytes())
+	if err != nil || len(items) != 1 || len(items[0].Logs) != 1 || len(items[0].Handoffs) != 1 {
+		t.Fatal(items, err)
+	}
+	log, handoff := items[0].Logs[0], items[0].Handoffs[0]
+	if !log.Historical || log.OriginalID != "log-old" || log.OriginalSessionID != "old-worker" || log.SessionID == "old-worker" || !strings.HasPrefix(log.SessionID, "imported-") || log.IssueID != "gh-1" || !log.Timestamp.Equal(original) || handoff.OriginalSessionID != "old-worker" {
+		t.Fatal(log, handoff)
+	}
+}

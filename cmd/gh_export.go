@@ -69,6 +69,13 @@ func runGitHubExport(cmd *cobra.Command, client githubExportReader) error {
 				item.Handoffs = append(item.Handoffs, models.Handoff{ID: a.ID, IssueID: a.IssueID, SessionID: a.SessionID, Done: a.Done, Remaining: a.Remaining, Decisions: a.Decisions, Uncertain: a.Uncertain, Timestamp: a.CreatedAt})
 			}
 		}
+		historicalLogs, historicalHandoffs, err := ghstore.ProjectImportedHistory(r.Activity, r.Record.ID)
+		if err != nil {
+			return err
+		}
+		ghstore.NamespacePortableHistorySessions(historicalLogs, historicalHandoffs)
+		item.Logs = append(item.Logs, historicalLogs...)
+		item.Handoffs = append(item.Handoffs, historicalHandoffs...)
 		items = append(items, item)
 		issue := r.Record.Issue
 		fmt.Fprintf(&md, "## %s: %s\n\n- Status: %s\n- Type: %s\n- Priority: %s\n", issue.ID, issue.Title, issue.Status, issue.Type, issue.Priority)

@@ -165,7 +165,14 @@ func (s *GitHubQuerySnapshot) GetLogs(id string, limit int) ([]models.Log, error
 	if err != nil {
 		return nil, err
 	}
-	out := []models.Log{}
+	issue, err := s.GetIssue(id)
+	if err != nil {
+		return nil, err
+	}
+	out, _, err := ghstore.ProjectImportedHistory(a, issue.ID)
+	if err != nil {
+		return nil, err
+	}
 	for _, v := range a {
 		if v.Kind == "log" {
 			out = append(out, models.Log{ID: v.ID, IssueID: v.IssueID, SessionID: v.SessionID, WorkSessionID: v.WorkSessionID, Message: v.Message, Type: v.LogType, Timestamp: v.CreatedAt})
@@ -196,8 +203,20 @@ func (s *GitHubQuerySnapshot) GetLatestHandoff(id string) (*models.Handoff, erro
 		return nil, err
 	}
 	var out *models.Handoff
+	issue, err := s.GetIssue(id)
+	if err != nil {
+		return nil, err
+	}
+	_, historical, err := ghstore.ProjectImportedHistory(a, issue.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(historical) > 0 {
+		copy := historical[0]
+		out = &copy
+	}
 	for _, v := range a {
-		if v.Kind == "handoff" && (out == nil || !v.CreatedAt.Before(out.Timestamp)) {
+		if v.Kind == "handoff" && (out == nil || out.Historical || !v.CreatedAt.Before(out.Timestamp)) {
 			out = &models.Handoff{ID: v.ID, IssueID: v.IssueID, SessionID: v.SessionID, Done: v.Done, Remaining: v.Remaining, Decisions: v.Decisions, Uncertain: v.Uncertain, Timestamp: v.CreatedAt}
 		}
 	}

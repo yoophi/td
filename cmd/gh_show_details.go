@@ -112,10 +112,17 @@ func loadGitHubShowDetails(cmd *cobra.Command, client *ghstore.Client, records [
 			return nil, err
 		}
 		for _, log := range d.modelLogs {
-			d.Logs = append(d.Logs, map[string]any{"timestamp": log.Timestamp, "session": log.SessionID, "message": log.Message, "type": log.Type})
+			row := map[string]any{"timestamp": log.Timestamp, "session": log.SessionID, "message": log.Message, "type": log.Type}
+			if log.Historical {
+				row["historical"], row["source_key"], row["original_id"] = true, log.SourceKey, log.OriginalID
+			}
+			d.Logs = append(d.Logs, row)
 		}
 		if h := d.modelHandoff; h != nil {
 			d.Handoff = map[string]any{"timestamp": h.Timestamp, "session": h.SessionID, "done": jsonList(h.Done), "remaining": jsonList(h.Remaining), "decisions": jsonList(h.Decisions), "uncertain": jsonList(h.Uncertain)}
+			if h.Historical {
+				d.Handoff["historical"], d.Handoff["source_key"], d.Handoff["original_id"] = true, h.SourceKey, h.OriginalID
+			}
 		}
 		if r.Details != nil {
 			d.Files = append(d.Files, r.Details.Files...)
