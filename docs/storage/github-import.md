@@ -1,8 +1,9 @@
 # GitHub issue import
 
 The #24 implementation is in progress. Input validation and `--dry-run`
-are available; full batch import orchestration and history replay
-and import/export round-trip verification remain required. A regular nonempty
+are available; internal batch execution is implemented, while intermediate
+graph detachments, preserved history reads/exports and import/export round-trip
+verification remain required. A regular nonempty
 GitHub import currently exits with an explicit error and makes no remote changes.
 
 `td import FILE --format json|md --dry-run [--force] [--json] [--source NAME]` reads a file;
@@ -38,8 +39,8 @@ The shared internal creation path can use this identity and retains normal
 validation, state/priority mirrors and uncertain-write diagnostics. Tests
 simulate a POST that creates an issue but loses its response, then recover
 the allocated ID from a fresh repository listing without a second POST.
-The CLI still refuses nonempty writes: batch allocation/application ordering,
-provenance replay and completion orchestration remain required before enabling it.
+The CLI still refuses nonempty writes pending graph transition support and
+history reads/exports; internal execution is described below.
 
 The planner reads a fresh complete issue/comment snapshot using two bulk
 collections (each paginated by gh), even when a reusable cache exists. It
@@ -61,7 +62,7 @@ a changed source cannot replace a pending import version. Resume with the
 original input first. A later completion supersedes its earlier intent; a newer
 intent supersedes an older completion so an interrupted subsequent import can
 be recovered. These publishers do not apply the issue PATCH or restore history;
-full batch orchestration remains unfinished and is not exposed as a standalone CLI.
+the internal batch executor invokes them and is not exposed as a standalone CLI.
 
 The internal single-issue apply stage now projects the imported fields into a
 normal observed PATCH, prepares its exact before/after bases, rechecks content
@@ -76,9 +77,9 @@ Imported workflow actors/approvals are cleared from active metadata; status,
 dates, files, labels and mapped references remain portable fields. This stage
 does not publish a completion receipt or finish history restoration.
 
-Remaining batch cases include changing an existing graph without temporary
-cycles, logical-deletion ordering/references, skip-row relation consistency and
-retaining prior destination history before a forced overwrite. These remain
+Remaining batch cases include graph transitions requiring durable intermediate
+detachments and end-to-end logical-deletion ordering/reference verification.
+Skipped-row consistency and prior destination archiving are now checked. These remain
 implementation work, not reasons to exclude the original import scope.
 
 The target basis includes the currently modeled native issue identity, author,
@@ -123,8 +124,11 @@ and SQLite authors/timestamps/logs/handoffs/files. JSON bytes are split into
 be interpreted as current activity or approvals. Each comment is bounded to a
 conservative 60000 bytes, and each set binds source identity/digest, destination
 ID, content digest, part index and total count. The same representation can
-archive the prior destination before a forced overwrite, but batch capture of
-that prior destination is still outstanding.
+archive the prior destination before a forced overwrite. Internal batch
+execution captures the original native issue and comments before the field
+PATCH, and binds that archive digest to the prepared intent and completion
+receipt. Resuming a prepared overwrite verifies the original archive instead
+of replacing it with the already-modified destination.
 
 Inventory is built from one complete bulk comment observation. The writer
 posts only missing pieces, checks destination content before/after the set,
@@ -149,10 +153,29 @@ Older fields-only receipts produce `resume_history` / `history_pending`; a
 changed source cannot replace their unarchived original history, even with
 `--force`. History-only replay cannot enter the issue-field apply stage.
 
-These helpers are not yet connected to the normal CLI write path. Batch
-orchestration must capture prior destination data, invoke the verified source
-archive/completion stages, and expose preserved history appropriately in
-reads/exports. Native provenance comments currently
+Internal batch execution allocates destination IDs before resolving links,
+archives all changed sources/destinations, applies checked fields/relations,
+then publishes verified completion receipts. Every uncertain POST/PATCH stops
+with the original error, earlier confirmed counts and an explicit instruction
+to refresh before resuming. Tests exercise lost allocation, source-part,
+intent, field-PATCH and completion responses, followed by a no-write repeat.
+
+Completion shares one fresh issue/comment inventory for the whole batch;
+individual receipt writes retain destination conflict checks. New allocation
+uses three bulk observations total (initial plan, allocated-ID recovery, final
+history verification), regardless of item count, before pagination. A fully
+completed repeat uses one bulk observation and no writes. Per-issue mutation
+and graph conflict fences still incur direct reads and writes.
+
+The field order considers existing parent/dependency graphs, removing old
+edges before reversing their direction. If independent graphs demand mutually
+incompatible orders, execution explicitly rejects the transition before field
+PATCHes. A durable intermediate-detach phase remains to be implemented;
+allocation may already have occurred and is reported. Skipped or history-only
+rows must already have the mapped relationships instead of silently losing them.
+
+The normal CLI write path remains gated until these graph transitions and
+preserved history reads/exports are supported and validated. Native provenance comments currently
 remain passive comments rather than active log/handoff/workflow events.
 
 The shared import envelope keeps SQLite's historical lenient deserialization;

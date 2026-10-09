@@ -8,21 +8,23 @@ import (
 )
 
 type ImportPlanRow struct {
-	SourceID             string   `json:"source_id"`
-	SourceKey            string   `json:"source_key"`
-	Digest               string   `json:"digest"`
-	TargetID             string   `json:"target_id,omitempty"`
-	Action               string   `json:"action"`
-	SourceChanged        bool     `json:"source_changed,omitempty"`
-	ParentSourceKey      string   `json:"parent_source_key,omitempty"`
-	DependencySourceKeys []string `json:"dependency_source_keys"`
-	BlockedSourceKeys    []string `json:"blocked_source_keys"`
-	Observed             *Record  `json:"-"`
-	OperationID          string   `json:"operation_id"`
-	ResumeState          string   `json:"resume_state,omitempty"`
-	HistoryVerified      bool     `json:"history_verified,omitempty"`
-	intent               *importIntent
-	basis                string
+	SourceID                 string   `json:"source_id"`
+	SourceKey                string   `json:"source_key"`
+	Digest                   string   `json:"digest"`
+	TargetID                 string   `json:"target_id,omitempty"`
+	Action                   string   `json:"action"`
+	SourceChanged            bool     `json:"source_changed,omitempty"`
+	ParentSourceKey          string   `json:"parent_source_key,omitempty"`
+	DependencySourceKeys     []string `json:"dependency_source_keys"`
+	BlockedSourceKeys        []string `json:"blocked_source_keys"`
+	Observed                 *Record  `json:"-"`
+	OperationID              string   `json:"operation_id"`
+	ResumeState              string   `json:"resume_state,omitempty"`
+	HistoryVerified          bool     `json:"history_verified,omitempty"`
+	intent                   *importIntent
+	basis                    string
+	destinationArchiveDigest string
+	destinationArchiveBasis  string
 }
 
 // The creation operation is stored atomically with the issue body. Using the
@@ -39,6 +41,7 @@ type ImportPlan struct {
 	DryRun     bool            `json:"dry_run"`
 	Rows       []ImportPlanRow `json:"rows"`
 	Warnings   []string        `json:"warnings"`
+	snapshot   *Snapshot
 }
 
 // PlanImport validates every source before observing targets. New GitHub
@@ -59,6 +62,7 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 	if err != nil {
 		return nil, err
 	}
+	plan.snapshot = snapshot
 	receipts, bases, err := snapshotImportReceipts(snapshot)
 	if err != nil {
 		return nil, err
@@ -143,6 +147,7 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 				return nil, err
 			}
 			row.HistoryVerified = verified
+			row.destinationArchiveDigest, row.destinationArchiveBasis = receipt.DestinationArchiveDigest, receipt.DestinationBasis
 			row.SourceChanged = receipt.SourceDigest != row.Digest
 			if row.SourceChanged && !force {
 				return nil, fmt.Errorf("source %s changed since completed import; inspect the plan with --force before applying; no import writes attempted", row.SourceKey)

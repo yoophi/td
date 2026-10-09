@@ -167,7 +167,7 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 				return nil, "", false, fmt.Errorf("unprepared imported issue differs from its creation payload; resume with original input or inspect subsequent edits: %w", &ConflictError{ID: row.TargetID})
 			}
 		}
-		intent := importIntent{Version: 1, SourceKey: row.SourceKey, SourceDigest: digest, TargetID: row.TargetID, BeforeBasis: basis, AfterBasis: after}
+		intent := importIntent{Version: 1, SourceKey: row.SourceKey, SourceDigest: digest, TargetID: row.TargetID, BeforeBasis: basis, AfterBasis: after, DestinationArchiveDigest: row.destinationArchiveDigest}
 		if err := c.prepareImport(ctx, intent); err != nil {
 			return nil, "", false, err
 		}

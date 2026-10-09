@@ -16,13 +16,15 @@ const importReceiptStart = importReceiptPrefix + "v1\n"
 // A receipt is a completion record, never an active workflow approval. It is
 // stored as a native comment; normal activity parsing does not grant it rights.
 type importReceipt struct {
-	Version      int    `json:"version"`
-	SourceKey    string `json:"source_key"`
-	SourceDigest string `json:"source_digest"`
-	TargetID     string `json:"target_id"`
-	TargetBasis  string `json:"target_basis"`
-	SourceParts  int    `json:"source_parts,omitempty"`
-	commentID    int64
+	Version                  int    `json:"version"`
+	SourceKey                string `json:"source_key"`
+	SourceDigest             string `json:"source_digest"`
+	TargetID                 string `json:"target_id"`
+	TargetBasis              string `json:"target_basis"`
+	SourceParts              int    `json:"source_parts,omitempty"`
+	DestinationArchiveDigest string `json:"destination_archive_digest,omitempty"`
+	DestinationBasis         string `json:"destination_basis,omitempty"`
+	commentID                int64
 }
 
 var importDigestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -36,6 +38,9 @@ func (receipt importReceipt) validate() error {
 	n, err := Number(receipt.TargetID)
 	if receipt.Version != 1 || !validSource || err != nil || receipt.SourceParts < 0 || receipt.TargetID != fmt.Sprintf("gh-%d", n) || !importDigestPattern.MatchString(receipt.SourceDigest) || !importDigestPattern.MatchString(receipt.TargetBasis) {
 		return fmt.Errorf("invalid or unsupported import completion receipt")
+	}
+	if (receipt.DestinationArchiveDigest == "") != (receipt.DestinationBasis == "") || (receipt.DestinationArchiveDigest != "" && (!importDigestPattern.MatchString(receipt.DestinationArchiveDigest) || !importDigestPattern.MatchString(receipt.DestinationBasis))) {
+		return fmt.Errorf("invalid import prior destination proof")
 	}
 	return nil
 }
@@ -56,6 +61,12 @@ func verifyImportReceiptHistory(receipt importReceipt, inventory importProvenanc
 	}
 	if parts[0].Count != receipt.SourceParts || source.SourceKey() != receipt.SourceKey {
 		return false, fmt.Errorf("%s completion history binding differs", receipt.TargetID)
+	}
+	if receipt.DestinationArchiveDigest != "" {
+		ref.Kind, ref.ContentDigest = "destination", receipt.DestinationArchiveDigest
+		if err := verifyImportDestinationParts(receipt.TargetID, receipt.DestinationBasis, inventory[ref.key()]); err != nil {
+			return false, err
+		}
 	}
 	return true, nil
 }

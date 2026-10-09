@@ -13,13 +13,14 @@ const importIntentStart = importIntentPrefix + "v1\n"
 // An intent precedes the issue PATCH. Either known content basis can be
 // resumed; a third state means a subsequent edit and must never be replaced.
 type importIntent struct {
-	Version      int    `json:"version"`
-	SourceKey    string `json:"source_key"`
-	SourceDigest string `json:"source_digest"`
-	TargetID     string `json:"target_id"`
-	BeforeBasis  string `json:"before_basis"`
-	AfterBasis   string `json:"after_basis"`
-	commentID    int64
+	Version                  int    `json:"version"`
+	SourceKey                string `json:"source_key"`
+	SourceDigest             string `json:"source_digest"`
+	TargetID                 string `json:"target_id"`
+	BeforeBasis              string `json:"before_basis"`
+	AfterBasis               string `json:"after_basis"`
+	DestinationArchiveDigest string `json:"destination_archive_digest,omitempty"`
+	commentID                int64
 }
 
 func (intent importIntent) validate() error {
@@ -27,7 +28,7 @@ func (intent importIntent) validate() error {
 	if err := receipt.validate(); err != nil {
 		return fmt.Errorf("invalid import intent: %w", err)
 	}
-	if !importDigestPattern.MatchString(intent.AfterBasis) {
+	if !importDigestPattern.MatchString(intent.AfterBasis) || (intent.DestinationArchiveDigest != "" && !importDigestPattern.MatchString(intent.DestinationArchiveDigest)) {
 		return fmt.Errorf("invalid import intent expected content basis")
 	}
 	return nil
@@ -151,7 +152,7 @@ func (c *Client) prepareImport(ctx context.Context, intent importIntent) error {
 }
 
 func (c *Client) completeImport(ctx context.Context, receipt importReceipt) error {
-	body, err := renderImportReceipt(receipt)
+	_, err := renderImportReceipt(receipt)
 	if err != nil {
 		return err
 	}
@@ -163,6 +164,19 @@ func (c *Client) completeImport(ctx context.Context, receipt importReceipt) erro
 		return err
 	}
 	inventory, err := snapshotImportProvenance(snapshot)
+	if err != nil {
+		return err
+	}
+	return c.completeImportWithInventory(ctx, receipt, inventory)
+}
+
+// Batch completion shares one fresh bulk inventory after all field writes.
+// Each publication still checks its own destination before/after its POST.
+func (c *Client) completeImportWithInventory(ctx context.Context, receipt importReceipt, inventory importProvenanceInventory) error {
+	if receipt.SourceParts == 0 {
+		return fmt.Errorf("completion requires verified source provenance parts; no receipt POST attempted")
+	}
+	body, err := renderImportReceipt(receipt)
 	if err != nil {
 		return err
 	}
