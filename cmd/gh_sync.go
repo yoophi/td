@@ -82,3 +82,18 @@ func githubSync(cmd *cobra.Command, args []string) (bool, error) {
 	}
 	return true, nil
 }
+
+func githubSyncToggle(cmd *cobra.Command) (bool, error) {
+	cfg, err := config.Load(getBaseDir())
+	if err != nil {
+		return true, err
+	}
+	kind, err := config.Store(cfg)
+	if err != nil {
+		return true, err
+	}
+	if kind != config.StoreGitHub {
+		return false, nil
+	}
+	return true, fmt.Errorf("sync %s controls SQLite td-sync autosync; gh-issue commands use gh directly and monitor controls its own refresh interval; no global or project settings changed", cmd.Name())
+}

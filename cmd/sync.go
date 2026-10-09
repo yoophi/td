@@ -777,6 +777,9 @@ This clears any global kill-switch so per-project sync configuration decides
 whether autosync runs. It does NOT force-enable sync on an unconfigured
 project. Works regardless of shell-init semantics (unlike TD_* env vars).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncToggle(cmd); handled {
+			return err
+		}
 		if err := syncconfig.SetGlobalAutosyncOverride(true); err != nil {
 			output.Error("write config: %v", err)
 			return err
@@ -798,6 +801,9 @@ This is a shell-independent kill-switch: every td process reads config.json, so
 autosync is suppressed everywhere regardless of which shell-init files are
 sourced. Re-enable with: td sync enable.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncToggle(cmd); handled {
+			return err
+		}
 		if err := syncconfig.SetGlobalAutosyncOverride(false); err != nil {
 			output.Error("write config: %v", err)
 			return err

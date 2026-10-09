@@ -123,3 +123,39 @@ func TestGitHubSyncCollectionFailureDoesNotEmitPartialSuccess(t *testing.T) {
 		t.Fatal("failed refresh opened SQLite", err)
 	}
 }
+
+func TestGitHubSyncInitValidatesExistingConfigAndTogglesReject(t *testing.T) {
+	dir := githubScheduleTestDir(t)
+	calls := recordScheduleGHCalls(t)
+	cmd := &cobra.Command{Use: syncInitCmd.Use, RunE: syncInitCmd.RunE, SilenceErrors: true, SilenceUsage: true}
+	cmd.Flags().Bool("json", false, "")
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var report githubSyncStatusReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil || report.Action != "validate-existing-config" || report.Repository != "owner/repo" {
+		t.Fatal(out.String(), err)
+	}
+	before, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, original := range []*cobra.Command{syncEnableCmd, syncDisableCmd} {
+		cmd := &cobra.Command{Use: original.Use, RunE: original.RunE, SilenceErrors: true, SilenceUsage: true}
+		out.Reset()
+		cmd.SetOut(&out)
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "no global or project settings changed") || out.Len() != 0 {
+			t.Fatal(original.Name(), err, out.String())
+		}
+	}
+	after, err := os.ReadFile(calls)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("toggles reached gh", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("setup opened SQLite", err)
+	}
+}

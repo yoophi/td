@@ -18,6 +18,9 @@ var syncInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Interactive guided setup for sync",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncStatusForAction(cmd, "validate-existing-config"); handled {
+			return err
+		}
 		reader := bufio.NewReader(os.Stdin)
 
 		// Step 1: Server URL

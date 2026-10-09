@@ -27,8 +27,18 @@ writes. Combining status/push/pull modes is rejected before any gh call.
 With the SQLite sync CLI feature off, the minimal parent rejects its new transfer
 flags; its always-available `status` diagnostic remains available.
 
-The #30 implementation remains incomplete: init/enable/disable/conflicts/tail
-and autosync hooks still need their own GitHub
-contracts and implementation. SQLite snapshot bootstrap, action-log replay and
+`td sync init` validates the existing GitHub store selection and credentials
+without entering the td-sync server/project wizard or changing configuration.
+Its JSON action is `validate-existing-config`; repository selection remains
+the responsibility of `td config set store gh-issue`.
+
+`sync enable/disable` report an explicit store-specific limitation in GitHub
+mode, without changing the global SQLite autosync switch. They do not control
+direct gh writes or the monitor's refresh interval. The shared td-sync runtime
+closes its gate for GitHub before reading SQLite or td-sync credentials, even
+if autosync is explicitly enabled or an embedding caller supplies a stale DB.
+
+The #30 implementation remains incomplete: conflicts/tail and sync settings
+still need their own GitHub contracts and implementation. SQLite snapshot bootstrap, action-log replay and
 FK repair are store-specific operations; they cannot be reported as successful
 GitHub transfers. Native repository checks and task review are still pending.

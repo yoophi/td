@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/features"
 	"github.com/marcus/td/internal/session"
@@ -137,11 +138,34 @@ func New(opts Options) (*Syncer, error) {
 // Gate resolves the one sync gate used by commands and in-process consumers.
 // It never returns an error; unavailable state closes the gate with a reason.
 func (s *Syncer) Gate() Gate {
+	if gate := s.storeGate(); gate != nil {
+		return *gate
+	}
 	database, closeDB, err := s.database()
 	if closeDB && database != nil {
 		defer func() { _ = database.Close() }()
 	}
 	return s.gate(database, err)
+}
+
+// Store selection precedes credentials and database observations, including
+// when an embedding caller still supplies an old SQLite handle.
+func (s *Syncer) storeGate() *Gate {
+	if s.baseDir == "" {
+		return nil
+	}
+	cfg, err := config.Load(s.baseDir)
+	if err != nil {
+		return &Gate{Source: "store-config", Reason: fmt.Sprintf("store configuration unavailable: %v", err)}
+	}
+	kind, err := config.Store(cfg)
+	if err != nil {
+		return &Gate{Source: "store-config", Reason: fmt.Sprintf("store configuration invalid: %v", err)}
+	}
+	if kind == config.StoreGitHub {
+		return &Gate{Source: "store=gh-issue", Reason: "GitHub store uses gh directly; td-sync autosync does not apply"}
+	}
+	return nil
 }
 
 func (s *Syncer) gate(database *db.DB, dbErr error) Gate {
@@ -277,6 +301,10 @@ func (s *Syncer) Once(ctx context.Context) (Result, error) {
 
 func (s *Syncer) once(ctx context.Context) (Result, error) {
 	var result Result
+	if gate := s.storeGate(); gate != nil {
+		s.logger.Debug("sync skipped", "reason", gate.Reason)
+		return result, nil
+	}
 	database, closeDB, err := s.database()
 	if err != nil {
 		return result, err

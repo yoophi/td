@@ -9,6 +9,7 @@ import (
 )
 
 type githubSyncStatusReport struct {
+	Action           string               `json:"action"`
 	Store            string               `json:"store"`
 	Repository       string               `json:"repository"`
 	Mode             string               `json:"mode"`
@@ -21,6 +22,10 @@ type githubSyncStatusReport struct {
 // GitHub sync diagnostics validate the configured origin/authentication without
 // opening SQLite, consulting td-sync credentials or fetching task collections.
 func githubSyncStatus(cmd *cobra.Command) (bool, error) {
+	return githubSyncStatusForAction(cmd, "status")
+}
+
+func githubSyncStatusForAction(cmd *cobra.Command, action string) (bool, error) {
 	cfg, err := config.Load(getBaseDir())
 	if err != nil {
 		return true, err
@@ -40,11 +45,14 @@ func githubSyncStatus(cmd *cobra.Command) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	report := githubSyncStatusReport{Store: "gh-issue", Repository: cfg.GitHub.Repo, Mode: "direct-gh", Cache: cache, Notes: []string{
+	report := githubSyncStatusReport{Action: action, Store: "gh-issue", Repository: cfg.GitHub.Repo, Mode: "direct-gh", Cache: cache, Notes: []string{
 		"GitHub reads and writes use gh directly; there is no local pending-event queue or td-sync server replay.",
 		"Cache freshness describes reusable observations, not a completed push/pull or an atomic repository snapshot.",
 		"Use td --refresh <read command> for a new observation; SQLite snapshot bootstrap and FK repair do not apply.",
 	}}
+	if action == "validate-existing-config" {
+		report.Notes = append([]string{"Existing GitHub store configuration validated; no repository, td-sync project or configuration was created or changed."}, report.Notes...)
+	}
 	if jsonMode(cmd) {
 		return true, json.NewEncoder(cmd.OutOrStdout()).Encode(report)
 	}
