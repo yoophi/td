@@ -328,5 +328,43 @@ failure, the command returns nonzero and names targets already completed;
 earlier writes remain. Each write uses the observed source and validates the
 reachable target graph before/after PATCH. These remain best-effort checks,
 without rollback, distributed locking or automatic retries. No SQLite database
-is opened. The remaining file commands and create/update/show/list relationship
-options are still tracked in #4.
+is opened. File commands are described below. Create/update/show/list relationship
+options remain tracked in #4.
+
+## Linked file commands
+
+`link`, `unlink`, and `files` use `details.files` in the issue metadata. Each
+association preserves ID, issue ID, repository-relative path, role, linked time
+and `linked_sha`. The SHA is a SHA-256 content hash used for change detection,
+not a Git commit ID. `files` displays the latest start transition's Git commit
+snapshot separately. Relinking updates the role/hash/time only when the role or
+content changed; an identical link is a no-op.
+
+`link` accepts multiple paths/globs and directories; `--recursive=false` limits
+a directory to immediate files. Roles are implementation/test/reference/config.
+All inputs are expanded, deduplicated and hashed before the metadata PATCH;
+a missing pattern, invalid role, inaccessible file or out-of-repository target
+fails without attempting file changes. Paths stay relative to the selected
+worktree, including when macOS exposes the same directory through `/var` and
+`/private/var`. Symlinks must resolve within that worktree. Recursive directory
+walks skip `.git` and `.todos`. `link --depends-on` uses the dependency writer
+and rejects combinations with file patterns or file options.
+
+`unlink` matches stored repository-relative paths, so it can remove links to
+files deleted from disk. `files --changed` reports new/modified/deleted linked
+files, and `--untracked` adds current Git changes not associated with this issue,
+including filenames containing spaces and rename destinations. JSON remains an
+array of file rows and adds `status`, `current_sha`, and `unlinked` when relevant.
+It returns `[]` when no rows match. Human output includes roles and the start
+commit when available. A file-inspection or Git-status failure is an explicit
+error rather than a successful empty result.
+
+A file-set update preserves other metadata, supersedes active review records,
+and clears the current reviewer/review basis. Old participation/reviews remain
+historical. The whole set uses one observed PATCH with pre/post revision checks;
+there is no distributed atomicity guarantee. A shared activity log is appended
+afterward with the real session. If that comment fails, the command returns
+nonzero and explicitly reports that the file changes are already saved; it does
+not retry or roll back. Inspect `files` and activity before taking recovery
+steps. These paths never open SQLite. Create/update/show/list relationship flags
+remain tracked in #4.
