@@ -1,7 +1,7 @@
 # GitHub issue import
 
 The #24 implementation is in progress. Input validation and `--dry-run`
-are available; remote import writes, receipts, ID allocation, resumable replay
+are available; remote import writes, receipt publication, ID allocation, resumable replay
 and import/export round-trip verification remain required. A regular nonempty
 GitHub import currently exits with an explicit error and makes no remote changes.
 
@@ -38,9 +38,26 @@ The shared internal creation path can use this identity and retains normal
 validation, state/priority mirrors and uncertain-write diagnostics. Tests
 simulate a POST that creates an issue but loses its response, then recover
 the allocated ID from a fresh repository listing without a second POST.
-The CLI still refuses nonempty writes: completion receipts, content/conflict
-verification on resume, relation application and provenance replay remain
-required before enabling it.
+The CLI still refuses nonempty writes: receipt publication, interrupted-phase
+content/conflict verification, relation application and provenance replay
+remain required before enabling it.
+
+The planner reads a fresh complete issue/comment snapshot using two bulk
+collections (each paginated by gh), even when a reusable cache exists. It
+recognizes versioned native-comment completion receipts that bind a source
+key and input digest to a target ID and target content basis. An unchanged
+completed import is skipped. A changed source requires explicit `--force`;
+a destination edited after completion is a conflict even with `--force`.
+Receipt reading does not add per-issue or per-comment API calls. No completion
+receipt is emitted by the current nonempty CLI path yet.
+
+The target basis includes the currently modeled native issue identity, author,
+state, title, body and label set. Native timestamps and label ordering are
+excluded because comments/server responses can change them without changing
+writable issue content. Unknown/edited receipt fields, mismatched targets and
+multiple completed targets for one source are explicit errors. Receipts remain
+ordinary native comments and cannot create active review/workflow privileges.
+They are conflict evidence, not an authenticated signature or atomic lock.
 
 Legacy exports do not identify their original project beyond the td ID. Use
 `--source project-a` to qualify SQLite/Markdown source identities, consistently

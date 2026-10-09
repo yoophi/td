@@ -51,10 +51,15 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 	if len(items) == 0 {
 		return plan, nil
 	}
-	records, err := c.ListIncludingDeleted(ctx, true)
+	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
 	if err != nil {
 		return nil, err
 	}
+	receipts, bases, err := snapshotImportReceipts(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	records := snapshot.Issues(true)
 	byID := map[string]Record{}
 	byOperation := map[string]Record{}
 	for _, r := range records {
@@ -101,6 +106,22 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 			row.TargetID = r.ID
 			row.Observed = &r
 			row.Action = "resume"
+		}
+		if receipt, ok := receipts[row.SourceKey]; ok {
+			if row.TargetID == "" || receipt.TargetID != row.TargetID {
+				return nil, fmt.Errorf("completion receipt for %s disagrees with its target mapping; no import writes attempted", row.SourceKey)
+			}
+			if bases[row.TargetID] != receipt.TargetBasis {
+				return nil, fmt.Errorf("import destination changed after completion; --force does not overwrite subsequent edits: %w", &ConflictError{ID: row.TargetID})
+			}
+			row.SourceChanged = receipt.SourceDigest != row.Digest
+			if row.SourceChanged && !force {
+				return nil, fmt.Errorf("source %s changed since completed import; inspect the plan with --force before applying; no import writes attempted", row.SourceKey)
+			}
+			row.Action = "skip"
+			if row.SourceChanged {
+				row.Action = "overwrite"
+			}
 		}
 		plan.Rows = append(plan.Rows, row)
 	}

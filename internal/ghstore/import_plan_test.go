@@ -10,6 +10,19 @@ import (
 	"testing"
 )
 
+func importHierarchyFixture(t *testing.T) (*Client, map[int]map[string]any, *int) {
+	t.Helper()
+	c, issues, writes := hierarchyFixture(t)
+	run := c.run
+	c.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+		if strings.Contains(args[5], "/issues/comments?") && slices.Contains(args, "GET") {
+			return []byte(`[[]]`), nil
+		}
+		return run(ctx, dir, payload, args...)
+	}
+	return c, issues, writes
+}
+
 func TestImportCreationIdentityRecoversUncertainPOSTWithoutRetry(t *testing.T) {
 	item := importTestItem("td-origin")
 	operation := importOperationID(item.SourceKey())
@@ -26,6 +39,9 @@ func TestImportCreationIdentityRecoversUncertainPOSTWithoutRetry(t *testing.T) {
 			return nil, failure
 		}
 		if !strings.Contains(args[5], "/issues?state=all") {
+			if strings.Contains(args[5], "/issues/comments?") {
+				return []byte(`[[]]`), nil
+			}
 			t.Fatalf("unexpected recovery request: %v", args)
 		}
 		data, err := fixtureIssueJSON(created)
@@ -48,7 +64,7 @@ func TestImportCreationIdentityRecoversUncertainPOSTWithoutRetry(t *testing.T) {
 }
 
 func TestImportPlanRecoversCreationIdentityWithoutReusingForeignNumber(t *testing.T) {
-	c, issues, writes := hierarchyFixture(t)
+	c, issues, writes := importHierarchyFixture(t)
 	item := importTestItem("td-local")
 	body, err := encodeBody(item.Issue.Description, metadata{OperationID: importOperationID(item.SourceKey()), Type: item.Issue.Type, Priority: item.Issue.Priority})
 	if err != nil {
@@ -91,7 +107,7 @@ func TestImportIdentityNamespaceAndJSONExcludeObservation(t *testing.T) {
 }
 
 func TestImportPlanActualRepoMappingsForceAndNoWrites(t *testing.T) {
-	c, _, writes := hierarchyFixture(t)
+	c, _, writes := importHierarchyFixture(t)
 	r, err := c.Get(context.Background(), "gh-1")
 	if err != nil {
 		t.Fatal(err)
