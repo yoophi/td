@@ -46,6 +46,10 @@ var rootCmd = &cobra.Command{
 
 Optimized for session continuity—capturing working state so new context windows can resume where previous ones stopped.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if os.Getenv("TD_GH_DEBUG") == "1" {
+			ctx, _ := ghstore.WithAPICost(cmd.Context())
+			cmd.SetContext(ctx)
+		}
 		if refresh, _ := cmd.Flags().GetBool("refresh"); refresh {
 			cmd.SetContext(ghstore.WithFreshSnapshot(cmd.Context()))
 		}
@@ -89,6 +93,9 @@ func Execute() {
 	executedCmd = nil // Reset for this execution
 
 	command, err := rootCmd.ExecuteC()
+	if command != nil {
+		ghstore.LogAPICostContext(command.Context())
+	}
 	if executedCmd == nil && command != nil && command != rootCmd {
 		executedCmd = command
 	}

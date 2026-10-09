@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/marcus/td/internal/ghstore"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -164,12 +165,16 @@ func (h *githubEventHub) run(ctx context.Context) {
 }
 func (s *Server) EnableGitHubEvents(store *GitHubReadStore) {
 	interval := s.config.PollInterval
-	// A complete token reads every issue's comments. At 44 issues a 30s
-	// interval alone exceeds the 5,000/hour REST allowance, even when idle.
+	// Keep the conservative event interval until coordinated polling (#50).
+	// Complete tokens now use repository-wide issue/comment pages.
 	if interval < 5*time.Minute {
 		interval = 5 * time.Minute
 	}
 	s.githubEvents = newGitHubEventHub(func(ctx context.Context) (string, error) {
+		if os.Getenv("TD_GH_DEBUG") == "1" {
+			ctx, _ = ghstore.WithAPICost(ctx)
+			defer ghstore.LogAPICostContext(ctx)
+		}
 		client, err := store.open(ctx)
 		if err != nil {
 			return "", err

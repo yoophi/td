@@ -297,7 +297,7 @@ func (c *Client) confirmNote(ctx context.Context, note *NoteRecord, data []byte,
 	if returned.Title != title || returned.Body != body {
 		return nil, fmt.Errorf("note %s write was accepted but title/body differed; inspect GitHub before retrying", note.ID)
 	}
-	confirmed, err := c.noteCarrier(ctx, note.Number)
+	confirmed, err := c.noteCarrier(withReadbackCost(ctx), note.Number)
 	if err != nil {
 		return nil, fmt.Errorf("note %s write was accepted but verification failed; inspect GitHub before retrying: %w", note.ID, err)
 	}

@@ -24,6 +24,9 @@ func runCommand(ctx context.Context, dir, name string, args ...string) ([]byte, 
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	data, err := cmd.Output()
+	if name == "gh" && len(args) > 0 && args[0] == "auth" {
+		recordAuthCost(ctx)
+	}
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

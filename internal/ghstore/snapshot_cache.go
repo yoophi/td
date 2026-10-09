@@ -371,6 +371,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 		return nil, err
 	}
 	if c.cache == nil {
+		recordCacheCost(ctx, false)
 		return c.readSnapshotRemote(ctx, history)
 	}
 	cache := c.cache
@@ -389,11 +390,14 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 	})
 	if err != nil {
 		cache.warn(err)
+		recordCacheCost(ctx, false)
 		return c.readSnapshotRemote(ctx, history)
 	}
 	if cached != nil {
+		recordCacheCost(ctx, true)
 		return cached, nil
 	}
+	recordCacheCost(ctx, false)
 	// Generation and refresh intent separate in-flight reads across invalidation.
 	key := cache.path(history) + ":" + generation
 	if ctx.Value(freshSnapshotKey{}) == true {

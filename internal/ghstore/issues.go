@@ -58,6 +58,10 @@ func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]
 	out, err := cmd.Output()
 	body, headers, headerErr := splitAPIHeaders(out)
 	traceAPIResponses(invocation, headers)
+	scope, category := recordAPICost(ctx, args, len(headers))
+	if os.Getenv("TD_GH_DEBUG") == "1" {
+		fmt.Fprintf(os.Stderr, "gh-api-scope scope=%d invocation=%d category=%s http_responses=%d\n", scope, invocation, category, len(headers))
+	}
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -610,7 +614,7 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 			return nil, err
 		}
 	}
-	verified, err := c.GetIncludingDeleted(ctx, id)
+	verified, err := c.GetIncludingDeleted(withReadbackCost(ctx), id)
 	if err != nil {
 		return nil, fmt.Errorf("%s update was accepted, but verification failed; inspect GitHub before retrying: %w", record.ID, err)
 	}

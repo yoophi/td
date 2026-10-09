@@ -164,3 +164,88 @@ overlap suppression, diagnostic preservation, reset waiting and bounded bulk
 review costs alongside the new interval boundaries.
 
 Source: [GitHub REST rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
+
+## Request-scoped cost accounting (#51)
+
+Under `TD_GH_DEBUG=1`, HTTP routes emit `gh-http-cost` with a numeric scope ID,
+registered route template, status and duration. `gh-api-scope` joins each gh API
+invocation to that scope and a fixed cost category. `gh-api-cost` summarizes API
+invocations, local authentication invocations, their total gh invocations, observed
+HTTP responses, cache hits/misses and category counts. CLI commands and TUI/main
+SSE polls also get scopes. Existing process-global numeric counters remain.
+
+Categories separate repository preflight, issue pages, repository comment pages,
+individual issue/comments, label setup, named review validation, writes and named
+write readbacks. The readback/review tags affect diagnostics only, not freshness
+or policy. PATCH/POST responses already checked by a caller cost no extra HTTP
+response; explicit post-write GETs are reported separately. Basic display detail
+reads are not mislabeled as bulk collection. Tokens, auth headers, bodies, user
+query strings and concrete request IDs/issue paths are absent from new cost logs.
+
+`api_invocations` counts attempted gh API commands, including failed executions;
+`auth_invocations` counts local gh authentication checks. An API command may
+produce multiple HTTP response headers under `--paginate --slurp`. A failed call
+without observable headers counts an invocation but zero observed responses;
+these metrics cannot reconstruct network traffic that gh never exposed.
+Concurrent HTTP requests have independent counters. A shared cache miss charges
+network work to its initiating scope; waiters do not claim those calls. SSE
+collection is accounted independently from an open HTTP event-stream request.
+
+Cold-read regressions use the actual ghstore client/runner and gh header/slurp
+framing for every aggregate consumer: ChangeToken, statistics, JSON/Markdown
+export, list, actual TUI data source and HTTP monitor/stats/list/labels. Fixtures
+reject individual issue/comment/event endpoints. The matrix covers issues
+0/1/45/101 and comments 0/101 (nonzero comments require a parent issue).
+
+| Retained issues | Comments | Full history: preflight + I + C | Issue-only: preflight + I |
+| ---: | ---: | ---: | ---: |
+| 0 | 0 | 2 (1+1+0) | 2 |
+| 1 or 45 | 0 | 3 (1+1+1) | 2 |
+| 1 or 45 | 101 | 4 (1+1+2) | 2 |
+| 101 | 0 | 4 (1+2+1) | 3 |
+| 101 | 101 | 5 (1+2+2) | 3 |
+
+Empty collections still have one HTTP page; full-history collection skips
+comments when there are no task/carrier issues. A 101-issue/101-comment full read
+has three API invocations, five HTTP responses and one separate auth invocation.
+The TUI test also runs a second Fetch and records its repeated preflight rather
+than implying Open is free. Cache-hit collection itself performs no API calls;
+production Open preflight remains one response.
+
+Historical `d5cedaa` ChangeToken made I issue-page responses plus at least one
+comment response per retained issue. Thus 45 issues with single-page comments
+cost 46 responses for collection alone, **47 including preflight**; the earlier
+44-issue incident was 46 including preflight. The new single-page 45-issue full
+observation is three including preflight. These are explicit page budgets, not a
+claim that every repository always costs two or three requests.
+
+### #51 native smoke (2026-10-10)
+
+The `yoophi/td-sample` smoke used a separate server on port 7778 and disposable
+issue #115, subsequently logically deleted. All tested HTTP reads returned
+`ok:true`. Counts below are observed HTTP response headers, not process counts.
+
+| Consumer | API invocations | HTTP responses | Observation |
+| --- | ---: | ---: | --- |
+| Cold HTTP monitor | 3 | 4 | preflight 1, issue pages 2, comment pages 1 |
+| Cached HTTP monitor | 1 | 1 | preflight retained; cache hit 1 |
+| Concurrent HTTP stats | 1 | 1 | cache miss waiter shared the monitor collection; network charged to initiating scope |
+| HTTP issue list | 2 | 3 | preflight 1, issue pages 2, no comments |
+| CLI list (open only) | 2 | 2 | open issues fit one page; no comments |
+| CLI JSON export (`--refresh`) | 3 | 4 | preflight 1, issue pages 2, comment pages 1 |
+| CLI create #115 | 3 | 3 | preflight 1, label setup 1, write 1 |
+| CLI title update #115 | 5 | 5 | preflight 1, detail reads 2, write 1, readback 1 |
+| CLI review #115 | 12 | 16 | preflight 1, four issue collection invocations / eight pages, detail reads 2, label setup 1, review validation 2, write 1, readback 1 |
+| HTTP selected detail #115 | 7 | 8 | preflight 1, issue collection 2 pages, detail reads 3, issue comments 1, review validation 1 |
+
+Each scope additionally attempted one local `gh auth token` command. It is
+counted separately and contributes no observed HTTP response. The review's
+repeated collection invocations remain a concrete optimization candidate for
+#50; aggregate display reads have no per-issue detail/comment/event requests.
+Route logs use registered templates, including `GET /v1/issues/{id}`.
+
+Verification: consumer matrices passed under the race detector for ghstore,
+serve, monitor and CLI packages. Full ghstore race tests (including partial,
+malformed and rate-limited pagination cache rejection) passed, as did full
+macOS and Linux lint. These checks do not claim completion of #50 or the
+remaining command/import tasks.

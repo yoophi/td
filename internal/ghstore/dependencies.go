@@ -58,8 +58,12 @@ func (c *Client) ChangeDependencyObserved(ctx context.Context, observed *Record,
 		details.Dependencies = slices.DeleteFunc(details.Dependencies, func(id string) bool { return id == target })
 	}
 	verify := func(after bool) error {
+		verifyCtx := ctx
+		if after {
+			verifyCtx = withReadbackCost(ctx)
+		}
 		for _, before := range observations {
-			current, err := c.Get(ctx, before.ID)
+			current, err := c.Get(verifyCtx, before.ID)
 			if err != nil {
 				return fmt.Errorf("verify dependency %s (source write attempted=%v): %w", before.ID, after, err)
 			}
@@ -174,8 +178,12 @@ func (c *Client) ReplaceDependenciesObserved(ctx context.Context, observed *Reco
 		return observed, true, nil
 	}
 	verify := func(after bool) error {
+		verifyCtx := ctx
+		if after {
+			verifyCtx = withReadbackCost(ctx)
+		}
 		for _, previous := range observations {
-			current, err := c.Get(ctx, previous.ID)
+			current, err := c.Get(verifyCtx, previous.ID)
 			if err != nil {
 				return fmt.Errorf("verify dependency %s (source write attempted=%t): %w", previous.ID, after, err)
 			}

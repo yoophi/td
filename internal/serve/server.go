@@ -69,6 +69,7 @@ func NewServer(database *db.DB, baseDir, sessionID string, config ServeConfig) *
 // Handler returns the mux wrapped in the middleware chain.
 func (s *Server) Handler() http.Handler {
 	h := http.Handler(s.mux)
+	h = s.githubCostMiddleware(h)
 	if s.githubRequests != nil {
 		h = s.githubRequests.middleware(h)
 	}

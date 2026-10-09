@@ -255,7 +255,7 @@ func (c *Client) reviewHandoff(ctx context.Context, observed *Record, o Transiti
 	if err != nil {
 		return nil, nil, err
 	}
-	refreshed, err := c.Get(ctx, observed.ID)
+	refreshed, err := c.Get(withReadbackCost(ctx), observed.ID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("handoff %s saved, but re-read failed: %w", created.ID, err)
 	}
@@ -272,6 +272,7 @@ func (c *Client) reviewHandoff(ctx context.Context, observed *Record, o Transiti
 }
 
 func (c *Client) verifyReview(ctx context.Context, record *Record, details IssueDetails) (string, error) {
+	ctx = withReviewCost(ctx)
 	if details.ReviewBasis == "" || details.ReviewBasis != reviewBasis(record, details) {
 		return "", workflowStateError("review is stale or missing for %s; start and submit it for review again", record.ID)
 	}

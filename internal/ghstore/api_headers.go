@@ -34,7 +34,7 @@ func splitAPIHeaders(output []byte) ([]byte, []apiResponseHeaders, error) {
 			}
 			name, value, ok := strings.Cut(text, ":")
 			if !ok || strings.TrimSpace(name) == "" {
-				return nil, nil, errors.New("invalid gh response header block")
+				return nil, headers, errors.New("invalid gh response header block")
 			}
 			name = http.CanonicalHeaderKey(strings.TrimSpace(name))
 			switch name {
@@ -60,7 +60,7 @@ func splitAPIHeaders(output []byte) ([]byte, []apiResponseHeaders, error) {
 		body.Write(line)
 	}
 	if inside {
-		return nil, nil, errors.New("truncated gh response headers")
+		return nil, headers, errors.New("truncated gh response headers")
 	}
 	return body.Bytes(), headers, nil
 }

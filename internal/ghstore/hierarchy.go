@@ -35,6 +35,9 @@ func (c *Client) parentObservations(ctx context.Context, child, parent string) (
 }
 
 func (c *Client) verifyParentObservations(ctx context.Context, child string, observations []Record, after bool) error {
+	if after {
+		ctx = withReadbackCost(ctx)
+	}
 	for _, previous := range observations {
 		current, err := c.Get(ctx, previous.ID)
 		if err != nil {

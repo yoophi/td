@@ -97,7 +97,7 @@ func (c *Client) createBoard(ctx context.Context, name, expression, actor string
 	if err := verifyBoardPayload(data, name, body); err != nil {
 		return nil, fmt.Errorf("board %s creation was accepted, but confirmation failed; inspect GitHub before retrying: %w", board.ID, err)
 	}
-	confirmed, err := c.boardCarrier(ctx, board.Number)
+	confirmed, err := c.boardCarrier(withReadbackCost(ctx), board.Number)
 	if err != nil {
 		return nil, fmt.Errorf("board %s was created but verification failed; inspect GitHub before retrying: %w", board.ID, err)
 	}
@@ -225,7 +225,7 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 	if err := verifyBoardPayload(data, name, body); err != nil {
 		return nil, fmt.Errorf("board %s write was accepted but values differed; inspect GitHub before retrying: %w", before.ID, err)
 	}
-	confirmed, err := c.boardCarrier(ctx, original.Number)
+	confirmed, err := c.boardCarrier(withReadbackCost(ctx), original.Number)
 	if err != nil {
 		return nil, fmt.Errorf("board %s write was accepted but verification failed; inspect GitHub before retrying: %w", before.ID, err)
 	}

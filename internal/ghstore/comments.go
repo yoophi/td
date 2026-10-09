@@ -99,7 +99,7 @@ func (c *Client) DeleteComment(ctx context.Context, issueID, commentID string) e
 	if _, err := c.request(ctx, "DELETE", path, nil, false); err != nil {
 		return fmt.Errorf("delete %s on %s failed or is uncertain; inspect current comments before retrying: %w", canonical, issue.ID, err)
 	}
-	remaining, err := c.ListActivity(ctx, issue.ID)
+	remaining, err := c.ListActivity(withReadbackCost(ctx), issue.ID)
 	if err != nil {
 		return fmt.Errorf("delete %s was accepted, but verification failed; inspect current comments before retrying: %w", canonical, err)
 	}

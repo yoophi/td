@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -77,15 +78,20 @@ func (s *GitHubDataSource) Fetch(search string, includeClosed bool, sort SortMod
 	if err != nil {
 		return fail(err)
 	}
-	client, err := s.open(s.ctx)
+	ctx := s.ctx
+	if os.Getenv("TD_GH_DEBUG") == "1" {
+		ctx, _ = ghstore.WithAPICost(ctx)
+		defer ghstore.LogAPICostContext(ctx)
+	}
+	client, err := s.open(ctx)
 	if err != nil {
 		return fail(err)
 	}
-	focus, err := s.focus(s.ctx)
+	focus, err := s.focus(ctx)
 	if err != nil {
 		return fail(err)
 	}
-	msg, err := FetchGitHubData(s.ctx, client, s.actor, mode, focus, search, "auto", includeClosed, sort, time.Now())
+	msg, err := FetchGitHubData(ctx, client, s.actor, mode, focus, search, "auto", includeClosed, sort, time.Now())
 	if err != nil {
 		return fail(err)
 	}
