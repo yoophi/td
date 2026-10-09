@@ -24,6 +24,9 @@ func githubSyncProject(cmd *cobra.Command, args []string) (bool, error) {
 		return true, err
 	}
 	if kind != config.StoreGitHub {
+		if cmd.Flags().Changed("visibility") {
+			return true, fmt.Errorf("--visibility applies only to GitHub repository creation")
+		}
 		if cmd.Flags().Changed("custom-role") {
 			return true, fmt.Errorf("--custom-role applies only to GitHub permissions")
 		}
@@ -39,6 +42,31 @@ func githubSyncProject(cmd *cobra.Command, args []string) (bool, error) {
 		return true, fmt.Errorf("GitHub repository configuration is missing")
 	}
 	switch cmd.Name() {
+	case "create":
+		if len(args) != 1 {
+			return true, fmt.Errorf("GitHub create requires an explicit owner/repository")
+		}
+		visibility, _ := cmd.Flags().GetString("visibility")
+		if err := ghstore.ValidateRepositoryCreation(args[0], visibility); err != nil {
+			return true, err
+		}
+		if _, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub); err != nil {
+			return true, err
+		}
+		description, _ := cmd.Flags().GetString("description")
+		repo, err := ghstore.CreateRepository(cmd.Context(), getBaseDir(), args[0], visibility, description)
+		if err != nil {
+			return true, err
+		}
+		note := "Created repository only; current Git remotes/store selection and local commits were not changed. Configure an explicit Git remote and select it separately; no data migration occurred."
+		if !repo.HasIssues {
+			note += " Issues are disabled; enable them before selecting this repository for gh-issue."
+		}
+		if jsonMode(cmd) {
+			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"store": "gh-issue", "action": "create-repository", "created": repo, "linked": false, "remote_changed": false, "data_migrated": false, "note": note})
+		}
+		cmd.Printf("Created GitHub repository: %s (%s)\n%s\n", repo.FullName, repo.Visibility, note)
+		return true, nil
 	case "link", "join":
 		if len(args) != 1 {
 			return true, fmt.Errorf("GitHub %s requires an explicit owner/repository; select an existing Git remote with --remote NAME", cmd.Name())

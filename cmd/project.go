@@ -30,6 +30,7 @@ var syncProjectCmd = &cobra.Command{
 var syncProjectCreateCmd = &cobra.Command{
 	Use:   "create <name>",
 	Short: "Create a remote sync project",
+	Long:  "SQLite: create a td-sync project and attempt to link it locally.\nGitHub: create OWNER/REPO --visibility public|private|internal [--description TEXT].\nRequires a valid current GitHub store; creates and verifies the explicit target without cloning, pushing, changing Git remotes, or auto-linking. Errors never retry uncertain creation.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if handled, err := githubSyncProject(cmd, args); handled {
@@ -516,6 +517,7 @@ var syncProjectJoinCmd = &cobra.Command{
 }
 
 func init() {
+	syncProjectCreateCmd.Flags().String("visibility", "", "Explicit GitHub repository visibility: public, private, internal")
 	syncProjectInviteCmd.Flags().Bool("custom-role", false, "Interpret permission as an exact GitHub custom repository role name")
 	syncProjectRoleCmd.Flags().Bool("custom-role", false, "Interpret permission as an exact GitHub custom repository role name")
 	syncProjectLinkCmd.Flags().String("remote", "", "Existing Git remote for GitHub repository selection")

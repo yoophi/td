@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -24,6 +25,9 @@ func runCommand(ctx context.Context, dir, name string, args ...string) ([]byte, 
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if name == "gh" && len(args) > 0 && args[0] == "repo" {
+		cmd.Env = append(os.Environ(), "GH_HOST=github.com", "GH_PROMPT_DISABLED=true")
+	}
 	data, err := cmd.Output()
 	if name == "gh" && len(args) > 0 && args[0] == "auth" {
 		recordAuthCost(ctx)

@@ -21,6 +21,8 @@ func executeGitHubProjectTest(original *cobra.Command, args ...string) (string, 
 	cmd.Flags().Bool("force", false, "")
 	cmd.Flags().Bool("json", true, "")
 	cmd.Flags().Bool("custom-role", false, "")
+	cmd.Flags().String("visibility", "", "")
+	cmd.Flags().String("description", "", "")
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetArgs(args)
@@ -67,7 +69,7 @@ func TestGitHubProjectSelectionAndDiagnostics(t *testing.T) {
 		{syncProjectLinkCmd, []string{"owner/repo", "--force"}, "cannot bypass"},
 		{syncProjectJoinCmd, nil, "explicit owner/repository"},
 		{syncProjectUnlinkCmd, nil, "requires a repository"},
-		{syncProjectCreateCmd, []string{"name"}, "not implemented yet"},
+		{syncProjectCreateCmd, []string{"name"}, "explicit GitHub owner/repository"},
 		{syncProjectInviteCmd, []string{"someone@example.com"}, "explicit login and permission"},
 		{syncProjectKickCmd, []string{"someone@example.com"}, "GitHub login"},
 		{syncProjectRoleCmd, []string{"user", "writer"}, "td-sync roles are not converted"},
@@ -148,6 +150,14 @@ func TestSQLiteProjectRouteStillRequiresFeature(t *testing.T) {
 	}
 	if handled, err := githubSyncProject(cmd, nil); !handled || err == nil || !strings.Contains(err.Error(), "only to GitHub") {
 		t.Fatal("SQLite ignored GitHub permission flag", handled, err)
+	}
+	create := &cobra.Command{Use: "create"}
+	create.Flags().String("visibility", "", "")
+	if err := create.Flags().Set("visibility", "private"); err != nil {
+		t.Fatal(err)
+	}
+	if handled, err := githubSyncProject(create, []string{"name"}); !handled || err == nil || !strings.Contains(err.Error(), "only to GitHub") {
+		t.Fatal("SQLite ignored GitHub visibility", handled, err)
 	}
 }
 
@@ -388,5 +398,113 @@ func TestGitHubProjectInviteAndRoleReceiptsAndRace(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("grant opened SQLite", err)
+	}
+}
+
+func TestGitHubProjectCreationPreservesSelectionAndNeverRetries(t *testing.T) {
+	dir := githubScheduleTestDir(t)
+	calls := recordScheduleGHCalls(t)
+	writes := filepath.Join(t.TempDir(), "creates.jsonl")
+	t.Setenv("TD_CREATE_WRITES", writes)
+	t.Setenv("GH_HOST", "unexpected.example")
+	ghPath := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "gh")
+	script, err := os.ReadFile(ghPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor := "if args[0]=='auth':sys.exit(0)"
+	create := `if args[:2]==['repo','create']:
+ with open(os.environ['TD_CREATE_WRITES'],'a') as f:f.write(json.dumps({'args':args,'host':os.environ.get('GH_HOST'),'prompt':os.environ.get('GH_PROMPT_DISABLED')})+'\n')
+ if os.environ.get('TD_CREATE_FAILURE')=='uncertain':sys.stderr.write('fixture connection lost after repository creation');sys.exit(1)
+ print('https://github.com/new-owner/new-repo');sys.exit(0)
+`
+	s := strings.Replace(string(script), anchor, create+anchor, 1)
+	s = strings.Replace(s, "a.startswith('repos/owner/repo')", "a.startswith('repos/')", 1)
+	anchor = "elif '/labels?' in path:"
+	verify := `elif path=='repos/new-owner/new-repo':
+ if os.environ.get('TD_CREATE_FAILURE')=='verify':sys.stderr.write('fixture HTTP 403 verification denied');sys.exit(1)
+ data={'full_name':'new-owner/new-repo','visibility':'private','has_issues':os.environ.get('TD_CREATE_FAILURE')!='issues-disabled'}
+`
+	if err := os.WriteFile(ghPath, []byte(strings.Replace(s, anchor, verify+anchor, 1)), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitConfigBefore, err := os.ReadFile(filepath.Join(dir, ".git", "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, enabled := range []string{"false", "true"} {
+		t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+		out, err := executeGitHubProjectTest(syncProjectCreateCmd, "new-owner/new-repo", "--visibility", "private", "--description", "literal $(not-run)")
+		if err != nil || !json.Valid([]byte(out)) || !strings.Contains(out, `"linked":false`) || !strings.Contains(out, `"visibility":"private"`) {
+			t.Fatal(out, err)
+		}
+	}
+	invocations, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := executeGitHubProjectTest(syncProjectCreateCmd, "new-owner/new-repo")
+	if err == nil || out != "" {
+		t.Fatal("implicit visibility allowed", out, err)
+	}
+	afterCalls, err := os.ReadFile(calls)
+	if err != nil || !bytes.Equal(invocations, afterCalls) {
+		t.Fatal("invalid create called gh", err)
+	}
+	for _, failure := range []string{"uncertain", "verify"} {
+		t.Setenv("TD_CREATE_FAILURE", failure)
+		out, err = executeGitHubProjectTest(syncProjectCreateCmd, "new-owner/new-repo", "--visibility", "private")
+		if err == nil || out != "" || !strings.Contains(err.Error(), "fixture") {
+			t.Fatal(failure, out, err)
+		}
+	}
+	t.Setenv("TD_CREATE_FAILURE", "issues-disabled")
+	out, err = executeGitHubProjectTest(syncProjectCreateCmd, "new-owner/new-repo", "--visibility", "private")
+	if err != nil || !strings.Contains(out, `"has_issues":false`) || !strings.Contains(out, "Issues are disabled") {
+		t.Fatal(out, err)
+	}
+	created, err := os.ReadFile(writes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(created)), "\n")
+	if len(lines) != 5 {
+		t.Fatal("unexpected repository creation retry", string(created))
+	}
+	for _, line := range lines {
+		var receipt struct {
+			Args   []string `json:"args"`
+			Host   string   `json:"host"`
+			Prompt string   `json:"prompt"`
+		}
+		if err := json.Unmarshal([]byte(line), &receipt); err != nil {
+			t.Fatal(err)
+		}
+		if receipt.Host != "github.com" || receipt.Prompt != "true" || receipt.Args[2] != "new-owner/new-repo" || strings.Contains(strings.Join(receipt.Args, " "), "--source") {
+			t.Fatal(receipt)
+		}
+	}
+	cfg, err = config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := json.Marshal(cfg)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("creation changed store config", err)
+	}
+	gitConfigAfter, err := os.ReadFile(filepath.Join(dir, ".git", "config"))
+	if err != nil || !bytes.Equal(gitConfigBefore, gitConfigAfter) {
+		t.Fatal("creation changed Git remotes", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("creation opened SQLite", err)
 	}
 }

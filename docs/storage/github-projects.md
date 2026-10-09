@@ -78,7 +78,25 @@ of success. Inspect/cancel it explicitly; td does not retry or roll back with a
 second uncertain write. Malformed receipts after PUT are uncertain failures.
 These commands do not change organization membership or all inherited grants.
 
-Repository creation and the account-wide listing scope audit remain unfinished
-#29 requirements. `create` still fails explicitly in GitHub mode before
-SQLite/td-sync access; it is pending implementation, not impossible. Native
-repository acceptance and task review also remain pending; #29 is not complete.
+`td sp create OWNER/REPO --visibility public|private|internal [--description TEXT]`
+creates an explicit github.com target with `gh repo create`, then verifies its
+name, visibility and Issues setting. Both owner and visibility are required;
+creation does not infer an owner or default public/private visibility. The
+current GitHub store must first pass normal origin/auth/repository validation.
+The subprocess pins GH_HOST=github.com and disables prompts. No clone, push,
+Git remote mutation, store relink or task migration is performed. JSON declares
+`linked=false`, `remote_changed=false`, `data_migrated=false` and the verified
+repository details. A created repo with Issues disabled is reported as such
+with instructions to enable Issues before selecting it as an issue store.
+See [gh repository creation](https://cli.github.com/manual/gh_repo_create).
+
+Creation is attempted once. Failure or failed/mismatched verification after
+the creation command never triggers another create or a delete rollback;
+inspect the explicit remote target before retrying. Raw gh failures are retained.
+This differs from SQLite create's automatic td-sync linking: a new GitHub repo
+does not match the current origin automatically. Configure a deliberate remote,
+then use `config set store gh-issue --remote NAME` or `sp link OWNER/REPO --remote NAME`.
+The visibility option is rejected by SQLite handlers.
+
+The account-wide listing scope audit, native repository acceptance and task
+review remain pending #29 requirements. #29 is not complete.
