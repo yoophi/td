@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/marcus/td/internal/config"
@@ -45,6 +46,7 @@ type featureListEntry struct {
 var featureListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List known feature flags and their resolved state",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
 
@@ -68,18 +70,16 @@ var featureListCmd = &cobra.Command{
 		// review_policy_mode is string-valued and lives outside the boolean
 		// registry; surface it here so `td feature list` shows the resolved
 		// review policy alongside the boolean flags.
-		if mode, err := features.ResolveReviewPolicyMode(baseDir); err == nil {
-			source := "default"
-			if _, ok, _ := config.GetFeatureStringFlag(baseDir, features.ReviewPolicyMode); ok {
-				source = "config"
-			}
-			entries = append(entries, featureListEntry{
-				Name:        features.ReviewPolicyMode,
-				State:       string(mode),
-				Source:      source,
-				Description: "Review policy: strict|balanced|delegated|trusted (default: trusted)",
-			})
+		mode, source, err := reviewPolicyFeatureState(baseDir)
+		if err != nil {
+			return err
 		}
+		entries = append(entries, featureListEntry{
+			Name:        features.ReviewPolicyMode,
+			State:       string(mode),
+			Source:      source,
+			Description: "Review policy: strict|balanced|delegated|trusted (default: trusted)",
+		})
 
 		if jsonMode(cmd) {
 			return output.JSON(jsonList(entries))
@@ -102,14 +102,13 @@ var featureGetCmd = &cobra.Command{
 		name := normalizeFeatureArg(args[0])
 
 		if isStringFeature(name) {
-			mode, err := features.ResolveReviewPolicyMode(getBaseDir())
+			mode, source, err := reviewPolicyFeatureState(getBaseDir())
 			if err != nil {
 				output.Error("%v", err)
 				return err
 			}
-			source := "default"
-			if _, ok, _ := config.GetFeatureStringFlag(getBaseDir(), name); ok {
-				source = "config"
+			if jsonMode(cmd) {
+				return output.JSON(map[string]any{"name": name, "value": mode, "source": source})
 			}
 			fmt.Printf("%s=%s (source=%s)\n", name, mode, source)
 			return nil
@@ -120,15 +119,22 @@ var featureGetCmd = &cobra.Command{
 		}
 
 		enabled, source := features.Resolve(getBaseDir(), name)
+		if jsonMode(cmd) {
+			return output.JSON(map[string]any{"name": name, "value": enabled, "source": source})
+		}
 		fmt.Printf("%s=%t (source=%s)\n", name, enabled, source)
 		return nil
 	},
 }
 
 var featureSetCmd = &cobra.Command{
-	Use:   "set <name> <true|false>",
+	Use:   "set <name> <value>",
 	Short: "Set a feature flag in local project config",
-	Args:  cobra.ExactArgs(2),
+	Long: `Set a stored project override. Boolean features accept true/false,
+on/off, yes/no or 1/0. review_policy_mode accepts strict, balanced, delegated
+or trusted. Environment overrides still take precedence; use feature get to
+inspect the effective value and source.`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := normalizeFeatureArg(args[0])
 
@@ -143,8 +149,7 @@ var featureSetCmd = &cobra.Command{
 				output.Error("set feature flag: %v", err)
 				return err
 			}
-			output.Success("feature %s set to %s", name, mode)
-			return nil
+			return reportFeatureMutation(cmd, "set", name, string(mode))
 		}
 
 		if !features.IsKnownFeature(name) {
@@ -162,8 +167,7 @@ var featureSetCmd = &cobra.Command{
 			return err
 		}
 
-		output.Success("feature %s set to %t", name, enabled)
-		return nil
+		return reportFeatureMutation(cmd, "set", name, enabled)
 	},
 }
 
@@ -179,8 +183,7 @@ var featureUnsetCmd = &cobra.Command{
 				output.Error("unset feature flag: %v", err)
 				return err
 			}
-			output.Success("feature %s unset", name)
-			return nil
+			return reportFeatureMutation(cmd, "unset", name, nil)
 		}
 
 		if !features.IsKnownFeature(name) {
@@ -192,9 +195,41 @@ var featureUnsetCmd = &cobra.Command{
 			return err
 		}
 
-		output.Success("feature %s unset", name)
-		return nil
+		return reportFeatureMutation(cmd, "unset", name, nil)
 	},
+}
+
+// Report the source using the resolver's precedence, including legacy flags.
+// Resolution errors must not be hidden by presenting an incomplete inventory.
+func reviewPolicyFeatureState(baseDir string) (reviewpolicy.Mode, string, error) {
+	mode, err := features.ResolveReviewPolicyMode(baseDir)
+	if err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(os.Getenv("TD_FEATURE_REVIEW_POLICY_MODE")) != "" {
+		return mode, "env", nil
+	}
+	if _, ok, _ := config.GetFeatureStringFlag(baseDir, features.ReviewPolicyMode); ok {
+		return mode, "config", nil
+	}
+	_, source := features.Resolve(baseDir, features.BalancedReviewPolicy.Name)
+	return mode, source, nil
+}
+
+func reportFeatureMutation(cmd *cobra.Command, action, name string, value any) error {
+	if jsonMode(cmd) {
+		result := map[string]any{"action": action, "name": name, "scope": "project"}
+		if action == "set" {
+			result["value"] = value // Stored override, not an env-overridden effective value.
+		}
+		return output.JSON(result)
+	}
+	if action == "set" {
+		output.Success("feature %s set to %v", name, value)
+	} else {
+		output.Success("feature %s unset", name)
+	}
+	return nil
 }
 
 func normalizeFeatureArg(name string) string {

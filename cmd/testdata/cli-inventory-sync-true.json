@@ -2330,7 +2330,7 @@
   },
   {
     "path": "td feature set",
-    "use": "set \u003cname\u003e \u003ctrue|false\u003e",
+    "use": "set \u003cname\u003e \u003cvalue\u003e",
     "aliases": [],
     "runnable": true,
     "flags": [

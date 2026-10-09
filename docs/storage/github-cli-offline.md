@@ -85,3 +85,18 @@ store classifications and native acceptance evidence remain required by #31.
 Device-local `errors`, `security` and `stats analytics/errors/security` also
 skip implicit issue sync/session discovery. Their explicit reading/clearing of
 local diagnostic files is retained. Ordinary `stats` still reads issue data.
+
+`feature get --json` returns `{name,value,source}` with a boolean or mode-string
+value and the effective `env/config/default` source. The review policy source
+honors modern environment/config settings and the legacy boolean override,
+using the same precedence as the policy resolver. A conflicting or invalid
+review policy fails in `feature list` as well as `get`; it is never silently
+omitted from the list.
+
+`feature set --json` returns `{action,name,value,scope:"project"}` after saving
+the stored override. The value is not a claim about effective environment
+overrides; use `get` to read the effective value. `unset --json` reports
+`{action,name,scope:"project"}` after removing the override. Existing human
+messages remain. `list` rejects extra arguments. The CLI lifecycle contract
+covers boolean and string features, environment precedence, legacy conflicts,
+invalid inputs, preserved store selection and no gh/SQLite/issue-context access.
