@@ -15,6 +15,9 @@ import (
 )
 
 func runGitHubWorkContext(original, cmd *cobra.Command, args []string, cfg *models.Config) error {
+	// Cobra's Print helpers default to stderr unless an output is selected.
+	// Context is command data and must remain available to stdout pipelines.
+	cmd.SetOut(cmd.OutOrStdout())
 	if original == resumeCmd && len(args) != 1 {
 		return fmt.Errorf("resume requires one issue ID")
 	}
