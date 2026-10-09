@@ -55,10 +55,30 @@ repository/access state before retrying; no automatic retry or SQLite fallback
 occurs. An unexpected response after a write is also an explicit uncertain
 failure, not a successful revocation report.
 
-Repository creation and invitation/permission assignment remain
-unfinished #29 requirements. `create`, `invite` and `role`
-currently fail explicitly in GitHub mode before SQLite/td-sync access. This is
-implementation pending, not an assertion that GitHub cannot support them.
-SQLite emails and owner/writer/reader roles must not be silently interpreted as
-GitHub accounts or permissions. Native repository acceptance and task review
-also remain pending; this selection stage does not complete #29.
+`td sp invite LOGIN PERMISSION` sends one GitHub collaborator permission
+request. Both arguments are required; email and td-sync default roles are not
+converted. Standard inputs are `pull`, `triage`, `triage_plus`, `push`, `maintain`
+and `admin`; `--custom-role` explicitly forwards an exact custom role name.
+GitHub validates its availability. The command checks repository ownership
+before writing: explicit permission selection is documented as organization-only;
+personal repositories accept only the API default `push` request here. Other
+requests fail before PUT. These flags are rejected by SQLite handlers.
+
+JSON distinguishes `invitation-created` (with invitation ID, still pending)
+from `assignment-accepted` (no new invitation receipt). Requested permission is
+reported separately; effective inherited access is not verified. The API can
+update an existing collaborator and can generate an invitation notification.
+See [permission request semantics](https://docs.github.com/en/rest/collaborators/collaborators#add-a-repository-collaborator).
+
+`td sp role LOGIN PERMISSION [--custom-role]` checks existing collaborator
+access before the same PUT. A failed check makes no permission write. This is
+best-effort: a concurrent removal can still cause an invitation. If that receipt
+is returned, td reports an after-write conflict with the invitation ID instead
+of success. Inspect/cancel it explicitly; td does not retry or roll back with a
+second uncertain write. Malformed receipts after PUT are uncertain failures.
+These commands do not change organization membership or all inherited grants.
+
+Repository creation and the account-wide listing scope audit remain unfinished
+#29 requirements. `create` still fails explicitly in GitHub mode before
+SQLite/td-sync access; it is pending implementation, not impossible. Native
+repository acceptance and task review also remain pending; #29 is not complete.

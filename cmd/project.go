@@ -287,7 +287,8 @@ var syncProjectMembersCmd = &cobra.Command{
 
 var syncProjectInviteCmd = &cobra.Command{
 	Use:   "invite <email> [role]",
-	Short: "Add an existing account to the project by email",
+	Short: "Invite a member using the selected store's account and role",
+	Long:  "SQLite: add an existing td-sync account by email with optional role.\nGitHub: invite LOGIN PERMISSION; both arguments are required. Use --custom-role for an exact custom GitHub role name.\nGitHub may send an invitation notification or update an existing collaborator. Pending invitation is not membership; no automatic retry.",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if handled, err := githubSyncProject(cmd, args); handled {
@@ -378,6 +379,7 @@ var syncProjectKickCmd = &cobra.Command{
 var syncProjectRoleCmd = &cobra.Command{
 	Use:   "role <user-id> <role>",
 	Short: "Change a member's role",
+	Long:  "SQLite: change a td-sync member role by user ID. GitHub: role LOGIN PERMISSION.\nUse --custom-role for an exact custom GitHub role name; no owner/writer/reader conversion.\nChecks existing collaborator access before writing; best-effort only. A detected race creating an invitation is reported as an after-write conflict.",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if handled, err := githubSyncProject(cmd, args); handled {
@@ -514,6 +516,8 @@ var syncProjectJoinCmd = &cobra.Command{
 }
 
 func init() {
+	syncProjectInviteCmd.Flags().Bool("custom-role", false, "Interpret permission as an exact GitHub custom repository role name")
+	syncProjectRoleCmd.Flags().Bool("custom-role", false, "Interpret permission as an exact GitHub custom repository role name")
 	syncProjectLinkCmd.Flags().String("remote", "", "Existing Git remote for GitHub repository selection")
 	syncProjectJoinCmd.Flags().String("remote", "", "Existing Git remote for GitHub repository selection")
 	syncProjectCreateCmd.Flags().String("description", "", "Project description")

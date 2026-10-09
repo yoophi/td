@@ -24,6 +24,9 @@ func githubSyncProject(cmd *cobra.Command, args []string) (bool, error) {
 		return true, err
 	}
 	if kind != config.StoreGitHub {
+		if cmd.Flags().Changed("custom-role") {
+			return true, fmt.Errorf("--custom-role applies only to GitHub permissions")
+		}
 		if cmd.Flags().Changed("remote") {
 			return true, fmt.Errorf("--remote applies only to GitHub repository selection")
 		}
@@ -110,6 +113,35 @@ func githubSyncProject(cmd *cobra.Command, args []string) (bool, error) {
 			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"store": "gh-issue", "repository": cfg.GitHub.Repo, "account": args[0], "action": "remove-repository-collaborator", "effective_access_verified": false, "note": note})
 		}
 		cmd.Printf("GitHub collaborator removal completed: %s from %s\n%s\n", args[0], cfg.GitHub.Repo, note)
+		return true, nil
+	case "invite", "role":
+		if len(args) != 2 {
+			return true, fmt.Errorf("GitHub %s requires an explicit login and permission; no email or td-sync role conversion is performed", cmd.Name())
+		}
+		custom, _ := cmd.Flags().GetBool("custom-role")
+		if err := ghstore.ValidateCollaboratorLogin(args[0]); err != nil {
+			return true, err
+		}
+		if err := ghstore.ValidateCollaboratorPermission(args[1], custom); err != nil {
+			return true, err
+		}
+		client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
+		if err != nil {
+			return true, err
+		}
+		result, err := client.GrantCollaboratorPermission(cmd.Context(), args[0], args[1], custom, cmd.Name() == "role")
+		if err != nil {
+			return true, err
+		}
+		note := "Requested GitHub repository permission; effective inherited permissions were not verified. Invitation creation is pending acceptance, not proof of membership. Existing-collaborator checks are best-effort, not an atomic lock."
+		if jsonMode(cmd) {
+			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"store": "gh-issue", "repository": cfg.GitHub.Repo, "account": args[0], "action": cmd.Name(), "result": result, "effective_access_verified": false, "note": note})
+		}
+		cmd.Printf("GitHub %s: %s for %s, requested permission=%s\n", cmd.Name(), result.Outcome, args[0], output.SanitizeIssueText(args[1]))
+		if result.InvitationID != 0 {
+			cmd.Printf("Invitation: %d\n", result.InvitationID)
+		}
+		cmd.Println(note)
 		return true, nil
 	default:
 		return true, fmt.Errorf("GitHub sync-project %s is not implemented yet; no td-sync, SQLite or GitHub write was attempted. Use GitHub repository settings or gh for repository/access management", cmd.Name())

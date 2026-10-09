@@ -20,6 +20,7 @@ func executeGitHubProjectTest(original *cobra.Command, args ...string) (string, 
 	cmd.Flags().String("remote", "", "")
 	cmd.Flags().Bool("force", false, "")
 	cmd.Flags().Bool("json", true, "")
+	cmd.Flags().Bool("custom-role", false, "")
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetArgs(args)
@@ -67,9 +68,9 @@ func TestGitHubProjectSelectionAndDiagnostics(t *testing.T) {
 		{syncProjectJoinCmd, nil, "explicit owner/repository"},
 		{syncProjectUnlinkCmd, nil, "requires a repository"},
 		{syncProjectCreateCmd, []string{"name"}, "not implemented yet"},
-		{syncProjectInviteCmd, []string{"someone@example.com"}, "not implemented yet"},
+		{syncProjectInviteCmd, []string{"someone@example.com"}, "explicit login and permission"},
 		{syncProjectKickCmd, []string{"someone@example.com"}, "GitHub login"},
-		{syncProjectRoleCmd, []string{"user", "writer"}, "not implemented yet"},
+		{syncProjectRoleCmd, []string{"user", "writer"}, "td-sync roles are not converted"},
 	} {
 		out, err := executeGitHubProjectTest(tc.cmd, tc.args...)
 		if err == nil || !strings.Contains(err.Error(), tc.want) || out != "" {
@@ -140,6 +141,13 @@ func TestSQLiteProjectRouteStillRequiresFeature(t *testing.T) {
 	t.Setenv("TD_FEATURE_SYNC_CLI", "true")
 	if handled, err := githubSyncProject(cmd, nil); handled || err != nil {
 		t.Fatal(handled, err)
+	}
+	cmd.Flags().Bool("custom-role", false, "")
+	if err := cmd.Flags().Set("custom-role", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if handled, err := githubSyncProject(cmd, nil); !handled || err == nil || !strings.Contains(err.Error(), "only to GitHub") {
+		t.Fatal("SQLite ignored GitHub permission flag", handled, err)
 	}
 }
 
@@ -291,5 +299,94 @@ func TestGitHubProjectKickTargetsLoginAndDoesNotRetry(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("kick opened SQLite", err)
+	}
+}
+
+func TestGitHubProjectInviteAndRoleReceiptsAndRace(t *testing.T) {
+	dir := githubScheduleTestDir(t)
+	calls := recordScheduleGHCalls(t)
+	writes := filepath.Join(t.TempDir(), "writes.jsonl")
+	t.Setenv("TD_GRANT_WRITES", writes)
+	t.Setenv("TD_GRANT_MODE", "invitation")
+	ghPath := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "gh")
+	script, err := os.ReadFile(ghPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := strings.Replace(string(script), "'has_issues':True}", "'has_issues':True,'owner':{'type':os.environ.get('TD_GRANT_OWNER','Organization')}}", 1)
+	anchor := "elif '/labels?' in path:"
+	route := `elif '/collaborators/' in path:
+ if method=='GET':
+  if os.environ.get('TD_GRANT_MODE')=='absent':sys.stderr.write('fixture HTTP 404 no collaborator');sys.exit(1)
+  sys.stdout.write('HTTP/2.0 204 No Content\r\n\r\n');sys.exit(0)
+ if method!='PUT':sys.stderr.write('unexpected grant method');sys.exit(1)
+ patch=json.load(sys.stdin)
+ with open(os.environ['TD_GRANT_WRITES'],'a') as log:log.write(json.dumps({'path':path,'permission':patch['permission']})+'\n')
+ if os.environ.get('TD_GRANT_MODE')=='uncertain':sys.stderr.write('fixture connection lost after PUT');sys.exit(1)
+ if os.environ.get('TD_GRANT_MODE')=='assigned':sys.stdout.write('HTTP/2.0 204 No Content\r\n\r\n');sys.exit(0)
+ data={'id':17,'invitee':{'login':'some-user'},'repository':{'full_name':'owner/repo'}}
+`
+	if !strings.Contains(s, anchor) {
+		t.Fatal("fixture routing changed")
+	}
+	if err := os.WriteFile(ghPath, []byte(strings.Replace(s, anchor, route+anchor, 1)), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, enabled := range []string{"false", "true"} {
+		t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+		t.Setenv("TD_GRANT_MODE", "invitation")
+		out, err := executeGitHubProjectTest(syncProjectInviteCmd, "some-user", "triage")
+		if err != nil || !json.Valid([]byte(out)) || !strings.Contains(out, `"outcome":"invitation-created"`) || !strings.Contains(out, `"invitation_id":17`) {
+			t.Fatal(out, err)
+		}
+		t.Setenv("TD_GRANT_MODE", "assigned")
+		out, err = executeGitHubProjectTest(syncProjectRoleCmd, "some-user", "maintain")
+		if err != nil || !strings.Contains(out, `"outcome":"assignment-accepted"`) {
+			t.Fatal(out, err)
+		}
+	}
+	before, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"some-user"}, {"some-user@example.com", "push"}, {"some-user", "writer"}} {
+		if out, err := executeGitHubProjectTest(syncProjectInviteCmd, args...); err == nil || out != "" {
+			t.Fatal(args, out, err)
+		}
+	}
+	after, err := os.ReadFile(calls)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("invalid invite called gh", err)
+	}
+	out, err := executeGitHubProjectTest(syncProjectInviteCmd, "some-user", "Security Reader", "--custom-role")
+	if err != nil || !strings.Contains(out, `"requested_permission":"Security Reader"`) {
+		t.Fatal(out, err)
+	}
+	t.Setenv("TD_GRANT_MODE", "invitation")
+	out, err = executeGitHubProjectTest(syncProjectRoleCmd, "some-user", "push")
+	if err == nil || out != "" || !strings.Contains(err.Error(), "invitation 17") || !strings.Contains(err.Error(), "conflict detection is best-effort") {
+		t.Fatal(out, err)
+	}
+	t.Setenv("TD_GRANT_MODE", "uncertain")
+	out, err = executeGitHubProjectTest(syncProjectInviteCmd, "some-user", "push")
+	if err == nil || out != "" || !strings.Contains(err.Error(), "fixture connection lost") || !strings.Contains(err.Error(), "inspect repository/access state") {
+		t.Fatal(out, err)
+	}
+	t.Setenv("TD_GRANT_MODE", "absent")
+	out, err = executeGitHubProjectTest(syncProjectRoleCmd, "some-user", "push")
+	if err == nil || out != "" || !strings.Contains(err.Error(), "no permission write attempted") {
+		t.Fatal(out, err)
+	}
+	t.Setenv("TD_GRANT_OWNER", "User")
+	out, err = executeGitHubProjectTest(syncProjectInviteCmd, "some-user", "pull")
+	if err == nil || out != "" || !strings.Contains(err.Error(), "organization-only") {
+		t.Fatal(out, err)
+	}
+	applied, err := os.ReadFile(writes)
+	if err != nil || strings.Count(string(applied), "\n") != 7 {
+		t.Fatal("retry or failed validation wrote permission", string(applied), err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("grant opened SQLite", err)
 	}
 }
