@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/marcus/td/internal/models"
+	"golang.org/x/sync/singleflight"
 )
 
 type runner func(context.Context, string, string, ...string) ([]byte, error)
@@ -119,8 +120,7 @@ func resolveRepositoryWithCredential(ctx context.Context, baseDir, remote string
 	if err := cooldown.check(ctx, time.Now()); err != nil {
 		return nil, err
 	}
-	data, err = run(ctx, baseDir, "gh", "api", "--hostname", "github.com", "repos/"+repo)
-	cooldown.observe(err, time.Now())
+	data, err = repositoryPreflight(ctx, baseDir, repo, run, cooldown)
 	if err != nil {
 		return nil, fmt.Errorf("cannot access GitHub repository %s: %w; check that it exists, your account has access, and the network is available", repo, err)
 	}
@@ -142,4 +142,36 @@ func resolveRepositoryWithCredential(ctx context.Context, baseDir, remote string
 		return nil, fmt.Errorf("GitHub repository %s is archived", info.FullName)
 	}
 	return &models.GitHubStoreConfig{Remote: remote, Repo: info.FullName}, nil
+}
+
+// Only overlapping remote checks are shared. Completed results are not cached:
+// later Open calls must still detect changed permissions or repository settings.
+var repositoryPreflights singleflight.Group
+
+func repositoryPreflight(ctx context.Context, dir, repo string, run runner, cooldown *apiCooldownScope) ([]byte, error) {
+	fetch := func() (any, error) {
+		if err := cooldown.check(ctx, time.Now()); err != nil {
+			return nil, err
+		}
+		data, err := run(ctx, dir, "gh", "api", "--hostname", "github.com", "repos/"+repo)
+		cooldown.observe(err, time.Now())
+		return data, err
+	}
+	if cooldown == nil {
+		data, err := fetch()
+		if err != nil {
+			return nil, err
+		}
+		return data.([]byte), nil
+	}
+	result := repositoryPreflights.DoChan(cooldown.key, fetch)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case observed := <-result:
+		if observed.Err != nil {
+			return nil, observed.Err
+		}
+		return observed.Val.([]byte), nil
+	}
 }

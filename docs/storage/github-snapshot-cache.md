@@ -68,7 +68,14 @@ error and a later read can try again, subject to rate protection. Rate-limit
 observations now create a process-local repository/credential cooldown shared
 by new repository preflights and all client API reads and writes. This protection
 is independent of `TD_GH_CACHE=off`; missing credentials cannot establish a
-shared identity. Local Git/credential validation still runs on every Open.
+shared identity. Local Git/credential validation still runs on every Open. Concurrent remote
+preflights with the same repository/credential digest now share their in-flight
+request. The completed result is not memoized: later Open calls recheck remote
+permissions and Issues/archive settings. Other identities never join that
+flight, and unavailable identity falls back to an independent check. A canceled
+waiter returns promptly without canceling the initiator; the initiator's context
+controls the shared request, so its failure/cancellation reaches waiting callers
+and is not automatically retried.
 No additional GitHub request is attempted before the observed reset/retry
 deadline (or a conservative one-minute wait without usable headers). The
 original typed error, request diagnostic and reset metadata are retained. A
@@ -80,7 +87,7 @@ new request. An explicitly blocked write performs no cache invalidation because
 no attempt was made. This is a cooldown gate, not an account-wide quota scheduler.
 
 This is one completed part of #50. Incremental cursors, periodic full comparison
-and further preflight/sweep coordination remain outstanding; the existing full
+and further sweep coordination remain outstanding; the existing full
 collector and 30-second TTL are unchanged.
 
 ## User controls and storage limits
@@ -148,3 +155,20 @@ A separate native server on port 7778 used a simulated gh executable with
 each returned HTTP 429 / `rate_limited`, original request-id and retry guidance,
 with zero additional API attempts. This is simulated error-path evidence, not a
 claim that the real GitHub account was rate-limited. The server was stopped.
+
+### #50 overlapping preflight verification (2026-10-10)
+
+Full ghstore race tests and GitHub consumer tests for serve/monitor/CLI passed,
+as did full macOS/Linux lint. Twelve concurrent repository resolutions perform
+24 local Git checks and 12 local credential reads, but one remote repository
+check. Tests additionally cover identity isolation, no reuse after completion
+and cancellation of a waiter without canceling the initiator.
+
+A native server with simulated gh responses and `TD_GH_CACHE=off` on port 7778
+returned HTTP 200 for concurrent monitor/stats/issues requests. Their additional
+remote preflight count was one; a later issues request added one fresh check.
+The initiating route receives the preflight API cost; waiting routes still count
+their own local auth invocation. With persistent caching disabled, their issue
+collections remained independent in this smoke: this verifies preflight merging,
+not completion of all sweep coordination or incremental collection in #50.
+The verification server was stopped.
