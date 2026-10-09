@@ -1,0 +1,5997 @@
+[
+  {
+    "path": "td",
+    "use": "td",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "persistent": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "persistent": true
+      },
+      {
+        "name": "version",
+        "type": "bool",
+        "shorthand": "v"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "persistent": true
+      }
+    ]
+  },
+  {
+    "path": "td approve",
+    "use": "approve [issue-id...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "all",
+        "type": "bool"
+      },
+      {
+        "name": "comment",
+        "type": "string",
+        "shorthand": "c"
+      },
+      {
+        "name": "decision",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "message",
+        "type": "string"
+      },
+      {
+        "name": "note",
+        "type": "string"
+      },
+      {
+        "name": "notes",
+        "type": "string"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "shorthand": "m"
+      },
+      {
+        "name": "record-only",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reviewed-by",
+        "type": "string"
+      },
+      {
+        "name": "self-review",
+        "type": "bool"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td auth",
+    "use": "auth",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td auth login",
+    "use": "login",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td auth logout",
+    "use": "logout",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "account",
+        "type": "string"
+      },
+      {
+        "name": "confirm-global",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td auth status",
+    "use": "status",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td block",
+    "use": "block [issue-id...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td blocked",
+    "use": "blocked",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td blocked-by",
+    "use": "blocked-by [issue-id]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "direct",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td board",
+    "use": "board",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td board create",
+    "use": "create \u003cname\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "query",
+        "type": "string",
+        "shorthand": "q"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td board delete",
+    "use": "delete \u003cboard\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td board edit",
+    "use": "edit \u003cboard\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "shorthand": "n"
+      },
+      {
+        "name": "query",
+        "type": "string",
+        "shorthand": "q"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "view-mode",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td board list",
+    "use": "list",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td board move",
+    "use": "move \u003cboard\u003e \u003cissue-id\u003e \u003cposition\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td board show",
+    "use": "show \u003cboard\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "status",
+        "type": "stringArray",
+        "shorthand": "s"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td board unposition",
+    "use": "unposition \u003cboard\u003e \u003cissue-id\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td cache",
+    "use": "cache",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td cache clear",
+    "use": "clear",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "all",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td cache status",
+    "use": "status",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td check-handoff",
+    "use": "check-handoff",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "quiet",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td close",
+    "use": "close [issue-id...]",
+    "aliases": [
+      "complete",
+      "done"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "admin",
+        "type": "string"
+      },
+      {
+        "name": "comment",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "message",
+        "type": "string"
+      },
+      {
+        "name": "note",
+        "type": "string",
+        "shorthand": "n"
+      },
+      {
+        "name": "notes",
+        "type": "string"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "shorthand": "m"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "self-close-exception",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td comment",
+    "use": "comment [issue-id] \"text\"",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td comments",
+    "use": "comments [issue-id]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td comments add",
+    "use": "add [issue-id] \"text\"",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td completion",
+    "use": "completion",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td completion bash",
+    "use": "bash",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "no-descriptions",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td completion fish",
+    "use": "fish",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "no-descriptions",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td completion powershell",
+    "use": "powershell",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "no-descriptions",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td completion zsh",
+    "use": "zsh",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "no-descriptions",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config",
+    "use": "config",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config associate",
+    "use": "associate [dir] \u003ctarget\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config associations",
+    "use": "associations",
+    "aliases": [
+      "assoc"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config dissociate",
+    "use": "dissociate [dir]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config get",
+    "use": "get \u003ckey\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config list",
+    "use": "list",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config set",
+    "use": "set \u003ckey\u003e \u003cvalue\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "remote",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config setup",
+    "use": "setup",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config sync-priority-labels",
+    "use": "sync-priority-labels",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "apply",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "id",
+        "type": "stringSlice"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td config sync-state-labels",
+    "use": "sync-state-labels",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td create",
+    "use": "create [title]",
+    "aliases": [
+      "add",
+      "new"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "acceptance",
+        "type": "string"
+      },
+      {
+        "name": "acceptance-file",
+        "type": "string"
+      },
+      {
+        "name": "blocks",
+        "type": "stringArray"
+      },
+      {
+        "name": "body",
+        "type": "string"
+      },
+      {
+        "name": "defer",
+        "type": "string"
+      },
+      {
+        "name": "depends-on",
+        "type": "stringArray"
+      },
+      {
+        "name": "desc",
+        "type": "string"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "shorthand": "d"
+      },
+      {
+        "name": "description-file",
+        "type": "string"
+      },
+      {
+        "name": "due",
+        "type": "string"
+      },
+      {
+        "name": "epic",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "label",
+        "type": "stringArray"
+      },
+      {
+        "name": "labels",
+        "type": "stringArray",
+        "shorthand": "l"
+      },
+      {
+        "name": "minor",
+        "type": "bool"
+      },
+      {
+        "name": "notes",
+        "type": "string"
+      },
+      {
+        "name": "parent",
+        "type": "string"
+      },
+      {
+        "name": "points",
+        "type": "int"
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "tag",
+        "type": "stringArray"
+      },
+      {
+        "name": "tags",
+        "type": "stringArray"
+      },
+      {
+        "name": "title",
+        "type": "string"
+      },
+      {
+        "name": "type",
+        "type": "string",
+        "shorthand": "t"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td critical-path",
+    "use": "critical-path",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "limit",
+        "type": "int"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td debug-stats",
+    "use": "debug-stats",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td defer",
+    "use": "defer [issue-id] [date]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "clear",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td delete",
+    "use": "delete [issue-id...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "force",
+        "type": "bool",
+        "shorthand": "f"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      },
+      {
+        "name": "yes",
+        "type": "bool",
+        "shorthand": "y"
+      }
+    ]
+  },
+  {
+    "path": "td deleted",
+    "use": "deleted",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td dep",
+    "use": "dep [issue] [depends-on-issue]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "blocking",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td dep add",
+    "use": "add \u003cissue\u003e \u003cdepends-on\u003e...",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "depends-on",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td dep rm",
+    "use": "rm \u003cissue\u003e \u003cdepends-on\u003e",
+    "aliases": [
+      "remove"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td depends-on",
+    "use": "depends-on [issue-id]",
+    "aliases": [
+      "dependencies",
+      "deps"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td doctor",
+    "use": "doctor",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td doctor fk",
+    "use": "fk",
+    "aliases": [],
+    "hidden": true,
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td due",
+    "use": "due [issue-id] [date]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "clear",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td epic",
+    "use": "epic",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td epic create",
+    "use": "create [title]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "acceptance",
+        "type": "string"
+      },
+      {
+        "name": "acceptance-file",
+        "type": "string"
+      },
+      {
+        "name": "blocks",
+        "type": "stringArray"
+      },
+      {
+        "name": "body",
+        "type": "string"
+      },
+      {
+        "name": "defer",
+        "type": "string"
+      },
+      {
+        "name": "depends-on",
+        "type": "stringArray"
+      },
+      {
+        "name": "desc",
+        "type": "string"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "shorthand": "d"
+      },
+      {
+        "name": "description-file",
+        "type": "string"
+      },
+      {
+        "name": "due",
+        "type": "string"
+      },
+      {
+        "name": "epic",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "label",
+        "type": "stringArray"
+      },
+      {
+        "name": "labels",
+        "type": "stringArray",
+        "shorthand": "l"
+      },
+      {
+        "name": "minor",
+        "type": "bool"
+      },
+      {
+        "name": "notes",
+        "type": "string"
+      },
+      {
+        "name": "parent",
+        "type": "string"
+      },
+      {
+        "name": "points",
+        "type": "int"
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "tag",
+        "type": "stringArray"
+      },
+      {
+        "name": "tags",
+        "type": "stringArray"
+      },
+      {
+        "name": "title",
+        "type": "string"
+      },
+      {
+        "name": "type",
+        "type": "string",
+        "shorthand": "t",
+        "hidden": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td epic list",
+    "use": "list",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "all",
+        "type": "bool",
+        "shorthand": "a"
+      },
+      {
+        "name": "closed",
+        "type": "string"
+      },
+      {
+        "name": "created",
+        "type": "string"
+      },
+      {
+        "name": "deferred",
+        "type": "bool"
+      },
+      {
+        "name": "due-soon",
+        "type": "bool"
+      },
+      {
+        "name": "epic",
+        "type": "string"
+      },
+      {
+        "name": "filter",
+        "type": "string",
+        "shorthand": "f"
+      },
+      {
+        "name": "format",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "id",
+        "type": "stringArray",
+        "shorthand": "i"
+      },
+      {
+        "name": "implementer",
+        "type": "string"
+      },
+      {
+        "name": "include-approved",
+        "type": "bool"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "labels",
+        "type": "stringArray",
+        "shorthand": "l"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "shorthand": "n"
+      },
+      {
+        "name": "long",
+        "type": "bool"
+      },
+      {
+        "name": "mine",
+        "type": "bool",
+        "shorthand": "m"
+      },
+      {
+        "name": "no-pager",
+        "type": "bool"
+      },
+      {
+        "name": "open",
+        "type": "bool",
+        "shorthand": "o"
+      },
+      {
+        "name": "overdue",
+        "type": "bool"
+      },
+      {
+        "name": "parent",
+        "type": "string"
+      },
+      {
+        "name": "points",
+        "type": "string"
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reverse",
+        "type": "bool",
+        "shorthand": "r"
+      },
+      {
+        "name": "reviewable",
+        "type": "bool"
+      },
+      {
+        "name": "reviewer",
+        "type": "string"
+      },
+      {
+        "name": "search",
+        "type": "string",
+        "shorthand": "q"
+      },
+      {
+        "name": "short",
+        "type": "bool"
+      },
+      {
+        "name": "sort",
+        "type": "string"
+      },
+      {
+        "name": "status",
+        "type": "stringArray",
+        "shorthand": "s"
+      },
+      {
+        "name": "surfacing",
+        "type": "bool"
+      },
+      {
+        "name": "type",
+        "type": "stringArray",
+        "shorthand": "t",
+        "hidden": true
+      },
+      {
+        "name": "updated",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td errors",
+    "use": "errors",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "clear",
+        "type": "bool"
+      },
+      {
+        "name": "count",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool"
+      },
+      {
+        "name": "limit",
+        "type": "int"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "session",
+        "type": "string"
+      },
+      {
+        "name": "since",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td export",
+    "use": "export",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "all",
+        "type": "bool"
+      },
+      {
+        "name": "format",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "output",
+        "type": "string",
+        "shorthand": "o"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "render-markdown",
+        "type": "bool",
+        "shorthand": "m"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td feature",
+    "use": "feature",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td feature get",
+    "use": "get \u003cname\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td feature list",
+    "use": "list",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td feature set",
+    "use": "set \u003cname\u003e \u003ctrue|false\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td feature unset",
+    "use": "unset \u003cname\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td files",
+    "use": "files [issue-id]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "changed",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "untracked",
+        "type": "bool",
+        "shorthand": "u"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td focus",
+    "use": "focus [issue-id]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td handoff",
+    "use": "handoff \u003cissue-id\u003e [message]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "decision",
+        "type": "stringArray"
+      },
+      {
+        "name": "done",
+        "type": "stringArray"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "message",
+        "type": "string",
+        "shorthand": "m"
+      },
+      {
+        "name": "note",
+        "type": "string",
+        "shorthand": "n"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "remaining",
+        "type": "stringArray"
+      },
+      {
+        "name": "uncertain",
+        "type": "stringArray"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td help",
+    "use": "help [command]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td import",
+    "use": "import [file]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "dry-run",
+        "type": "bool"
+      },
+      {
+        "name": "force",
+        "type": "bool"
+      },
+      {
+        "name": "format",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "source",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td in-review",
+    "use": "in-review",
+    "aliases": [
+      "ir"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td info",
+    "use": "info",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td init",
+    "use": "init",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "remote",
+        "type": "string"
+      },
+      {
+        "name": "store",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td last",
+    "use": "last",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "n",
+        "type": "int",
+        "shorthand": "n"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td link",
+    "use": "link [issue-id] [file-pattern...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "depends-on",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "recursive",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "role",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td list",
+    "use": "list [filters]",
+    "aliases": [
+      "ls"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "all",
+        "type": "bool",
+        "shorthand": "a"
+      },
+      {
+        "name": "closed",
+        "type": "string"
+      },
+      {
+        "name": "created",
+        "type": "string"
+      },
+      {
+        "name": "deferred",
+        "type": "bool"
+      },
+      {
+        "name": "due-soon",
+        "type": "bool"
+      },
+      {
+        "name": "epic",
+        "type": "string"
+      },
+      {
+        "name": "filter",
+        "type": "string",
+        "shorthand": "f"
+      },
+      {
+        "name": "format",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "id",
+        "type": "stringArray",
+        "shorthand": "i"
+      },
+      {
+        "name": "implementer",
+        "type": "string"
+      },
+      {
+        "name": "include-approved",
+        "type": "bool"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "labels",
+        "type": "stringArray",
+        "shorthand": "l"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "shorthand": "n"
+      },
+      {
+        "name": "long",
+        "type": "bool"
+      },
+      {
+        "name": "mine",
+        "type": "bool",
+        "shorthand": "m"
+      },
+      {
+        "name": "no-pager",
+        "type": "bool"
+      },
+      {
+        "name": "open",
+        "type": "bool",
+        "shorthand": "o"
+      },
+      {
+        "name": "overdue",
+        "type": "bool"
+      },
+      {
+        "name": "parent",
+        "type": "string"
+      },
+      {
+        "name": "points",
+        "type": "string"
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reverse",
+        "type": "bool",
+        "shorthand": "r"
+      },
+      {
+        "name": "reviewable",
+        "type": "bool"
+      },
+      {
+        "name": "reviewer",
+        "type": "string"
+      },
+      {
+        "name": "search",
+        "type": "string",
+        "shorthand": "q"
+      },
+      {
+        "name": "short",
+        "type": "bool"
+      },
+      {
+        "name": "sort",
+        "type": "string"
+      },
+      {
+        "name": "status",
+        "type": "stringArray",
+        "shorthand": "s"
+      },
+      {
+        "name": "surfacing",
+        "type": "bool"
+      },
+      {
+        "name": "type",
+        "type": "stringArray",
+        "shorthand": "t"
+      },
+      {
+        "name": "updated",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td log",
+    "use": "log [issue-id] \u003cmessage\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "blocker",
+        "type": "bool"
+      },
+      {
+        "name": "decision",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "hypothesis",
+        "type": "bool"
+      },
+      {
+        "name": "issue",
+        "type": "string",
+        "shorthand": "i"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "result",
+        "type": "bool"
+      },
+      {
+        "name": "task",
+        "type": "string",
+        "shorthand": "T"
+      },
+      {
+        "name": "tried",
+        "type": "bool"
+      },
+      {
+        "name": "type",
+        "type": "string",
+        "shorthand": "t"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td monitor",
+    "use": "monitor",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "interval",
+        "type": "duration"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td next",
+    "use": "next",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note",
+    "use": "note",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note add",
+    "use": "add \u003ctitle\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "content",
+        "type": "string",
+        "shorthand": "c"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note archive",
+    "use": "archive \u003cid\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note delete",
+    "use": "delete \u003cid\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note edit",
+    "use": "edit \u003cid\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "content",
+        "type": "string",
+        "shorthand": "c"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "shorthand": "t"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note list",
+    "use": "list",
+    "aliases": [
+      "ls"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "all",
+        "type": "bool",
+        "shorthand": "a"
+      },
+      {
+        "name": "archived",
+        "type": "bool"
+      },
+      {
+        "name": "deleted",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "shorthand": "n"
+      },
+      {
+        "name": "output",
+        "type": "string",
+        "shorthand": "o"
+      },
+      {
+        "name": "pinned",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "search",
+        "type": "string",
+        "shorthand": "s"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note pin",
+    "use": "pin \u003cid\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note restore",
+    "use": "restore \u003cid\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note show",
+    "use": "show \u003cid\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "include-deleted",
+        "type": "bool"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note unarchive",
+    "use": "unarchive \u003cid\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td note unpin",
+    "use": "unpin \u003cid\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td query",
+    "use": "query [expression]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "examples",
+        "type": "bool"
+      },
+      {
+        "name": "explain",
+        "type": "bool"
+      },
+      {
+        "name": "fields",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "shorthand": "n"
+      },
+      {
+        "name": "max-scan",
+        "type": "int"
+      },
+      {
+        "name": "output",
+        "type": "string",
+        "shorthand": "o"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "sort",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ready",
+    "use": "ready",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td reject",
+    "use": "reject [issue-id...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "comment",
+        "type": "string",
+        "shorthand": "c"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "message",
+        "type": "string"
+      },
+      {
+        "name": "note",
+        "type": "string"
+      },
+      {
+        "name": "notes",
+        "type": "string"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "shorthand": "m"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td reopen",
+    "use": "reopen [issue-id...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td restore",
+    "use": "restore [issue-id...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td resume",
+    "use": "resume [issue-id]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td review",
+    "use": "review [issue-id...]",
+    "aliases": [
+      "finish",
+      "submit"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "comment",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "message",
+        "type": "string"
+      },
+      {
+        "name": "minor",
+        "type": "bool"
+      },
+      {
+        "name": "note",
+        "type": "string"
+      },
+      {
+        "name": "notes",
+        "type": "string"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "shorthand": "m"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td reviewable",
+    "use": "reviewable",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "include-approved",
+        "type": "bool"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td search",
+    "use": "search [query]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "labels",
+        "type": "stringArray",
+        "shorthand": "l"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "shorthand": "n"
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "show-score",
+        "type": "bool"
+      },
+      {
+        "name": "status",
+        "type": "stringArray",
+        "shorthand": "s"
+      },
+      {
+        "name": "type",
+        "type": "stringArray",
+        "shorthand": "t"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td security",
+    "use": "security",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "clear",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td serve",
+    "use": "serve",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "addr",
+        "type": "string",
+        "shorthand": "a"
+      },
+      {
+        "name": "cors",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "interval",
+        "type": "duration"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "port",
+        "type": "int",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "token",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td session",
+    "use": "session [name]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "new",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td session cleanup",
+    "use": "cleanup",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "force",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "older-than",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td session list",
+    "use": "list",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td show",
+    "use": "show [issue-id...]",
+    "aliases": [
+      "context",
+      "get",
+      "view"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "children",
+        "type": "bool"
+      },
+      {
+        "name": "format",
+        "type": "string",
+        "shorthand": "f"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool"
+      },
+      {
+        "name": "long",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "render-markdown",
+        "type": "bool",
+        "shorthand": "m"
+      },
+      {
+        "name": "short",
+        "type": "bool"
+      },
+      {
+        "name": "tree",
+        "type": "bool"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td start",
+    "use": "start [issue-id...]",
+    "aliases": [
+      "begin"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "force",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td stats",
+    "use": "stats",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td stats analytics",
+    "use": "analytics",
+    "aliases": [
+      "usage"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "clear",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "limit",
+        "type": "int"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "since",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td stats errors",
+    "use": "errors",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "clear",
+        "type": "bool"
+      },
+      {
+        "name": "count",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool"
+      },
+      {
+        "name": "limit",
+        "type": "int"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "session",
+        "type": "string"
+      },
+      {
+        "name": "since",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td stats security",
+    "use": "security",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "clear",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td status",
+    "use": "status",
+    "aliases": [
+      "current"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync",
+    "use": "sync",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "pull",
+        "type": "bool"
+      },
+      {
+        "name": "push",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "status",
+        "type": "bool"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync conflicts",
+    "use": "conflicts",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "limit",
+        "type": "int"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "since",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync disable",
+    "use": "disable",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync enable",
+    "use": "enable",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync init",
+    "use": "init",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync status",
+    "use": "status",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync tail",
+    "use": "tail",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "follow",
+        "type": "bool",
+        "shorthand": "f"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "interval",
+        "type": "duration"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "lines",
+        "type": "int",
+        "shorthand": "n"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project",
+    "use": "sync-project",
+    "aliases": [
+      "sp"
+    ],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project create",
+    "use": "create \u003cname\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "description",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "visibility",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project invite",
+    "use": "invite \u003cemail\u003e [role]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "custom-role",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project join",
+    "use": "join [name-or-id]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "remote",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project kick",
+    "use": "kick \u003cuser-id\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project link",
+    "use": "link \u003cproject-id\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "force",
+        "type": "bool",
+        "shorthand": "f"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "remote",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project list",
+    "use": "list",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "all",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project members",
+    "use": "members",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project role",
+    "use": "role \u003cuser-id\u003e \u003crole\u003e",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "custom-role",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td sync-project unlink",
+    "use": "unlink",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "force",
+        "type": "bool",
+        "shorthand": "f"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td task",
+    "use": "task",
+    "aliases": [],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td task create",
+    "use": "create [title]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "acceptance",
+        "type": "string"
+      },
+      {
+        "name": "acceptance-file",
+        "type": "string"
+      },
+      {
+        "name": "blocks",
+        "type": "stringArray"
+      },
+      {
+        "name": "body",
+        "type": "string"
+      },
+      {
+        "name": "defer",
+        "type": "string"
+      },
+      {
+        "name": "depends-on",
+        "type": "stringArray"
+      },
+      {
+        "name": "desc",
+        "type": "string"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "shorthand": "d"
+      },
+      {
+        "name": "description-file",
+        "type": "string"
+      },
+      {
+        "name": "due",
+        "type": "string"
+      },
+      {
+        "name": "epic",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "label",
+        "type": "stringArray"
+      },
+      {
+        "name": "labels",
+        "type": "stringArray",
+        "shorthand": "l"
+      },
+      {
+        "name": "minor",
+        "type": "bool"
+      },
+      {
+        "name": "notes",
+        "type": "string"
+      },
+      {
+        "name": "parent",
+        "type": "string"
+      },
+      {
+        "name": "points",
+        "type": "int"
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "tag",
+        "type": "stringArray"
+      },
+      {
+        "name": "tags",
+        "type": "stringArray"
+      },
+      {
+        "name": "title",
+        "type": "string"
+      },
+      {
+        "name": "type",
+        "type": "string",
+        "shorthand": "t",
+        "hidden": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td task list",
+    "use": "list",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "all",
+        "type": "bool",
+        "shorthand": "a"
+      },
+      {
+        "name": "closed",
+        "type": "string"
+      },
+      {
+        "name": "created",
+        "type": "string"
+      },
+      {
+        "name": "deferred",
+        "type": "bool"
+      },
+      {
+        "name": "due-soon",
+        "type": "bool"
+      },
+      {
+        "name": "epic",
+        "type": "string"
+      },
+      {
+        "name": "filter",
+        "type": "string",
+        "shorthand": "f"
+      },
+      {
+        "name": "format",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "id",
+        "type": "stringArray",
+        "shorthand": "i"
+      },
+      {
+        "name": "implementer",
+        "type": "string"
+      },
+      {
+        "name": "include-approved",
+        "type": "bool"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "labels",
+        "type": "stringArray",
+        "shorthand": "l"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "shorthand": "n"
+      },
+      {
+        "name": "long",
+        "type": "bool"
+      },
+      {
+        "name": "mine",
+        "type": "bool",
+        "shorthand": "m"
+      },
+      {
+        "name": "no-pager",
+        "type": "bool"
+      },
+      {
+        "name": "open",
+        "type": "bool",
+        "shorthand": "o"
+      },
+      {
+        "name": "overdue",
+        "type": "bool"
+      },
+      {
+        "name": "parent",
+        "type": "string"
+      },
+      {
+        "name": "points",
+        "type": "string"
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reverse",
+        "type": "bool",
+        "shorthand": "r"
+      },
+      {
+        "name": "reviewable",
+        "type": "bool"
+      },
+      {
+        "name": "reviewer",
+        "type": "string"
+      },
+      {
+        "name": "search",
+        "type": "string",
+        "shorthand": "q"
+      },
+      {
+        "name": "short",
+        "type": "bool"
+      },
+      {
+        "name": "sort",
+        "type": "string"
+      },
+      {
+        "name": "status",
+        "type": "stringArray",
+        "shorthand": "s"
+      },
+      {
+        "name": "surfacing",
+        "type": "bool"
+      },
+      {
+        "name": "type",
+        "type": "stringArray",
+        "shorthand": "t",
+        "hidden": true
+      },
+      {
+        "name": "updated",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td tree",
+    "use": "tree [issue-id]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "depth",
+        "type": "int"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td unblock",
+    "use": "unblock [issue-id...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td undo",
+    "use": "undo",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "list",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td unfocus",
+    "use": "unfocus",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td unlink",
+    "use": "unlink [issue-id] [file-pattern]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td unstart",
+    "use": "unstart [issue-id...]",
+    "aliases": [
+      "stop"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "force",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "session",
+        "type": "string"
+      },
+      {
+        "name": "stale",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td update",
+    "use": "update [issue-id...]",
+    "aliases": [
+      "edit"
+    ],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "acceptance",
+        "type": "string"
+      },
+      {
+        "name": "acceptance-file",
+        "type": "string"
+      },
+      {
+        "name": "append",
+        "type": "bool"
+      },
+      {
+        "name": "blocks",
+        "type": "stringArray"
+      },
+      {
+        "name": "body",
+        "type": "string"
+      },
+      {
+        "name": "comment",
+        "type": "string",
+        "shorthand": "m"
+      },
+      {
+        "name": "defer",
+        "type": "string"
+      },
+      {
+        "name": "depends-on",
+        "type": "stringArray"
+      },
+      {
+        "name": "desc",
+        "type": "string"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "shorthand": "d"
+      },
+      {
+        "name": "description-file",
+        "type": "string"
+      },
+      {
+        "name": "due",
+        "type": "string"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "labels",
+        "type": "stringArray",
+        "shorthand": "l"
+      },
+      {
+        "name": "note",
+        "type": "string",
+        "shorthand": "c",
+        "hidden": true
+      },
+      {
+        "name": "parent",
+        "type": "string"
+      },
+      {
+        "name": "points",
+        "type": "int"
+      },
+      {
+        "name": "priority",
+        "type": "string",
+        "shorthand": "p"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "sprint",
+        "type": "string"
+      },
+      {
+        "name": "status",
+        "type": "string"
+      },
+      {
+        "name": "title",
+        "type": "string"
+      },
+      {
+        "name": "type",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td upgrade",
+    "use": "upgrade",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td usage",
+    "use": "usage",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "compact",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "new-session",
+        "type": "bool"
+      },
+      {
+        "name": "quiet",
+        "type": "bool",
+        "shorthand": "q"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td version",
+    "use": "version",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "check",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "short",
+        "type": "bool"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td whoami",
+    "use": "whoami",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td workflow",
+    "use": "workflow",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "dot",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "mermaid",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws",
+    "use": "ws",
+    "aliases": [
+      "worksession"
+    ],
+    "runnable": false,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws current",
+    "use": "current",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws end",
+    "use": "end",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws handoff",
+    "use": "handoff",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "continue",
+        "type": "bool"
+      },
+      {
+        "name": "decision",
+        "type": "stringArray"
+      },
+      {
+        "name": "done",
+        "type": "stringArray"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "remaining",
+        "type": "stringArray"
+      },
+      {
+        "name": "review",
+        "type": "bool"
+      },
+      {
+        "name": "uncertain",
+        "type": "stringArray"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws list",
+    "use": "list",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws log",
+    "use": "log \"message\"",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "blocker",
+        "type": "bool"
+      },
+      {
+        "name": "decision",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "hypothesis",
+        "type": "bool"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "only",
+        "type": "string"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "result",
+        "type": "bool"
+      },
+      {
+        "name": "tried",
+        "type": "bool"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws show",
+    "use": "show [session-id]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "full",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws start",
+    "use": "start [name]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws tag",
+    "use": "tag [issue-ids...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "no-start",
+        "type": "bool"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td ws untag",
+    "use": "untag [issue-ids...]",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  }
+]

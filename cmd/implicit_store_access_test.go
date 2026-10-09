@@ -118,7 +118,7 @@ func TestMetadataCommandsSkipSyncAndDiagnosticIssueContext(t *testing.T) {
 		return child
 	}
 	commands := []*cobra.Command{}
-	for _, path := range [][2]string{{"config", "set"}, {"config", "associate"}, {"feature", "set"}, {"workflow", ""}, {"debug-stats", ""}, {"version", ""}, {"completion", "zsh"}, {"help", ""}, {"init", ""}} {
+	for _, path := range [][2]string{{"config", "set"}, {"config", "associate"}, {"feature", "set"}, {"workflow", ""}, {"debug-stats", ""}, {"version", ""}, {"completion", "zsh"}, {"help", ""}, {"init", ""}, {"errors", ""}, {"security", ""}, {"stats", "analytics"}, {"stats", "errors"}, {"stats", "security"}} {
 		commands = append(commands, makeCommand(path[0], path[1]))
 	}
 	for _, flag := range []string{"fields", "examples", "explain"} {
@@ -173,5 +173,8 @@ func TestMetadataCommandsSkipSyncAndDiagnosticIssueContext(t *testing.T) {
 	query := makeCommand("query", "")
 	if skipImplicitIssueAccess(query) {
 		t.Fatal("normal query classified as offline")
+	}
+	if skipImplicitIssueAccess(makeCommand("stats", "")) {
+		t.Fatal("issue statistics classified as offline")
 	}
 }

@@ -18,8 +18,15 @@ func skipImplicitIssueAccess(cmd *cobra.Command) bool {
 		top = top.Parent()
 	}
 	switch top.Name() {
-	case "config", "feature", "workflow", "debug-stats", "version", "completion", "help", "init":
+	case "config", "feature", "workflow", "debug-stats", "version", "completion", "help", "init", "errors", "security":
 		return true
+	case "stats":
+		if cmd.Parent() == top {
+			switch cmd.Name() {
+			case "analytics", "errors", "security":
+				return true
+			}
+		}
 	case "query":
 		for _, name := range []string{"fields", "examples", "explain"} {
 			if enabled, _ := cmd.Flags().GetBool(name); enabled {

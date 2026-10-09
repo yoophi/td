@@ -44,6 +44,11 @@ func TestGitHubDiagnosticIdentityFiltersJSONAndDisable(t *testing.T) {
 	if !strings.HasPrefix(id, "ses_") {
 		t.Fatal(id)
 	}
+	oldCmd, oldStart := executedCmd, cmdStartTime
+	t.Cleanup(func() { executedCmd = oldCmd; cmdStartTime = oldStart })
+	// An issue command's failure retains its context. Diagnostic commands
+	// themselves now stay offline and do not discover an issue session.
+	executedCmd = createCmd
 	logAgentError([]string{"test", "--token", "local-only"}, "fixture failure")
 	errs, err := db.ReadAgentErrors(dir)
 	if err != nil || len(errs) != 1 || errs[0].SessionID != id {
@@ -67,14 +72,12 @@ func TestGitHubDiagnosticIdentityFiltersJSONAndDisable(t *testing.T) {
 		t.Fatalf("%q %v", out, err)
 	}
 
-	oldCmd, oldStart := executedCmd, cmdStartTime
-	t.Cleanup(func() { executedCmd = oldCmd; cmdStartTime = oldStart })
 	executedCmd = statsErrorsCmd
 	cmdStartTime = time.Now()
 	t.Setenv("TD_ANALYTICS", "true")
 	logAnalytics(errors.New("fixture failed command"))
 	events, err := db.ReadCommandUsage(dir)
-	if err != nil || len(events) != 1 || events[0].SessionID != id || events[0].Command != "stats" || events[0].Subcommand != "errors" || events[0].Success {
+	if err != nil || len(events) != 1 || events[0].SessionID != "" || events[0].Command != "stats" || events[0].Subcommand != "errors" || events[0].Success {
 		t.Fatalf("%+v %v", events, err)
 	}
 	t.Setenv("TD_ANALYTICS", "false")
@@ -85,7 +88,7 @@ func TestGitHubDiagnosticIdentityFiltersJSONAndDisable(t *testing.T) {
 	}
 	out, err = executeGitHubTest(diagnosticTestCommand(statsAnalyticsCmd), "--json", "--since", "1h", "--limit", "1")
 	var summary db.AnalyticsSummary
-	if err != nil || json.Unmarshal([]byte(out), &summary) != nil || summary.CommandCounts["stats errors"] != 1 || summary.SessionActivity[id] != 1 || slices.Contains(summary.NeverUsed, "stats errors") {
+	if err != nil || json.Unmarshal([]byte(out), &summary) != nil || summary.CommandCounts["stats errors"] != 1 || len(summary.SessionActivity) != 0 || slices.Contains(summary.NeverUsed, "stats errors") {
 		t.Fatalf("%s %v", out, err)
 	}
 	out, err = executeGitHubTest(diagnosticTestCommand(statsAnalyticsCmd), "--json", "--clear")
@@ -136,7 +139,7 @@ func TestDiagnosticIdentityBeforeCommandInitialization(t *testing.T) {
 	baseDir = ""
 	oldCmd, oldStart := executedCmd, cmdStartTime
 	t.Cleanup(func() { executedCmd = oldCmd; cmdStartTime = oldStart })
-	executedCmd = statsErrorsCmd
+	executedCmd = createCmd
 	cmdStartTime = time.Now()
 	t.Setenv("TD_ANALYTICS", "true")
 	logAnalytics(errors.New("flag parsing failure"))

@@ -64,3 +64,24 @@ Extra positional arguments and simultaneous `--mermaid --dot` now fail rather
 than silently ignoring input. Tests compare documented implementer-approval
 boundaries with the real policy evaluator and run the CLI in both feature modes
 with analytics enabled, proving no gh, SQLite database or issue context creation.
+
+## CLI surface inventory
+
+`cmd/testdata/cli-inventory-sync-false.json` and the `sync-true` counterpart
+capture the actual Cobra tree in isolated subprocesses, including built-in
+help/completion, hidden commands, aliases, runnable/group nodes and every local
+or inherited flag (type, shorthand, hidden/deprecated and persistent markers).
+An inherited flag shadowed by a local flag records the effective local type.
+The current inventory is 151 command nodes, 973 flag entries and 23 aliases in
+each mode; registration is currently identical with sync_cli disabled/enabled.
+
+The regression compares the tree with those committed inventories. An explicit
+`TD_UPDATE_CLI_INVENTORY=1 go test ./cmd -run TestCLIInventoryMatchesCapturedSurface`
+regenerates them after reviewing a CLI change. Defaults are excluded because
+they can depend on the environment. This inventory detects surface changes;
+it does **not** establish that a command or flag supports gh-issue. Individual
+store classifications and native acceptance evidence remain required by #31.
+
+Device-local `errors`, `security` and `stats analytics/errors/security` also
+skip implicit issue sync/session discovery. Their explicit reading/clearing of
+local diagnostic files is retained. Ordinary `stats` still reads issue data.
