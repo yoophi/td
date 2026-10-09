@@ -40,7 +40,7 @@ func init() {
 }
 
 func gitHubFlags(cmd *cobra.Command, operation string) error {
-	allowed := " json work-dir help "
+	allowed := " json work-dir help refresh "
 	switch operation {
 	case "create":
 		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file minor parent epic depends-on blocks due defer "

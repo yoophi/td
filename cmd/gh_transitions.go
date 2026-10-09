@@ -31,7 +31,7 @@ func init() {
 			}
 			cmd.SilenceUsage = true
 			cmd.SetOut(cmd.OutOrStdout())
-			allowed := []string{"json", "work-dir", "help", "reason"}
+			allowed := []string{"json", "work-dir", "help", "refresh", "reason"}
 			if command == startCmd {
 				allowed = append(allowed, "force")
 			}

@@ -13,6 +13,7 @@ import (
 )
 
 func TestGitHubHTTPMonitorReviewCountDoesNotAddIndividualRequests(t *testing.T) {
+	t.Setenv("TD_GH_CACHE", "off")
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".todos"), 0700); err != nil {
 		t.Fatal(err)

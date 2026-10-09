@@ -47,7 +47,7 @@ func init() {
 				return local(cmd, args)
 			}
 			cmd.SilenceUsage = true
-			allowed := " json work-dir help "
+			allowed := " json work-dir help refresh "
 			if command != deletedCmd {
 				allowed += "reason "
 			}

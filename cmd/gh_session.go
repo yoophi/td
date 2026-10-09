@@ -36,7 +36,7 @@ func init() {
 }
 
 func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.Config) error {
-	allowed := []string{"json", "work-dir", "help"}
+	allowed := []string{"json", "work-dir", "help", "refresh"}
 	if original == sessionNameCmd {
 		allowed = append(allowed, "new")
 	}

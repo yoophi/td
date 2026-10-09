@@ -77,7 +77,7 @@ func gitHubContextDirectory() (string, error) {
 func runGitHubActivity(original, cmd *cobra.Command, args []string, store issuestore.ActivityStore, state *ghcontext.State, worktree string) error {
 	cmd.SetOut(cmd.OutOrStdout())
 	// Reject any newly introduced option until its semantics have been wired.
-	allowed := []string{"json", "work-dir", "help"}
+	allowed := []string{"json", "work-dir", "help", "refresh"}
 	if original == logCmd {
 		allowed = append(allowed, "issue", "task", "type", "blocker", "decision", "hypothesis", "tried", "result")
 	}

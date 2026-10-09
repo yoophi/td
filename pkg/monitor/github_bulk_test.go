@@ -17,6 +17,7 @@ import (
 )
 
 func TestGitHubMonitorReviewCountDoesNotAddIndividualRequests(t *testing.T) {
+	t.Setenv("TD_GH_CACHE", "off")
 	dir := t.TempDir()
 	for _, args := range [][]string{{"init", "--quiet", dir}, {"-C", dir, "remote", "add", "origin", "https://github.com/owner/repo.git"}} {
 		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {

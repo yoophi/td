@@ -39,7 +39,7 @@ func init() {
 
 func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *models.Config) error {
 	cmd.SetOut(cmd.OutOrStdout())
-	allowed := []string{"json", "work-dir", "help"}
+	allowed := []string{"json", "work-dir", "help", "refresh"}
 	if original == wsTagCmd {
 		allowed = append(allowed, "no-start")
 	}

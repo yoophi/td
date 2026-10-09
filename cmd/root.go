@@ -16,6 +16,7 @@ import (
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/ghcontext"
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/session"
 	"github.com/marcus/td/internal/suggest"
 	"github.com/marcus/td/internal/workdir"
@@ -45,6 +46,9 @@ var rootCmd = &cobra.Command{
 
 Optimized for session continuity—capturing working state so new context windows can resume where previous ones stopped.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if refresh, _ := cmd.Flags().GetBool("refresh"); refresh {
+			cmd.SetContext(ghstore.WithFreshSnapshot(cmd.Context()))
+		}
 		cmdStartTime = time.Now()
 		executedCmd = cmd
 		runGatedSyncStartupHook(cmd)
@@ -305,6 +309,7 @@ func init() {
 	cobra.OnInitialize(initBaseDir)
 	rootCmd.PersistentFlags().StringVarP(&workDirFlag, "work-dir", "w", "", "project directory (resolves .td-root and git worktrees from this path)")
 	rootCmd.PersistentFlags().Bool("json", false, "Output result as JSON")
+	rootCmd.PersistentFlags().Bool("refresh", false, "Bypass reusable GitHub issue/comment snapshots for this invocation")
 
 	// Add custom template function for showing aliases
 	cobra.AddTemplateFunc("nameWithAliases", nameWithAliases)

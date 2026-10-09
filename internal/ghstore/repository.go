@@ -63,6 +63,10 @@ func repositoryFromRemote(remoteURL string) (string, error) {
 // ResolveRepository verifies the actual Git remote, gh authentication and Issues availability.
 // All calls are read-only; no issue, label or repository setting is changed.
 func ResolveRepository(ctx context.Context, baseDir, remote string) (*models.GitHubStoreConfig, error) {
+	return resolveRepositoryCredential(ctx, baseDir, remote, nil)
+}
+
+func resolveRepositoryCredential(ctx context.Context, baseDir, remote string, credential func([]byte)) (*models.GitHubStoreConfig, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
 		return nil, fmt.Errorf("gh CLI not found or not executable in PATH; install GitHub CLI before selecting gh-issue: %w", err)
 	}
@@ -71,10 +75,14 @@ func ResolveRepository(ctx context.Context, baseDir, remote string) (*models.Git
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	return resolveRepository(ctx, baseDir, remote, runCommand)
+	return resolveRepositoryWithCredential(ctx, baseDir, remote, runCommand, credential)
 }
 
 func resolveRepository(ctx context.Context, baseDir, remote string, run runner) (*models.GitHubStoreConfig, error) {
+	return resolveRepositoryWithCredential(ctx, baseDir, remote, run, nil)
+}
+
+func resolveRepositoryWithCredential(ctx context.Context, baseDir, remote string, run runner, credential func([]byte)) (*models.GitHubStoreConfig, error) {
 	if remote == "" || strings.HasPrefix(remote, "-") || strings.ContainsAny(remote, "\r\n\t ") {
 		return nil, fmt.Errorf("a valid Git remote name is required")
 	}
@@ -97,8 +105,12 @@ func resolveRepository(ctx context.Context, baseDir, remote string, run runner) 
 	// invalid. Check local credential availability without that network probe;
 	// the repository API below validates access and preserves the real error.
 	// The returned credential is discarded and must never be logged.
-	if _, err := run(ctx, baseDir, "gh", "auth", "token", "--hostname", "github.com"); err != nil {
+	token, err := run(ctx, baseDir, "gh", "auth", "token", "--hostname", "github.com")
+	if err != nil {
 		return nil, fmt.Errorf("GitHub authentication failed: %w; run 'gh auth login --hostname github.com'", err)
+	}
+	if credential != nil {
+		credential(token)
 	}
 	data, err = run(ctx, baseDir, "gh", "api", "--hostname", "github.com", "repos/"+repo)
 	if err != nil {

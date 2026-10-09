@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/marcus/td/internal/models"
 )
@@ -26,7 +27,11 @@ type Snapshot struct {
 	activities  map[string][]models.Activity
 	entries     []snapshotEntry
 	fullHistory bool
+	observedAt  time.Time
 }
+
+// ObservedAt reports when collection began, including when reused from cache.
+func (s *Snapshot) ObservedAt() time.Time { return s.observedAt }
 
 type snapshotEntry struct {
 	Issue    apiIssue
@@ -76,7 +81,13 @@ func (s *Snapshot) ChangeToken() (string, error) {
 // ReadSnapshot uses one paginated issue collection and, when requested, one
 // paginated repository comment collection. No per-issue endpoint is visited.
 // Every page must succeed before any snapshot is returned.
-func (c *Client) ReadSnapshot(ctx context.Context, includeActivity bool) (*Snapshot, error) {
+func (c *Client) readSnapshotRemote(ctx context.Context, includeActivity bool) (snapshot *Snapshot, err error) {
+	started := time.Now().UTC()
+	defer func() {
+		if snapshot != nil {
+			snapshot.observedAt = started
+		}
+	}()
 	data, err := c.request(ctx, "GET", "/issues?state=all&per_page=100", nil, true)
 	if err != nil {
 		return nil, err
@@ -88,6 +99,31 @@ func (c *Client) ReadSnapshot(ctx context.Context, includeActivity bool) (*Snaps
 	if pages == nil {
 		return nil, fmt.Errorf("snapshot issue list is not a paginated array")
 	}
+	var comments [][]apiComment
+	if includeActivity {
+		for _, page := range pages {
+			for _, item := range page {
+				if len(item.PullRequest) == 0 || string(item.PullRequest) == "null" {
+					data, err := c.request(ctx, "GET", "/issues/comments?per_page=100", nil, true)
+					if err != nil {
+						return nil, err
+					}
+					if err := json.Unmarshal(data, &comments); err != nil {
+						return nil, fmt.Errorf("invalid snapshot comments: %w", err)
+					}
+					if comments == nil {
+						return nil, fmt.Errorf("snapshot comments are not a paginated array")
+					}
+					return c.assembleSnapshot(pages, comments, includeActivity)
+				}
+			}
+		}
+	}
+	return c.assembleSnapshot(pages, comments, includeActivity)
+}
+
+// assembleSnapshot validates both remote and cached observations identically.
+func (c *Client) assembleSnapshot(pages [][]apiIssue, comments [][]apiComment, includeActivity bool) (*Snapshot, error) {
 	s := &Snapshot{records: []Record{}, activities: map[string][]models.Activity{}, entries: []snapshotEntry{}, fullHistory: includeActivity}
 	seen := map[int]bool{}
 	prs := map[int]bool{}
@@ -118,20 +154,9 @@ func (c *Client) ReadSnapshot(ctx context.Context, includeActivity bool) (*Snaps
 		}
 	}
 	if includeActivity && len(s.entries) > 0 {
-		data, err := c.request(ctx, "GET", "/issues/comments?per_page=100", nil, true)
-		if err != nil {
-			return nil, err
-		}
-		var pages [][]apiComment
-		if err := json.Unmarshal(data, &pages); err != nil {
-			return nil, fmt.Errorf("invalid snapshot comments: %w", err)
-		}
-		if pages == nil {
-			return nil, fmt.Errorf("snapshot comments are not a paginated array")
-		}
 		seenComments := map[int64]bool{}
 		operations := map[int]map[string]bool{}
-		for _, page := range pages {
+		for _, page := range comments {
 			if page == nil {
 				return nil, fmt.Errorf("snapshot comment page is null")
 			}
