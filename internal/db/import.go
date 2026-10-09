@@ -143,6 +143,7 @@ func (db *DB) ReplaceIssueRaw(issue *models.Issue) error {
 // supersedeIfReviewInvalidating below.
 func (db *DB) ImportItemRaw(issue *models.Issue, logs []models.Log, handoffs []models.Handoff, deps []models.IssueDependency, files []models.IssueFile, replace bool) error {
 	issue.ID = NormalizeIssueID(issue.ID)
+	issue.ParentID = NormalizeIssueID(issue.ParentID)
 	var prevBeforeImport *models.Issue
 
 	err := db.withWriteLock(func() error {
@@ -178,16 +179,21 @@ func (db *DB) ImportItemRaw(issue *models.Issue, logs []models.Log, handoffs []m
 			return err
 		}
 		for i := range logs {
-			if err := insertLogExec(tx, &logs[i]); err != nil {
+			log := logs[i]
+			log.IssueID = NormalizeIssueID(log.IssueID)
+			if err := insertLogExec(tx, &log); err != nil {
 				return err
 			}
 		}
 		for i := range handoffs {
-			if err := insertHandoffExec(tx, &handoffs[i]); err != nil {
+			handoff := handoffs[i]
+			handoff.IssueID = NormalizeIssueID(handoff.IssueID)
+			if err := insertHandoffExec(tx, &handoff); err != nil {
 				return err
 			}
 		}
 		for _, dep := range deps {
+			dep.DependsOnID = NormalizeIssueID(dep.DependsOnID)
 			depID := DependencyID(issue.ID, dep.DependsOnID, dep.RelationType)
 			if _, err := tx.Exec(`
 				INSERT OR REPLACE INTO issue_dependencies (id, issue_id, depends_on_id, relation_type)
@@ -197,7 +203,9 @@ func (db *DB) ImportItemRaw(issue *models.Issue, logs []models.Log, handoffs []m
 			}
 		}
 		for i := range files {
-			if err := insertIssueFileExec(tx, &files[i]); err != nil {
+			file := files[i]
+			file.IssueID = NormalizeIssueID(file.IssueID)
+			if err := insertIssueFileExec(tx, &file); err != nil {
 				return err
 			}
 		}

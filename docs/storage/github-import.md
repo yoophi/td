@@ -263,6 +263,11 @@ snapshot reimport, restore portable rows into temporary SQLite, and resume after
 an explicit denied PATCH without recreating allocated targets. Original log/
 handoff content and historical session keys survive SQLite restoration. The
 configured GitHub project never opens a SQLite DB during these operations.
+Portable GitHub rows restored into SQLite use its existing `td-` normalization:
+`gh-N` becomes `td-gh-N`. Parent/dependency and log/handoff/file issue references
+are normalized together, so the restored relationships resolve to real rows.
+CLI round-trip tests cover priority, description, acceptance, points, sprint,
+minor/schedule fields, files and mapped relationships alongside history.
 Native validation remains pending. Monitor detail views project preserved logs
 and handoffs through the shared reader and label them as history. The activity
 feed and active-session/recent-handoff summaries use native events only; imported
