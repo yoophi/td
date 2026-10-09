@@ -228,3 +228,24 @@ left intact. Evidence is recorded under the tracking checkout's
 artifacts/td-gui-compatibility/browser-workflow. #55 remains in_progress;
 real drag/drop, unauthenticated reuse and the remaining acceptance audit
 must not be inferred from these narrower successful workflow checks.
+
+### Existing unauthenticated backend reuse (verified)
+
+Started a separately owned installed td server on loopback with no bearer
+token against td-sample, then launched the unchanged GUI on7778. The sample
+discovery file recorded port53743, PID19932 and instance srv_efc6d1 before
+GUI startup. All discovery fields were identical afterward, and proxy health
+returned200 for gh-issue. After terminating only this GUI, the same server
+PID and discovery fields remained, and direct backend health still returned
+200. The separately owned server was then stopped explicitly. This proves
+reuse and lifecycle ownership without removing authentication from any
+existing user server. Evidence: artifacts/td-gui-compatibility/backend-reuse.
+
+A further isolated gh-125 drag check tested the coordinate-scale hypothesis.
+Half-sized coordinates selected the board title instead of the card, so that
+hypothesis did not explain the earlier failure. Original coordinates at the
+card edge also produced no transition panel or server write. The fixture was
+logically deleted, its GUI stopped and its browser tab closed; the original
+user7777 tab remained selected. Real drag/drop remains unverified.
+Unauthenticated backend reuse is now complete; the preceding outstanding
+list is historical and must not be read as its current status.
