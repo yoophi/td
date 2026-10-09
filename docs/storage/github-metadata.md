@@ -490,3 +490,56 @@ Create label spellings keep SQLite's first non-empty precedence:
 `--labels`, `--label`, `--tags`, `--tag`. Each accepts repeated/comma-separated
 values. File/stdin rich-text input uses the command's configured input stream;
 multiple stdin consumers or inline/file conflicts fail before issue writes.
+
+### Query and ranked search
+
+`query` evaluates parsed TDQ against a fresh repository-scoped GitHub issue
+snapshot using the same evaluator as SQLite and board queries. Deleted records
+and pull requests are excluded. Explicit query conditions determine status and
+deferral scope. `--output table|json|ids|count`, `--limit`, `--sort` and
+`--max-scan` are supported; count reports matched records before the output limit.
+Limit and scan warnings go to stderr, including JSON mode, leaving stdout usable
+as one JSON array. An empty JSON result is `[]`. Fields, examples and explain
+remain offline. Invalid predicates, formats and negative limits fail explicitly.
+
+`list "TDQ expression"` and `list --filter "TDQ expression"` use the same
+snapshot and evaluator, including calendar, relation and activity predicates.
+As with SQLite's TDQ list mode, the expression defines the scope; ordinary list
+filter flags do not add implicit predicates. `--filter ''` and combining the
+flag with a positional expression are explicit errors. Sort, reverse, limit and
+short/long/JSON formatting retain list semantics. Detailed TDQ listings fetch
+shared logs and handoffs before emitting output, so activity failures cannot
+leave an apparently successful partial list.
+
+`search` searches IDs, titles, descriptions, shared logs and all historical
+handoffs. Native comments and structured user comments are excluded; use
+`query 'comment.text ~ text'` for comments. Search retains SQLite LIKE semantics
+for `%` and `_`, including ASCII case folding; TDQ `~` uses the shared literal
+text evaluator instead. Status, type, priority and label filters apply before
+ranking, and limit applies after ranking the complete candidate set. Scores
+prioritize exact ID/title matches over description and activity matches;
+`--show-score` exposes the score and matching field. JSON keeps the existing
+SQLite search result shape with `Issue`, `Score` and `MatchField` keys.
+
+Issue pages and activity pages are fully paginated. Activities are loaded lazily
+and cached only within one command snapshot, once per relevant issue. A denied,
+malformed or rate-limited read aborts output instead of substituting cached or
+partial results. There is no persistent read cache or automatic retry. Separate
+GitHub reads are not an atomic snapshot: concurrent edits can change records
+between issue and activity reads. Search may require one comments pagination
+sequence per candidate issue, so large repositories can consume significant API
+quota even when the final output limit is small.
+
+GitHub's issue listing can also lag a successful direct create/read-back: a new
+issue may briefly be missing from query/search/list results. Fresh requests do
+not guarantee immediately current results. The CLI does not silently retry or
+label such a listing as a strongly consistent snapshot; repeat a read when you
+need to observe a just-created issue in list-based queries.
+
+Set `TD_GH_DEBUG=1` to print numeric API invocation counts, observed HTTP response
+counts (including paginated responses), last status and remaining quota to
+stderr. Counts include repository verification through td's API runner and
+exclude requests performed internally by `gh auth`; they are observations of
+received headers, not a claim to count every network exchange. Credentials,
+bodies and arbitrary response headers are not printed. Rate-limit errors remain
+explicit and include the retry/reset observation when available.

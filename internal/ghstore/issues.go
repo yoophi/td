@@ -43,6 +43,7 @@ func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Clie
 }
 
 func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+	invocation := apiInvocations.Add(1)
 	args = append(append([]string(nil), args...), "--include")
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = dir
@@ -51,10 +52,11 @@ func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
+	body, headers, headerErr := splitAPIHeaders(out)
+	traceAPIResponses(invocation, headers)
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	body, headers, headerErr := splitAPIHeaders(out)
 	if err != nil {
 		cause := fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 		return nil, rateLimitFromHeaders(cause, headers, time.Now())

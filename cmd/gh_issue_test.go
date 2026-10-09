@@ -17,8 +17,8 @@ import (
 
 func githubTestCommand(original *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{Use: original.Use, RunE: original.RunE, SilenceErrors: true, SilenceUsage: true}
-	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "epic", "comment", "note", "sprint", "due", "defer"} {
-		if original == listCmd && (name == "type" || name == "status") {
+	for _, name := range []string{"title", "type", "priority", "description", "desc", "body", "notes", "description-file", "acceptance", "acceptance-file", "status", "format", "sort", "search", "reason", "parent", "epic", "comment", "note", "sprint", "due", "defer", "filter"} {
+		if (original == listCmd || original == searchCmd) && (name == "type" || name == "status") {
 			continue
 		}
 		cmd.Flags().String(name, "", "")
@@ -26,13 +26,21 @@ func githubTestCommand(original *cobra.Command) *cobra.Command {
 	for _, name := range []string{"labels", "label", "tags", "tag", "id", "depends-on", "blocks"} {
 		cmd.Flags().StringArray(name, nil, "")
 	}
-	if original == listCmd {
+	if original == listCmd || original == searchCmd {
 		cmd.Flags().StringArray("type", nil, "")
 		cmd.Flags().StringArray("status", nil, "")
 	}
 	for _, name := range []string{"json", "long", "short", "all", "open", "reverse", "append", "minor", "tree", "children", "render-markdown", "deferred", "overdue", "due-soon", "surfacing", "clear"} {
 		cmd.Flags().Bool(name, false, "")
 	}
+	if original == queryCmd {
+		cmd.Flags().String("output", "table", "")
+		cmd.Flags().Int("max-scan", 10000, "")
+		for _, name := range []string{"examples", "fields", "explain"} {
+			cmd.Flags().Bool(name, false, "")
+		}
+	}
+	cmd.Flags().Bool("show-score", false, "")
 	cmd.Flags().Int("points", 0, "")
 	cmd.Flags().Int("limit", 50, "")
 	return cmd
@@ -63,7 +71,7 @@ func TestGitHubRoutingRejectsUnsupportedBeforeNetwork(t *testing.T) {
 		{updateCmd, []string{"gh-1"}, "no issue changes"},
 		{showCmd, []string{"td-abcdef"}, "invalid GitHub issue ID"},
 		{listCmd, []string{"--sort", "bogus"}, "unsupported gh-issue sort"},
-		{listCmd, []string{"status=open"}, "does not support positional TDQ"},
+		{listCmd, []string{"unknown_field=open"}, "validation error"},
 	} {
 		_, err := executeGitHubTest(githubTestCommand(tc.command), tc.args...)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {

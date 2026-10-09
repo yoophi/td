@@ -25,6 +25,8 @@ func (db *DB) SearchIssues(query string, opts ListIssuesOptions) ([]models.Issue
 // handoff content. Matches found only in that activity rank below matches in
 // the issue's title or description.
 func (db *DB) SearchIssuesRanked(query string, opts ListIssuesOptions) ([]SearchResult, error) {
+	limit := opts.Limit
+	opts.Limit = 0 // Rank the complete candidate set before taking the requested limit.
 	opts.SearchActivity = true
 	issues, err := db.SearchIssues(query, opts)
 	if err != nil {
@@ -84,8 +86,14 @@ func (db *DB) SearchIssuesRanked(query string, opts ListIssuesOptions) ([]Search
 		if results[i].Score != results[j].Score {
 			return results[i].Score > results[j].Score
 		}
-		return results[i].Issue.Priority < results[j].Issue.Priority
+		if results[i].Issue.Priority != results[j].Issue.Priority {
+			return results[i].Issue.Priority < results[j].Issue.Priority
+		}
+		return results[i].Issue.ID < results[j].Issue.ID
 	})
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
 
 	return results, nil
 }
