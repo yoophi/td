@@ -171,3 +171,26 @@ func TestScopeSeparatesWorktreesEvenOnSameBranch(t *testing.T) {
 		t.Fatalf("worktree collision: %+v %+v", first, second)
 	}
 }
+
+func TestContextRootOverrideKeepsRepositoryIsolationAndRejectsRelativePath(t *testing.T) {
+	dir, root := t.TempDir(), t.TempDir()
+	if data, err := exec.Command("git", "init", "-b", "main", dir).CombinedOutput(); err != nil {
+		t.Fatal(string(data), err)
+	}
+	t.Setenv("TD_GH_CONTEXT_ROOT", root)
+	first, err := Resolve(context.Background(), dir, "owner/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Resolve(context.Background(), dir, "owner/other")
+	if err != nil || first.Directory == second.Directory || filepath.Dir(first.Directory) != root {
+		t.Fatal(first, second, err)
+	}
+	if _, err := first.Update(context.Background(), func(s *State) error { s.Focus = "gh-1"; return nil }); err != nil {
+		t.Fatal("isolated root cannot persist state", err)
+	}
+	t.Setenv("TD_GH_CONTEXT_ROOT", "relative")
+	if _, err := Resolve(context.Background(), dir, "owner/repo"); err == nil {
+		t.Fatal("relative root silently accepted")
+	}
+}

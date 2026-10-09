@@ -32,6 +32,7 @@ func TestGitHubWorkContextTouchedDeletedHistory(t *testing.T) {
 }
 
 func TestGitHubWorkContextCLIQueuesAndPreservedFocusOnReadFailure(t *testing.T) {
+	t.Setenv("TD_GH_CONTEXT_ROOT", t.TempDir())
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX fixture")
 	}

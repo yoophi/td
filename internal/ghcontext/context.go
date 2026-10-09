@@ -57,6 +57,12 @@ func Resolve(ctx context.Context, dir, repo string) (Scope, error) {
 	repoKey := sha256.Sum256([]byte(strings.ToLower(repo)))
 	key := sha256.Sum256(identity)
 	directory := filepath.Join(home, "td", "gh-contexts", fmt.Sprintf("%x", repoKey))
+	if root := os.Getenv("TD_GH_CONTEXT_ROOT"); root != "" {
+		if !filepath.IsAbs(root) {
+			return Scope{}, fmt.Errorf("TD_GH_CONTEXT_ROOT must be an absolute directory")
+		}
+		directory = filepath.Join(root, fmt.Sprintf("%x", repoKey))
+	}
 	return Scope{Directory: directory, Path: filepath.Join(directory, fmt.Sprintf("%x.json", key)), Branch: strings.TrimSpace(string(branch)), Repo: repo, Worktree: info.WorktreeRoot}, nil
 }
 
