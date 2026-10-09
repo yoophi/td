@@ -24,6 +24,9 @@ func githubSyncProject(cmd *cobra.Command, args []string) (bool, error) {
 		return true, err
 	}
 	if kind != config.StoreGitHub {
+		if cmd.Flags().Changed("all") {
+			return true, fmt.Errorf("--all applies only to GitHub accessible repository listing")
+		}
 		if cmd.Flags().Changed("visibility") {
 			return true, fmt.Errorf("--visibility applies only to GitHub repository creation")
 		}
@@ -90,8 +93,29 @@ func githubSyncProject(cmd *cobra.Command, args []string) (bool, error) {
 		}
 		return true, reportGitHubProject(cmd, cmd.Name(), target)
 	case "list":
-		if _, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub); err != nil {
+		client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
+		if err != nil {
 			return true, err
+		}
+		all, _ := cmd.Flags().GetBool("all")
+		if all {
+			repositories, err := client.AccessibleRepositories(cmd.Context())
+			if err != nil {
+				return true, err
+			}
+			note := "Repositories visible to the active credential through owner/collaborator/organization affiliation; token scope may limit results. This does not select a repository or prove issue-write access. Each selection still requires an explicit matching Git remote and repository validation."
+			if jsonMode(cmd) {
+				return true, json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"store": "gh-issue", "scope": "credential-accessible-repositories", "configured_repository": cfg.GitHub.Repo, "projects": repositories, "note": note})
+			}
+			cmd.Printf("Credential-visible GitHub repositories (%d)\n", len(repositories))
+			for _, repo := range repositories {
+				cmd.Printf("%s visibility=%s issues=%t archived=%t disabled=%t\n", output.SanitizeIssueText(repo.FullName), repo.Visibility, *repo.HasIssues, *repo.Archived, *repo.Disabled)
+			}
+			if len(repositories) == 0 {
+				cmd.Println("No repositories visible to this credential.")
+			}
+			cmd.Println(note)
+			return true, nil
 		}
 		if jsonMode(cmd) {
 			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"store": "gh-issue", "scope": "configured-repository", "projects": []*models.GitHubStoreConfig{cfg.GitHub}, "note": "Configured repository only; not an account-wide repository listing."})

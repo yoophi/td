@@ -23,6 +23,21 @@ Neither command discovers or silently rewrites an origin to match its argument.
 not an account-wide repository listing. JSON explicitly declares that scope.
 The operation reads no issue/comment collections and opens no SQLite database.
 
+`td sp list --all` lists repositories visible to the active credential through
+owner/collaborator/organization affiliation. It uses the paginated `user/repos`
+collection (`per_page=100`, sorted by full name), with no per-repository detail
+or issue requests. JSON declares `scope=credential-accessible-repositories`,
+the currently configured repository, and an allowlist of repository ID/name,
+visibility, Issues/archived/disabled state and returned base permissions. Raw
+response credentials and unrelated fields are never copied to output. An empty
+list is `projects: []`; malformed pages fail without partial success. gh errors
+retain diagnostics and are not automatically retried. Token scope can limit
+visibility, so this is not a list of all public repositories or proof of issue
+write access. No selection/configuration change follows listing; normal remote
+and repository checks still apply when explicitly selecting a result.
+`--all` is rejected by SQLite handlers. See
+[authenticated repository listing](https://docs.github.com/en/rest/repos/repos#list-repositories-for-the-authenticated-user).
+
 GitHub storage cannot be unlinked while retaining a usable repository-less
 GitHub store. `td sp unlink` therefore fails with instructions to switch stores
 explicitly (`td config set store sqlite`) after exporting/importing any needed
@@ -98,5 +113,5 @@ does not match the current origin automatically. Configure a deliberate remote,
 then use `config set store gh-issue --remote NAME` or `sp link OWNER/REPO --remote NAME`.
 The visibility option is rejected by SQLite handlers.
 
-The account-wide listing scope audit, native repository acceptance and task
-review remain pending #29 requirements. #29 is not complete.
+Native repository acceptance and task review remain pending #29 requirements.
+#29 is not complete.

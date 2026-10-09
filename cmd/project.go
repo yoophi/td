@@ -22,8 +22,8 @@ var syncProjectCmd = &cobra.Command{
 	Short:   "Manage sync projects",
 	Long: "Manage projects for the selected store. GitHub link/join require an explicit owner/repository\n" +
 		"matching an existing Git remote; --remote selects it without changing Git URLs.\n" +
-		"GitHub list validates only the configured repository. Repository/access management\n" +
-		"is still under implementation; those operations fail explicitly without td-sync fallback.",
+		"GitHub list validates the configured repository; list --all enumerates repositories visible to the active credential.\n" +
+		"GitHub management uses explicit repository/account/permission inputs without td-sync fallback.",
 	GroupID: "system",
 }
 
@@ -517,6 +517,7 @@ var syncProjectJoinCmd = &cobra.Command{
 }
 
 func init() {
+	syncProjectListCmd.Flags().Bool("all", false, "List all repositories visible to the active GitHub credential")
 	syncProjectCreateCmd.Flags().String("visibility", "", "Explicit GitHub repository visibility: public, private, internal")
 	syncProjectInviteCmd.Flags().Bool("custom-role", false, "Interpret permission as an exact GitHub custom repository role name")
 	syncProjectRoleCmd.Flags().Bool("custom-role", false, "Interpret permission as an exact GitHub custom repository role name")

@@ -21,6 +21,7 @@ func executeGitHubProjectTest(original *cobra.Command, args ...string) (string, 
 	cmd.Flags().Bool("force", false, "")
 	cmd.Flags().Bool("json", true, "")
 	cmd.Flags().Bool("custom-role", false, "")
+	cmd.Flags().Bool("all", false, "")
 	cmd.Flags().String("visibility", "", "")
 	cmd.Flags().String("description", "", "")
 	var out bytes.Buffer
@@ -158,6 +159,97 @@ func TestSQLiteProjectRouteStillRequiresFeature(t *testing.T) {
 	}
 	if handled, err := githubSyncProject(create, []string{"name"}); !handled || err == nil || !strings.Contains(err.Error(), "only to GitHub") {
 		t.Fatal("SQLite ignored GitHub visibility", handled, err)
+	}
+	list := &cobra.Command{Use: "list"}
+	list.Flags().Bool("all", false, "")
+	if err := list.Flags().Set("all", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if handled, err := githubSyncProject(list, nil); !handled || err == nil || !strings.Contains(err.Error(), "only to GitHub") {
+		t.Fatal("SQLite ignored all-repo scope", handled, err)
+	}
+}
+
+func TestGitHubProjectAccessibleListNoPerRepositoryQueries(t *testing.T) {
+	dir := githubScheduleTestDir(t)
+	calls := recordScheduleGHCalls(t)
+	ghPath := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "gh")
+	script, err := os.ReadFile(ghPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor := "path=next(a for a in args if a.startswith('repos/owner/repo'));"
+	collection := `if any(a.startswith('user/repos?') for a in args):
+ if os.environ.get('TD_REPO_LIST_DENIED'):sys.stderr.write('fixture HTTP 403 repo list denied');sys.exit(1)
+ sys.stdout.write('HTTP/2.0 200 OK\r\n\r\n'+os.environ['TD_REPO_LIST_RESPONSE']);sys.exit(0)
+`
+	if !strings.Contains(string(script), anchor) {
+		t.Fatal("fixture routing changed")
+	}
+	if err := os.WriteFile(ghPath, []byte(strings.Replace(string(script), anchor, collection+anchor, 1)), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TD_REPO_LIST_RESPONSE", `[[{"id":1,"full_name":"owner/one","visibility":"private","has_issues":true,"archived":false,"disabled":false,"temp_clone_token":"fixture-secret"}],[{"id":2,"full_name":"org/two","visibility":"internal","has_issues":false,"archived":true,"disabled":false}]]`)
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, enabled := range []string{"false", "true"} {
+		t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+		out, err := executeGitHubProjectTest(syncProjectListCmd, "--all")
+		if err != nil || !json.Valid([]byte(out)) || !strings.Contains(out, `"scope":"credential-accessible-repositories"`) || !strings.Contains(out, `"full_name":"org/two"`) || strings.Contains(out, "fixture-secret") {
+			t.Fatal(out, err)
+		}
+	}
+	t.Setenv("TD_REPO_LIST_RESPONSE", `[[]]`)
+	out, err := executeGitHubProjectTest(syncProjectListCmd, "--all")
+	if err != nil || !strings.Contains(out, `"projects":[]`) {
+		t.Fatal(out, err)
+	}
+	t.Setenv("TD_REPO_LIST_DENIED", "1")
+	out, err = executeGitHubProjectTest(syncProjectListCmd, "--all")
+	if err == nil || out != "" || !strings.Contains(err.Error(), "fixture HTTP 403") {
+		t.Fatal(out, err)
+	}
+	invocations, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collections := 0
+	for _, line := range strings.Split(strings.TrimSpace(string(invocations)), "\n") {
+		var args []string
+		if err := json.Unmarshal([]byte(line), &args); err != nil {
+			t.Fatal(err)
+		}
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "user/repos?") {
+				collections++
+				if !strings.Contains(strings.Join(args, " "), "--paginate --slurp") {
+					t.Fatal(args)
+				}
+			}
+			if strings.HasPrefix(arg, "repos/") && arg != "repos/owner/repo" {
+				t.Fatal("per-repo or task lookup", args)
+			}
+		}
+	}
+	if collections != 4 {
+		t.Fatal("retry or per-item collection", collections)
+	}
+	cfg, err = config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := json.Marshal(cfg)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("listing changed selection", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("listing opened SQLite", err)
 	}
 }
 

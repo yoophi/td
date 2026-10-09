@@ -89,12 +89,16 @@ func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]
 }
 
 func (c *Client) request(ctx context.Context, method, endpoint string, payload any, paginate bool) ([]byte, error) {
+	return c.requestAPI(ctx, method, "repos/"+c.repo+endpoint, endpoint, payload, paginate)
+}
+
+func (c *Client) requestAPI(ctx context.Context, method, path, endpoint string, payload any, paginate bool) ([]byte, error) {
 	if err := c.cooldown.check(ctx, time.Now()); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	args := []string{"api", "--hostname", "github.com", "--method", method, "repos/" + c.repo + endpoint,
+	args := []string{"api", "--hostname", "github.com", "--method", method, path,
 		"--header", "Accept: application/vnd.github+json", "--header", "X-GitHub-Api-Version: 2022-11-28"}
 	var body []byte
 	var err error
