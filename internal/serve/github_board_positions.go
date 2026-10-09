@@ -24,7 +24,7 @@ type githubBoardPositionClient interface {
 }
 
 func (s *Server) EnableGitHubBoardPositions(store *GitHubWriteStore) {
-	s.githubCapabilities = append(s.githubCapabilities, "board_positions")
+	s.githubCapabilities = append(s.githubCapabilities, "board_positions", "board_move")
 	s.githubEndpoints = append(s.githubEndpoints, "POST /v1/boards/{id}/issues", "POST /v1/boards/{id}/move", "DELETE /v1/boards/{id}/issues/{issue_id}")
 	s.mux.HandleFunc("POST /v1/boards/{id}/issues", store.positionBoardIssue)
 	s.mux.HandleFunc("POST /v1/boards/{id}/move", store.moveBoardIssue)

@@ -344,7 +344,7 @@ board DTOs, slim cards and unresolved blockers from the same task listing. The
 `board_reads` capability advertises these routes. `board_crud` adds POST, PATCH
 and DELETE board routes using the actual web session, strict inputs and optional
 If-Match against the original carrier revision (returned in ETag/revision).
-`board_positions` adds slot positioning, ID-anchored movement and saved-position
+`board_positions` and the existing client-facing `board_move` capability add slot positioning, ID-anchored movement and saved-position
 removal routes. Valid virtual-builtin writes materialize a carrier with explicit
 conflict/partial-write errors. CLI/TUI routing remains pending. See [board carrier schema](docs/storage/github-metadata.md#board-carrier-schema-read-foundation).
 

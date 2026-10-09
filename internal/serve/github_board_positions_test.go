@@ -188,3 +188,38 @@ func TestGitHubBoardPositionHTTPValidationMovesAndBuiltin(t *testing.T) {
 	unsupported = true
 	request("POST", "/v1/boards/bd-gh-8/issues", `{"issue_id":"gh-1"}`, "", 501)
 }
+
+// Existing HTTP clients gate movement on board_move, rather than the broader
+// GitHub-specific board_positions capability.
+func TestGitHubBoardMoveCapabilityRequiresRegisteredWriter(t *testing.T) {
+	srv := NewGitHubServer(t.TempDir(), "actual-web", "owner/repo", ServeConfig{})
+	capabilities := func() []string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/v1/project", nil))
+		var body struct {
+			Data struct {
+				Capabilities []string `json:"capabilities"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body.Data.Capabilities
+	}
+	for _, c := range capabilities() {
+		if c == "board_move" {
+			t.Fatal("unregistered move advertised")
+		}
+	}
+	srv.EnableGitHubBoardPositions(&GitHubWriteStore{})
+	found := false
+	for _, c := range capabilities() {
+		if c == "board_move" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("existing clients cannot discover supported movement")
+	}
+}
