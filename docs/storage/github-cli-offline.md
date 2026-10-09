@@ -116,3 +116,16 @@ paths. SQLite sync-setting roundtrip and invalid-value persistence checks use
 an injected temporary global-settings backend. Native persistence stays at
 `~/.config/td/config.json`; the test does not change HOME or write real settings.
 No gh calls, issue database or issue-session context is created by these paths.
+
+GitHub bootstrap (`init --store gh-issue` and interactive `config setup`)
+validates the remote, local gh credential availability and repository access
+before saving the selection. A missing/null `has_issues` field is now an invalid
+repository response, separate from an explicit `has_issues=false` (Issues
+disabled). Neither case initializes SQLite or changes the project store.
+Bootstrap CLI fixtures exercise missing gh, non-Git directories, missing
+remote, another host, raw auth/access
+errors, disabled Issues, incomplete/malformed responses, successful selection
+and EOF cancellation in both feature modes. Successful selection creates only
+configuration; it does not enumerate issues/comments or start an issue session.
+The fixtures emulate `gh api --include` HTTP headers; they are CLI contract
+validation, not acceptance against a live GitHub repository.

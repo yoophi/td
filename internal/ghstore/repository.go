@@ -130,7 +130,7 @@ func resolveRepositoryWithCredential(ctx context.Context, baseDir, remote string
 	}
 	var info struct {
 		FullName  string `json:"full_name"`
-		HasIssues bool   `json:"has_issues"`
+		HasIssues *bool  `json:"has_issues"`
 		Archived  bool   `json:"archived"`
 	}
 	if err := json.Unmarshal(data, &info); err != nil {
@@ -139,7 +139,10 @@ func resolveRepositoryWithCredential(ctx context.Context, baseDir, remote string
 	if !repositoryPattern.MatchString(info.FullName) {
 		return nil, fmt.Errorf("gh returned an invalid repository name")
 	}
-	if !info.HasIssues {
+	if info.HasIssues == nil {
+		return nil, fmt.Errorf("invalid gh repository response: missing has_issues boolean")
+	}
+	if !*info.HasIssues {
 		return nil, fmt.Errorf("GitHub Issues is disabled for %s; enable Issues in the repository settings first", info.FullName)
 	}
 	if info.Archived {

@@ -58,6 +58,8 @@ func TestResolveRepositoryRejectsUnavailableStore(t *testing.T) {
 		{"authentication", "https://github.com/o/r", "", "authentication", 3, 3},
 		{"access", "https://github.com/o/r", "", "cannot access", 4, 4},
 		{"disabled issues", "https://github.com/o/r", `{"full_name":"o/r","has_issues":false}`, "disabled", 0, 4},
+		{"missing issues flag", "https://github.com/o/r", `{"full_name":"o/r"}`, "missing has_issues", 0, 4},
+		{"null issues flag", "https://github.com/o/r", `{"full_name":"o/r","has_issues":null}`, "missing has_issues", 0, 4},
 		{"archived", "https://github.com/o/r", `{"full_name":"o/r","has_issues":true,"archived":true}`, "archived", 0, 4},
 		{"invalid json", "https://github.com/o/r", "broken", "invalid gh", 0, 4},
 	} {
