@@ -133,6 +133,9 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload a
 		hint := ""
 		if method != "GET" {
 			hint = "; the write may have reached GitHub: inspect the issue before retrying"
+			if strings.HasPrefix(endpoint, "/collaborators/") {
+				hint = "; the write may have reached GitHub: inspect repository/access state before retrying"
+			}
 		}
 		return nil, fmt.Errorf("gh %s %s failed: %w%s", method, endpoint, err, hint)
 	}

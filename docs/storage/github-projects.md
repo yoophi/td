@@ -40,8 +40,23 @@ See [GitHub collaborator API](https://docs.github.com/en/rest/collaborators/coll
 for the effective role semantics and required permissions. Native verification
 is still pending; this list alone does not establish administrator privileges.
 
-Repository creation and invitations/permission management remain
-unfinished #29 requirements. `create`, `invite`, `kick` and `role`
+`td sp kick LOGIN` removes the repository collaborator grant using a single
+DELETE request after the usual repository/origin/authentication validation.
+The argument is a literal GitHub login, not an email or a td-sync user ID;
+numeric input is treated as a numeric login, never looked up as an account ID.
+Malformed handles are rejected before any gh call. Success reports
+`action=remove-repository-collaborator` and `effective_access_verified=false`.
+Inherited organization/team access may remain and related changes can be
+asynchronous. GitHub can also unassign issues and delete affected forks;
+see [removal API semantics](https://docs.github.com/en/rest/collaborators/collaborators#remove-a-repository-collaborator).
+This command does not claim to remove organization membership, teams or all
+effective access. Failures preserve gh diagnostics and instruct inspection of
+repository/access state before retrying; no automatic retry or SQLite fallback
+occurs. An unexpected response after a write is also an explicit uncertain
+failure, not a successful revocation report.
+
+Repository creation and invitation/permission assignment remain
+unfinished #29 requirements. `create`, `invite` and `role`
 currently fail explicitly in GitHub mode before SQLite/td-sync access. This is
 implementation pending, not an assertion that GitHub cannot support them.
 SQLite emails and owner/writer/reader roles must not be silently interpreted as

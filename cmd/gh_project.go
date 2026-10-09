@@ -91,6 +91,26 @@ func githubSyncProject(cmd *cobra.Command, args []string) (bool, error) {
 		}
 		cmd.Println(note)
 		return true, nil
+	case "kick":
+		if len(args) != 1 {
+			return true, fmt.Errorf("GitHub kick requires one explicit account login")
+		}
+		if err := ghstore.ValidateCollaboratorLogin(args[0]); err != nil {
+			return true, err
+		}
+		client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
+		if err != nil {
+			return true, err
+		}
+		if err := client.RemoveCollaborator(cmd.Context(), args[0]); err != nil {
+			return true, err
+		}
+		note := "Repository collaborator removal completed; organization/team/other inherited access may remain and related GitHub changes may finish asynchronously. Effective access was not verified."
+		if jsonMode(cmd) {
+			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"store": "gh-issue", "repository": cfg.GitHub.Repo, "account": args[0], "action": "remove-repository-collaborator", "effective_access_verified": false, "note": note})
+		}
+		cmd.Printf("GitHub collaborator removal completed: %s from %s\n%s\n", args[0], cfg.GitHub.Repo, note)
+		return true, nil
 	default:
 		return true, fmt.Errorf("GitHub sync-project %s is not implemented yet; no td-sync, SQLite or GitHub write was attempted. Use GitHub repository settings or gh for repository/access management", cmd.Name())
 	}

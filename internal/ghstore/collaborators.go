@@ -1,10 +1,39 @@
 package ghstore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 )
+
+var collaboratorLoginPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?$`)
+
+// ValidateCollaboratorLogin accepts GitHub handles, not emails, paths or td-sync
+// identifiers. A numeric handle is used literally, never resolved as a user ID.
+func ValidateCollaboratorLogin(login string) error {
+	if !collaboratorLoginPattern.MatchString(login) {
+		return fmt.Errorf("a GitHub login is required (not an email, URL, or td-sync user ID)")
+	}
+	return nil
+}
+
+// RemoveCollaborator removes only the repository collaborator grant. Other
+// grants may remain and GitHub may apply related side effects asynchronously.
+func (c *Client) RemoveCollaborator(ctx context.Context, login string) error {
+	if err := ValidateCollaboratorLogin(login); err != nil {
+		return err
+	}
+	data, err := c.request(ctx, "DELETE", "/collaborators/"+login, nil, false)
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(data)) != 0 {
+		return fmt.Errorf("unexpected GitHub collaborator removal response; the write may have applied: inspect repository/access state before retrying")
+	}
+	return nil
+}
 
 // Collaborator preserves GitHub roles and effective base permissions. These
 // are not td-sync owner/writer/reader roles or evidence of a direct grant.

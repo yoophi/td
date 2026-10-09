@@ -337,7 +337,10 @@ var syncProjectInviteCmd = &cobra.Command{
 var syncProjectKickCmd = &cobra.Command{
 	Use:   "kick <user-id>",
 	Short: "Remove a member from the project",
-	Args:  cobra.ExactArgs(1),
+	Long: "SQLite: remove a td-sync member by user ID. GitHub: the argument is an explicit GitHub login, not an email or numeric user ID.\n" +
+		"GitHub removes the repository collaborator grant; inherited organization/team access may remain.\n" +
+		"GitHub may also unassign issues and delete affected forks. No automatic retry is performed.",
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if handled, err := githubSyncProject(cmd, args); handled {
 			return err

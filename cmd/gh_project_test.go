@@ -68,7 +68,7 @@ func TestGitHubProjectSelectionAndDiagnostics(t *testing.T) {
 		{syncProjectUnlinkCmd, nil, "requires a repository"},
 		{syncProjectCreateCmd, []string{"name"}, "not implemented yet"},
 		{syncProjectInviteCmd, []string{"someone@example.com"}, "not implemented yet"},
-		{syncProjectKickCmd, []string{"user"}, "not implemented yet"},
+		{syncProjectKickCmd, []string{"someone@example.com"}, "GitHub login"},
 		{syncProjectRoleCmd, []string{"user", "writer"}, "not implemented yet"},
 	} {
 		out, err := executeGitHubProjectTest(tc.cmd, tc.args...)
@@ -210,5 +210,86 @@ func TestGitHubProjectMembersPagesEmptyAndPermissionFailure(t *testing.T) {
 	}
 	if _, err := os.Stat(os.Getenv("TD_SCHEDULE_STATE")); !os.IsNotExist(err) {
 		t.Fatal("members changed remote state", err)
+	}
+}
+
+func TestGitHubProjectKickTargetsLoginAndDoesNotRetry(t *testing.T) {
+	dir := githubScheduleTestDir(t)
+	calls := recordScheduleGHCalls(t)
+	writes := filepath.Join(t.TempDir(), "writes.jsonl")
+	t.Setenv("TD_KICK_WRITES", writes)
+	ghPath := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "gh")
+	script, err := os.ReadFile(ghPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor := "elif '/labels?' in path:"
+	route := `elif '/collaborators/' in path:
+ if method!='DELETE':sys.stderr.write('unexpected method');sys.exit(1)
+ if os.environ.get('TD_KICK_FAIL')=='denied':sys.stderr.write('fixture HTTP 403 delete denied');sys.exit(1)
+ with open(os.environ['TD_KICK_WRITES'],'a') as log:log.write(json.dumps({'path':path,'method':method})+'\n')
+ if os.environ.get('TD_KICK_FAIL')=='uncertain':sys.stderr.write('fixture connection lost after DELETE');sys.exit(1)
+ sys.stdout.write('HTTP/2.0 204 No Content\r\n\r\n');sys.exit(0)
+`
+	if !strings.Contains(string(script), anchor) {
+		t.Fatal("fixture routing changed")
+	}
+	if err := os.WriteFile(ghPath, []byte(strings.Replace(string(script), anchor, route+anchor, 1)), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, enabled := range []string{"false", "true"} {
+		t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+		out, err := executeGitHubProjectTest(syncProjectKickCmd, "some-user")
+		if err != nil || !json.Valid([]byte(out)) || !strings.Contains(out, `"action":"remove-repository-collaborator"`) || !strings.Contains(out, `"effective_access_verified":false`) {
+			t.Fatal(out, err)
+		}
+	}
+	before, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := executeGitHubProjectTest(syncProjectKickCmd, "some-user@example.com")
+	if err == nil || out != "" {
+		t.Fatal("email treated as login", out, err)
+	}
+	after, err := os.ReadFile(calls)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("invalid identity called gh", err)
+	}
+	for _, failure := range []string{"denied", "uncertain"} {
+		t.Setenv("TD_KICK_FAIL", failure)
+		out, err = executeGitHubProjectTest(syncProjectKickCmd, "some-user")
+		if err == nil || out != "" || !strings.Contains(err.Error(), "inspect repository/access state") {
+			t.Fatal(failure, out, err)
+		}
+	}
+	invocations, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deletes := 0
+	for _, line := range strings.Split(strings.TrimSpace(string(invocations)), "\n") {
+		var args []string
+		if err := json.Unmarshal([]byte(line), &args); err != nil {
+			t.Fatal(err)
+		}
+		for _, arg := range args {
+			if strings.Contains(arg, "/collaborators/") {
+				deletes++
+				if arg != "repos/owner/repo/collaborators/some-user" || !strings.Contains(strings.Join(args, " "), "--method DELETE") {
+					t.Fatal(args)
+				}
+			}
+		}
+	}
+	if deletes != 4 {
+		t.Fatal("unexpected retry or write count", deletes)
+	}
+	applied, err := os.ReadFile(writes)
+	if err != nil || strings.Count(string(applied), "\n") != 3 {
+		t.Fatal("fixture write receipt count", string(applied), err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("kick opened SQLite", err)
 	}
 }
