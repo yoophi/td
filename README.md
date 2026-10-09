@@ -420,6 +420,21 @@ receive 503. Cancellation of a mutation does not prove that GitHub rejected it;
 inspect the remote issue before retrying an uncertain write. The server does
 not retry writes automatically. Stopped server instances cannot be restarted.
 
+`td errors` / `td stats errors` and `td stats analytics` (`usage`) continue to
+use device-local `.todos/agent_errors.jsonl` and `.todos/command_usage.jsonl`.
+In GitHub projects their session IDs come from the branch/agent/worktree-scoped
+`ghcontext`, with no SQLite issue DB or remote API calls. Diagnostics remain
+available when authentication, origin or the network is broken; if local
+identity cannot be resolved, logging does not replace the original command error.
+Nothing in these files is automatically posted to GitHub. Existing session,
+duration and limit filters and clear/count options remain available.
+Empty `errors --json` is an empty JSONL stream; analytics JSON returns a zero
+summary. JSON clear returns `{"cleared":true}`, and count returns a number.
+Analytics record canonical nested command paths and enumerate registered
+subcommands for never-used statistics. Historical entries retain their recorded
+command names; missing ancestors are not inferred. `TD_ANALYTICS=false` disables usage
+recording, while existing diagnostics can still be read or cleared.
+
 `td info` reports the GitHub repository, selected remote, issue URL, device-local
 context path and session, with complete visible status/type/priority counts and
 the current session's review queue. `--json` uses the same counts and has no

@@ -148,6 +148,7 @@ func ComputeAnalyticsSummary(events []CommandUsageEvent, allCommands []string) *
 	}
 
 	if len(events) == 0 {
+		summary.NeverUsed = append([]string(nil), allCommands...)
 		return summary
 	}
 
@@ -197,8 +198,10 @@ func ComputeAnalyticsSummary(events []CommandUsageEvent, allCommands []string) *
 	usedCommands := make(map[string]bool)
 	for cmd := range summary.CommandCounts {
 		// Handle both "cmd" and "cmd subcmd" formats
-		parts := strings.SplitN(cmd, " ", 2)
-		usedCommands[parts[0]] = true
+		parts := strings.Fields(cmd)
+		for n := 1; n <= len(parts); n++ {
+			usedCommands[strings.Join(parts[:n], " ")] = true
+		}
 	}
 
 	for _, cmd := range allCommands {

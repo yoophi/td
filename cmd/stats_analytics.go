@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -38,6 +39,7 @@ least-used commands, never-used commands, flag frequencies, and activity pattern
 Analytics are enabled by default. Set TD_ANALYTICS=false to disable.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
+		jsonOut := jsonMode(cmd)
 
 		// Handle --clear
 		if clear, _ := cmd.Flags().GetBool("clear"); clear {
@@ -45,14 +47,16 @@ Analytics are enabled by default. Set TD_ANALYTICS=false to disable.`,
 				output.Error("failed to clear analytics: %v", err)
 				return err
 			}
-			fmt.Println("Cleared command usage analytics")
-			return nil
+			if jsonOut {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]bool{"cleared": true})
+			}
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "Cleared command usage analytics")
+			return err
 		}
 
 		// Parse filters
 		sinceStr, _ := cmd.Flags().GetString("since")
 		limit, _ := cmd.Flags().GetInt("limit")
-		jsonOut := jsonMode(cmd)
 
 		var since time.Time
 		if sinceStr != "" {
@@ -70,7 +74,7 @@ Analytics are enabled by default. Set TD_ANALYTICS=false to disable.`,
 			return err
 		}
 
-		if len(events) == 0 {
+		if len(events) == 0 && !jsonOut {
 			fmt.Println("No analytics data recorded")
 			return nil
 		}
@@ -80,7 +84,7 @@ Analytics are enabled by default. Set TD_ANALYTICS=false to disable.`,
 		summary := db.ComputeAnalyticsSummary(events, allCommands)
 
 		if jsonOut {
-			return output.JSON(summary)
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(summary)
 		}
 
 		// Human-readable output with charts
@@ -92,13 +96,19 @@ Analytics are enabled by default. Set TD_ANALYTICS=false to disable.`,
 // getAllCommandNames returns all registered command names (excluding help/completion)
 func getAllCommandNames() []string {
 	var names []string
-	for _, cmd := range rootCmd.Commands() {
-		// Skip hidden and built-in commands
-		if cmd.Hidden || cmd.Name() == "help" || cmd.Name() == "completion" {
-			continue
+	var walk func(*cobra.Command, string)
+	walk = func(parent *cobra.Command, prefix string) {
+		for _, cmd := range parent.Commands() {
+			// Skip hidden and built-in commands
+			if cmd.Hidden || cmd.Name() == "help" || cmd.Name() == "completion" {
+				continue
+			}
+			name := strings.TrimSpace(prefix + " " + cmd.Name())
+			names = append(names, name)
+			walk(cmd, name)
 		}
-		names = append(names, cmd.Name())
 	}
+	walk(rootCmd, "")
 	return names
 }
 

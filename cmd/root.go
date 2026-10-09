@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/ghcontext"
 	"github.com/marcus/td/internal/session"
 	"github.com/marcus/td/internal/suggest"
 	"github.com/marcus/td/internal/workdir"
@@ -43,6 +46,7 @@ var rootCmd = &cobra.Command{
 Optimized for session continuity—capturing working state so new context windows can resume where previous ones stopped.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		cmdStartTime = time.Now()
+		executedCmd = cmd
 		runGatedSyncStartupHook(cmd)
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
@@ -80,7 +84,10 @@ func Execute() {
 	cmdStartTime = time.Now()
 	executedCmd = nil // Reset for this execution
 
-	err := rootCmd.Execute()
+	command, err := rootCmd.ExecuteC()
+	if executedCmd == nil && command != nil && command != rootCmd {
+		executedCmd = command
+	}
 
 	// Log analytics once (handles both success and failure)
 	logAnalytics(err)
@@ -187,13 +194,7 @@ func logAgentError(args []string, errMsg string) {
 	}
 
 	// Try to get session ID (may fail if not initialized)
-	var sessionID string
-	if database, dbErr := db.Open(dir); dbErr == nil {
-		if sess, err := session.Get(database); err == nil {
-			sessionID = sess.ID
-		}
-		_ = database.Close()
-	}
+	sessionID := diagnosticSessionID(dir)
 
 	// Log the error (silently fails if project not initialized)
 	_ = db.LogAgentError(dir, args, errMsg, sessionID)
@@ -453,11 +454,13 @@ func buildCommandEvent(cmd *cobra.Command, err error) db.CommandUsageEvent {
 	}
 
 	if cmd != nil {
-		event.Command = cmd.Name()
-		// Check for subcommand (parent is not "td")
-		if cmd.Parent() != nil && cmd.Parent().Name() != "td" {
-			event.Subcommand = cmd.Name()
-			event.Command = cmd.Parent().Name()
+		path := []string{cmd.Name()}
+		for parent := cmd.Parent(); parent != nil && parent.Name() != "td"; parent = parent.Parent() {
+			path = append([]string{parent.Name()}, path...)
+		}
+		event.Command = path[0]
+		if len(path) > 1 {
+			event.Subcommand = strings.Join(path[1:], " ")
 		}
 		event.Flags = extractFlags(cmd)
 	}
@@ -465,15 +468,50 @@ func buildCommandEvent(cmd *cobra.Command, err error) db.CommandUsageEvent {
 	// Try to get session ID
 	dir := getBaseDir()
 	if dir != "" {
-		if database, dbErr := db.Open(dir); dbErr == nil {
-			if sess, err := session.Get(database); err == nil {
-				event.SessionID = sess.ID
-			}
-			_ = database.Close()
-		}
+		event.SessionID = diagnosticSessionID(dir)
 	}
 
 	return event
+}
+
+// Diagnostics stay local even if gh is missing or the network is unavailable.
+// Failure to resolve identity never replaces the original command's outcome.
+func diagnosticSessionID(dir string) string {
+	cfg, err := config.Load(dir)
+	if err != nil {
+		return ""
+	}
+	kind, err := config.Store(cfg)
+	if err != nil {
+		return ""
+	}
+	if kind == config.StoreGitHub {
+		if cfg.GitHub == nil || cfg.GitHub.Repo == "" {
+			return ""
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		worktree, err := gitHubContextDirectory()
+		if err != nil {
+			return ""
+		}
+		scope, err := ghcontext.Resolve(ctx, worktree, cfg.GitHub.Repo)
+		if err != nil {
+			return ""
+		}
+		state, err := scope.Update(ctx, nil)
+		if err != nil {
+			return ""
+		}
+		return state.Session.ID
+	}
+	if database, err := db.Open(dir); err == nil {
+		defer func() { _ = database.Close() }()
+		if sess, err := session.Get(database); err == nil {
+			return sess.ID
+		}
+	}
+	return ""
 }
 
 // extractFlags extracts changed flags from a command and sanitizes them

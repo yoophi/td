@@ -19,6 +19,7 @@ var errorsCmd = &cobra.Command{
 	GroupID: "system",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
+		jsonOut := jsonMode(cmd)
 
 		clearFlag, _ := cmd.Flags().GetBool("clear")
 		if clearFlag {
@@ -26,8 +27,11 @@ var errorsCmd = &cobra.Command{
 				output.Error("failed to clear errors: %v", err)
 				return err
 			}
-			fmt.Println("Cleared agent error log")
-			return nil
+			if jsonOut {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]bool{"cleared": true})
+			}
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "Cleared agent error log")
+			return err
 		}
 
 		countFlag, _ := cmd.Flags().GetBool("count")
@@ -37,15 +41,13 @@ var errorsCmd = &cobra.Command{
 				output.Error("failed to count errors: %v", err)
 				return err
 			}
-			fmt.Printf("%d\n", count)
-			return nil
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(count)
 		}
 
 		// Parse filters
 		limit, _ := cmd.Flags().GetInt("limit")
 		sessionFilter, _ := cmd.Flags().GetString("session")
 		sinceStr, _ := cmd.Flags().GetString("since")
-		jsonOut, _ := cmd.Flags().GetBool("json")
 
 		var since time.Time
 		if sinceStr != "" {
@@ -63,20 +65,20 @@ var errorsCmd = &cobra.Command{
 			return err
 		}
 
-		if len(errors) == 0 {
-			fmt.Println("No agent errors logged")
-			return nil
-		}
-
 		if jsonOut {
 			for _, e := range errors {
-				fmt.Printf(`{"ts":"%s","args":[%s],"error":"%s","session":"%s"}`+"\n",
-					e.Timestamp.Format(time.RFC3339),
-					formatArgsJSON(e.Args),
-					escapeJSON(e.Error),
-					e.SessionID)
+				if e.Args == nil {
+					e.Args = []string{}
+				}
+				if err := json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"ts": e.Timestamp.Format(time.RFC3339), "args": e.Args, "error": e.Error, "session": e.SessionID}); err != nil {
+					return err
+				}
 			}
 			return nil
+		}
+		if len(errors) == 0 {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "No agent errors logged")
+			return err
 		}
 
 		// Human-readable output
