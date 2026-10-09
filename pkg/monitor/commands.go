@@ -1227,6 +1227,10 @@ func (m Model) executeCommand(cmd keymap.Command) (tea.Model, tea.Cmd) {
 	case keymap.CmdOpenStats:
 		return m.openStatsModal()
 
+	case keymap.CmdOpenNotes:
+		m.StatusMessage = "Notes UI is unavailable in this build"
+		m.StatusIsError = true
+		return m, nil
 	case keymap.CmdOpenHandoffs:
 		return m.openHandoffsModal()
 
@@ -2300,6 +2304,12 @@ func (m Model) saveFilterState() tea.Cmd {
 			TypeFilter:    m.TypeFilterMode.String(),
 			IncludeClosed: m.IncludeClosed,
 		}
+		if m.preferences != nil {
+			if err := m.preferences.Update(func(p *monitorPreferences) { p.Filter = *state }); err != nil {
+				return MonitorPreferencesErrorMsg{Error: err}
+			}
+			return nil
+		}
 		// Fire and forget - errors are not critical
 		_ = config.SetFilterState(m.BaseDir, state)
 		return nil
@@ -2326,6 +2336,9 @@ func (m Model) handleGettingStartedAction(action string) (Model, tea.Cmd) {
 		m.GettingStartedMouseHandler = nil
 		if m.IsFirstRunInit {
 			m.IsFirstRunInit = false
+			if m.DataSource != nil {
+				return m, nil
+			}
 			return m, checkSyncPrompt(m.BaseDir)
 		}
 		return m, nil
@@ -2458,7 +2471,16 @@ func (m Model) checkFirstRun() tea.Cmd {
 		// Suppress the modal once it has been shown in this project, even if the
 		// user declined to install instructions. This keeps td from re-prompting
 		// on every launch. The seen flag is recorded when the modal is shown.
-		seen, _ := config.GetGettingStartedSeen(m.BaseDir)
+		seen := false
+		if m.preferences != nil {
+			prefs, err := m.preferences.Load()
+			if err != nil {
+				return MonitorPreferencesErrorMsg{Error: err}
+			}
+			seen = prefs.GettingStartedSeen
+		} else {
+			seen, _ = config.GetGettingStartedSeen(m.BaseDir)
+		}
 
 		return FirstRunCheckMsg{
 			IsFirstRun:              !seen && !hasTD, // Show only on the first open of a project without instructions
@@ -2475,6 +2497,12 @@ func (m Model) checkFirstRun() tea.Cmd {
 func (m Model) markGettingStartedSeen() tea.Cmd {
 	baseDir := m.BaseDir
 	return func() tea.Msg {
+		if m.preferences != nil {
+			if err := m.preferences.Update(func(p *monitorPreferences) { p.GettingStartedSeen = true }); err != nil {
+				return MonitorPreferencesErrorMsg{Error: err}
+			}
+			return nil
+		}
 		_ = config.SetGettingStartedSeen(baseDir, true)
 		return nil
 	}

@@ -56,6 +56,7 @@ func (m Model) prepareRemoteRecordReview() (tea.Model, tea.Cmd) {
 	m.WorkflowRequest++
 	request := m.WorkflowRequest
 	m.WorkflowPending = true
+	m.WorkflowWriting = false
 	return m, func() tea.Msg {
 		plan, err := store.RecordPlan()
 		return MonitorRecordReviewPreparedMsg{IssueID: id, Request: request, Store: store, Plan: plan, Error: err}
@@ -66,6 +67,7 @@ func (m Model) handleRemoteRecordPrepared(msg MonitorRecordReviewPreparedMsg) (t
 		return m, nil
 	}
 	m.WorkflowPending = false
+	m.WorkflowWriting = false
 	if msg.Error != nil {
 		m.StatusMessage = "Cannot record review: " + msg.Error.Error()
 		m.StatusIsError = true
@@ -116,6 +118,7 @@ func (m Model) executeRemoteRecordReview() (tea.Model, tea.Cmd) {
 	m.WorkflowRequest++
 	request := m.WorkflowRequest
 	m.WorkflowPending = true
+	m.WorkflowWriting = true
 	return m, func() tea.Msg {
 		return MonitorTransitionedMsg{IssueID: id, Action: "record-review", Request: request, Error: store.RecordReview(decision, by, reason, self)}
 	}

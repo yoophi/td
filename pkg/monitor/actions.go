@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -920,6 +921,24 @@ func (m Model) sendToWorktree() (tea.Model, tea.Cmd) {
 		issueID = m.SelectedIssueID(m.ActivePanel)
 		if issueID == "" {
 			return m, nil
+		}
+		if m.DataSource != nil {
+			source, ok := m.DataSource.(MonitorDetailSource)
+			if !ok {
+				m.StatusMessage = "GitHub monitor task reader unavailable"
+				m.StatusIsError = true
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				detail := source.Details(issueID)
+				if detail.Error != nil {
+					return MonitorReadErrorMsg{Error: detail.Error}
+				}
+				if detail.Issue == nil || detail.Issue.ID != issueID || detail.Issue.DeletedAt != nil {
+					return MonitorReadErrorMsg{Error: fmt.Errorf("selected worktree task is no longer available")}
+				}
+				return SendTaskToWorktreeMsg{TaskID: issueID, TaskTitle: detail.Issue.Title}
+			}
 		}
 		issue, err := m.DB.GetIssue(issueID)
 		if err != nil || issue == nil {

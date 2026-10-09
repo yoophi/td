@@ -109,7 +109,7 @@ func TestGitHubFormCreateUIFailureKeepsDraftAndAttemptGuard(t *testing.T) {
 		m.FormState.Dependencies = "gh-2"
 		pending, cmd := m.submitForm()
 		m = pending.(Model)
-		if cmd == nil || !m.WorkflowPending || !m.FormOpen || !m.FormCreateAttempted {
+		if cmd == nil || !m.WorkflowPending || !m.PendingRemoteWrite() || !m.FormOpen || !m.FormCreateAttempted {
 			t.Fatal("create not queued safely")
 		}
 		if _, duplicate := m.submitForm(); duplicate != nil {

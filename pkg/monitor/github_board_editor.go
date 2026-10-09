@@ -41,7 +41,11 @@ func (s *GitHubBoardSource) ListBoardsForEditing() ([]models.Board, map[string]B
 	boards := make([]models.Board, 0, len(records))
 	editors := map[string]BoardEditorStore{}
 	for _, r := range records {
-		boards = append(boards, r.Board)
+		board, err := s.displayBoard(r.Board)
+		if err != nil {
+			return nil, nil, err
+		}
+		boards = append(boards, *board)
 		editors[r.ID] = &githubBoardEditor{source: s, observed: r}
 	}
 	return boards, editors, nil
@@ -69,7 +73,7 @@ func (s *GitHubBoardSource) CreateBoard(name, expression string) (*models.Board,
 	if err != nil {
 		return nil, err
 	}
-	return &b.Board, nil
+	return s.displayBoard(b.Board)
 }
 func (e *githubBoardEditor) Save(name, expression string) (*models.Board, error) {
 	c, err := e.source.editorClient()
@@ -82,7 +86,7 @@ func (e *githubBoardEditor) Save(name, expression string) (*models.Board, error)
 	if err != nil {
 		return nil, err
 	}
-	return &b.Board, nil
+	return e.source.displayBoard(b.Board)
 }
 func (e *githubBoardEditor) Delete() error {
 	c, err := e.source.editorClient()

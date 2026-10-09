@@ -470,15 +470,17 @@ type boardEditorDebounceMsg struct {
 
 // BoardEditorSaveResultMsg carries the result of saving a board
 type BoardEditorSaveResultMsg struct {
-	Board *models.Board
-	IsNew bool // true if newly created, false if updated
-	Error error
+	Request, Generation uint64
+	Board               *models.Board
+	IsNew               bool // true if newly created, false if updated
+	Error               error
 }
 
 // BoardEditorDeleteResultMsg carries the result of deleting a board
 type BoardEditorDeleteResultMsg struct {
-	BoardID string
-	Error   error
+	Request, Generation uint64
+	BoardID             string
+	Error               error
 }
 
 // BoardEditorQueryPreviewMsg carries live query preview results
@@ -722,3 +724,6 @@ type SyncPromptCreateResultMsg struct {
 	ProjectName string
 	Error       error
 }
+
+// MonitorReadErrorMsg reports an asynchronous read action failure.
+type MonitorReadErrorMsg struct{ Error error }

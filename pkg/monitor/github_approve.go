@@ -114,6 +114,7 @@ func (m Model) prepareRemoteApprove() (tea.Model, tea.Cmd) {
 	m.WorkflowRequest++
 	request := m.WorkflowRequest
 	m.WorkflowPending = true
+	m.WorkflowWriting = false
 	return m, func() tea.Msg {
 		plan, err := store.ApprovalPlan()
 		return MonitorApprovalPreparedMsg{IssueID: id, Request: request, Store: store, Plan: plan, Error: err}
@@ -124,6 +125,7 @@ func (m Model) handleRemoteApprovalPrepared(msg MonitorApprovalPreparedMsg) (tea
 		return m, nil
 	}
 	m.WorkflowPending = false
+	m.WorkflowWriting = false
 	if msg.Error != nil {
 		m.StatusMessage = "Cannot approve: " + msg.Error.Error()
 		m.StatusIsError = true
@@ -161,6 +163,7 @@ func (m Model) startRemoteApprove(store MonitorApproveStore, id, reviewedBy, rea
 	m.WorkflowRequest++
 	request := m.WorkflowRequest
 	m.WorkflowPending = true
+	m.WorkflowWriting = true
 	return m, func() tea.Msg {
 		return MonitorTransitionedMsg{IssueID: id, Action: "approve", Request: request, Error: store.Approve(reviewedBy, reason, self)}
 	}

@@ -81,6 +81,7 @@ func (m Model) prepareRemoteEdit() (tea.Model, tea.Cmd) {
 	m.WorkflowRequest++
 	request := m.WorkflowRequest
 	m.WorkflowPending = true
+	m.WorkflowWriting = false
 	return m, func() tea.Msg {
 		issue, deps, err := store.PrepareEdit()
 		if err == nil && issue.ID != id {
@@ -94,6 +95,7 @@ func (m Model) handleRemoteEditPrepared(msg MonitorEditPreparedMsg) (tea.Model, 
 		return m, nil
 	}
 	m.WorkflowPending = false
+	m.WorkflowWriting = false
 	if msg.Error != nil {
 		m.StatusMessage = "Cannot edit: " + msg.Error.Error() + "; refresh before retrying"
 		m.StatusIsError = true

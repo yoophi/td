@@ -53,7 +53,7 @@ func TestGitHubFormEditUsesModalObservationAndPreservesDraft(t *testing.T) {
 	m := Model{DataSource: s, Width: 100, Height: 40, ModalStack: []ModalEntry{{IssueID: "gh-1", Issue: &original.Issue, Transitions: map[string]MonitorTransitionStore{"gh-1": store}}}, IssueTransitions: map[string]MonitorTransitionStore{"gh-1": &githubIssueTransition{source: s, observed: ghstore.Record{Issue: models.Issue{ID: "gh-1", Title: "new dashboard"}}}}}
 	pending, cmd := m.openEditIssueForm()
 	m = pending.(Model)
-	if cmd == nil || !m.WorkflowPending || m.FormOpen {
+	if cmd == nil || !m.WorkflowPending || m.FormOpen || m.PendingRemoteWrite() {
 		t.Fatal("edit was not prepared asynchronously")
 	}
 	if _, cmd := m.openNewIssueForm(); cmd != nil {

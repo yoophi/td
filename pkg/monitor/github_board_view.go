@@ -1,7 +1,6 @@
 package monitor
 
 import (
-	"context"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
@@ -12,10 +11,6 @@ import (
 type BoardViewStore interface {
 	SetViewMode(string) (*models.Board, BoardViewStore, error)
 }
-type githubBoardViewClient interface {
-	SetBoardViewModeObserved(context.Context, *ghstore.BoardRecord, string, string) (*ghstore.BoardRecord, error)
-	MaterializeBuiltinBoardObserved(context.Context, *ghstore.BoardRecord, string) (*ghstore.BoardRecord, error)
-}
 type githubBoardView struct {
 	source   *GitHubBoardSource
 	observed ghstore.BoardRecord
@@ -25,32 +20,17 @@ func (v *githubBoardView) SetViewMode(mode string) (*models.Board, BoardViewStor
 	if mode != "swimlanes" && mode != "backlog" {
 		return nil, nil, fmt.Errorf("invalid board view mode %q", mode)
 	}
-	c, err := v.source.open(v.source.ctx)
+	if err := v.source.ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if err := v.source.preferences.Update(func(p *monitorPreferences) { p.BoardViews[v.observed.ID] = mode }); err != nil {
+		return nil, nil, err
+	}
+	display, err := v.source.displayBoard(v.observed.Board)
 	if err != nil {
 		return nil, nil, err
 	}
-	writer, ok := c.(githubBoardViewClient)
-	if !ok {
-		return nil, nil, fmt.Errorf("GitHub board view writer unavailable")
-	}
-	observed := v.observed
-	created := false
-	if observed.Number == 0 {
-		b, err := writer.MaterializeBuiltinBoardObserved(v.source.ctx, &observed, v.source.actor)
-		if err != nil {
-			return nil, nil, err
-		}
-		observed = *b
-		created = true
-	}
-	saved, err := writer.SetBoardViewModeObserved(v.source.ctx, &observed, mode, v.source.actor)
-	if err != nil {
-		if created {
-			err = fmt.Errorf("builtin carrier was created, but view save failed; inspect GitHub before retrying: %w", err)
-		}
-		return nil, nil, err
-	}
-	return &saved.Board, &githubBoardView{source: v.source, observed: *saved}, nil
+	return display, v, nil
 }
 
 type BoardViewSavedMsg struct {

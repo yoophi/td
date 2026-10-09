@@ -104,6 +104,7 @@ func (m Model) submitRemoteCreate() (tea.Model, tea.Cmd) {
 	m.FormCreateAttempted = true
 	m.WorkflowRequest++
 	m.WorkflowPending = true
+	m.WorkflowWriting = true
 	request, formRequest := m.WorkflowRequest, m.FormAutofillRequest
 	return m, func() tea.Msg {
 		id, err := source.CreateIssue(issue, deps)

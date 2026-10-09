@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -24,25 +25,31 @@ import (
 
 // Model is the main Bubble Tea model for the monitor TUI
 type Model struct {
-	RecordStore              MonitorRecordReviewStore
-	RecordSelfReviewPrompt   bool
-	ApproveStore             MonitorApproveStore
-	ApprovalSelfReviewPrompt bool
-	CloseStore               MonitorCloseStore
-	IssueTransitions         map[string]MonitorTransitionStore
-	WorkflowRequest          uint64
-	WorkflowPending          bool
-	DeleteStore              MonitorDeleteStore
-	DeleteRequest            uint64
-	DeletePreparing          bool
-	DeletePending            bool
-	DataSource               MonitorDataSource
-	BoardMoveRequest         uint64
-	BoardMovePending         bool
-	BoardVisitRequest        uint64
-	BoardVisitPending        bool
-	BoardViewRequest         uint64
-	BoardViewPending         bool
+	BoardEditorPending         bool
+	BoardEditorRequest         uint64
+	BoardEditorGeneration      uint64
+	BoardEditorCreateAttempted bool
+	preferences                *localMonitorPreferences
+	RecordStore                MonitorRecordReviewStore
+	RecordSelfReviewPrompt     bool
+	ApproveStore               MonitorApproveStore
+	ApprovalSelfReviewPrompt   bool
+	CloseStore                 MonitorCloseStore
+	IssueTransitions           map[string]MonitorTransitionStore
+	WorkflowRequest            uint64
+	WorkflowPending            bool
+	WorkflowWriting            bool
+	DeleteStore                MonitorDeleteStore
+	DeleteRequest              uint64
+	DeletePreparing            bool
+	DeletePending              bool
+	DataSource                 MonitorDataSource
+	BoardMoveRequest           uint64
+	BoardMovePending           bool
+	BoardVisitRequest          uint64
+	BoardVisitPending          bool
+	BoardViewRequest           uint64
+	BoardViewPending           bool
 	// Database and session
 	DB          *db.DB
 	BoardSource BoardDataSource
@@ -368,24 +375,7 @@ func NewModel(database *db.DB, sessionID string, interval time.Duration, ver str
 // Model values are copied in Update().
 // The caller must call Close() when done to release resources.
 func NewEmbedded(baseDir string, interval time.Duration, ver string) (*Model, error) {
-	resolvedBaseDir := db.ResolveBaseDir(baseDir)
-
-	// Use shared DB to prevent connection leaks on Model value copies
-	database, err := getSharedDB(resolvedBaseDir)
-	if err != nil {
-		return nil, err
-	}
-
-	sess, err := session.GetOrCreate(database)
-	if err != nil {
-		_ = releaseSharedDB(resolvedBaseDir)
-		return nil, err
-	}
-
-	m := NewModel(database, sess.ID, interval, ver, resolvedBaseDir)
-	m.Embedded = true
-	m.syncRuntime.release = func() error { return releaseSharedDB(resolvedBaseDir) }
-	return &m, nil
+	return NewEmbeddedWithOptions(EmbeddedOptions{BaseDir: baseDir, Interval: interval, Version: ver})
 }
 
 // EmbeddedOptions configures an embedded monitor model. Theme supplies td's
@@ -428,35 +418,51 @@ func NewEmbeddedWithOptions(opts EmbeddedOptions) (*Model, error) {
 
 	resolvedBaseDir := db.ResolveBaseDir(opts.BaseDir)
 
-	// Use shared DB to prevent connection leaks on Model value copies
-	database, err := getSharedDB(resolvedBaseDir)
+	cfg, err := config.Load(resolvedBaseDir)
 	if err != nil {
 		return nil, err
 	}
-
-	sess, err := session.GetOrCreate(database)
+	store, err := config.Store(cfg)
 	if err != nil {
-		_ = releaseSharedDB(resolvedBaseDir)
 		return nil, err
 	}
-
-	m := NewModel(database, sess.ID, opts.Interval, opts.Version, resolvedBaseDir)
-	m.Embedded = true
-	release := func() error { return releaseSharedDB(resolvedBaseDir) }
-	if opts.Sync.Disabled {
-		m.syncRuntime = newSyncRuntime(nil, opts.Sync, release)
-	} else {
-		if opts.Sync.Interval == 0 {
-			opts.Sync.Interval = syncconfig.GetAutoSyncInterval()
+	var m Model
+	if store == config.StoreGitHub {
+		m, err = NewGitHubModelForWorktree(context.Background(), resolvedBaseDir, opts.BaseDir, opts.Interval, opts.Version)
+		if err != nil {
+			return nil, err
 		}
-		syncer, syncErr := tdsync.New(tdsync.Options{BaseDir: resolvedBaseDir, DB: database, Logger: opts.Sync.Logger, Interval: opts.Sync.Interval})
-		if syncErr != nil {
-			slog.Debug("monitor: background sync unavailable", "err", syncErr)
+	} else {
+		// Use shared DB to prevent connection leaks on Model value copies
+		database, err := getSharedDB(resolvedBaseDir)
+		if err != nil {
+			return nil, err
+		}
+
+		sess, err := session.GetOrCreate(database)
+		if err != nil {
+			_ = releaseSharedDB(resolvedBaseDir)
+			return nil, err
+		}
+
+		m = NewModel(database, sess.ID, opts.Interval, opts.Version, resolvedBaseDir)
+		release := func() error { return releaseSharedDB(resolvedBaseDir) }
+		if opts.Sync.Disabled {
 			m.syncRuntime = newSyncRuntime(nil, opts.Sync, release)
 		} else {
-			m.syncRuntime = newSyncRuntime(syncer, opts.Sync, release)
+			if opts.Sync.Interval == 0 {
+				opts.Sync.Interval = syncconfig.GetAutoSyncInterval()
+			}
+			syncer, syncErr := tdsync.New(tdsync.Options{BaseDir: resolvedBaseDir, DB: database, Logger: opts.Sync.Logger, Interval: opts.Sync.Interval})
+			if syncErr != nil {
+				slog.Debug("monitor: background sync unavailable", "err", syncErr)
+				m.syncRuntime = newSyncRuntime(nil, opts.Sync, release)
+			} else {
+				m.syncRuntime = newSyncRuntime(syncer, opts.Sync, release)
+			}
 		}
 	}
+	m.Embedded = true
 	m.PanelRenderer = opts.PanelRenderer
 	m.ModalRenderer = opts.ModalRenderer
 	if themeIsZero(opts.Theme) {
@@ -638,7 +644,17 @@ func (m Model) restoreLastViewedBoard() tea.Cmd {
 // restoreFilterState returns a command that restores saved filter state on launch
 func (m Model) restoreFilterState() tea.Cmd {
 	return func() tea.Msg {
-		state, err := config.GetFilterState(m.BaseDir)
+		var state *config.FilterState
+		var err error
+		if m.preferences != nil {
+			prefs, loadErr := m.preferences.Load()
+			if loadErr != nil {
+				return MonitorPreferencesErrorMsg{Error: loadErr}
+			}
+			state = &prefs.Filter
+		} else {
+			state, err = config.GetFilterState(m.BaseDir)
+		}
 		if err != nil || state == nil {
 			return nil
 		}
@@ -728,6 +744,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 		return m, tea.Batch(cmds...)
+	}
+
+	// Remote request cancellation must also work while text inputs own keys.
+	// Preserve pending write facts for the CLI's exit/inspection warning.
+	if key, ok := msg.(tea.KeyMsg); ok && m.DataSource != nil && key.String() == "ctrl+c" {
+		return m, tea.Quit
 	}
 
 	// Form mode: forward all messages to huh form first
@@ -840,6 +862,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// NOTE: TickMsg is handled above the form/overlay interception block
 	// to prevent the poll chain from breaking. Do not add a TickMsg case here.
 
+	case MonitorReadErrorMsg:
+		if msg.Error != nil {
+			m.StatusMessage = "GitHub monitor: " + msg.Error.Error()
+			m.StatusIsError = true
+		}
+		return m, nil
+	case MonitorPreferencesErrorMsg:
+		if msg.Error != nil {
+			m.StatusMessage = "Monitor preferences: " + msg.Error.Error()
+			m.StatusIsError = true
+		}
+		return m, nil
 	case RefreshDataMsg:
 		if msg.Skipped {
 			return m, nil
@@ -852,6 +886,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.StatusMessage = "Error refreshing monitor: " + msg.Error.Error()
 			m.StatusIsError = true
 			return m, nil
+		}
+		if m.DataSource != nil && strings.HasPrefix(m.StatusMessage, "Error refreshing monitor:") {
+			m.StatusMessage = "GitHub refreshed"
+			m.StatusIsError = false
 		}
 		m.IssueTransitions = msg.Transitions
 		m.FocusedIssue = msg.FocusedIssue
@@ -1015,7 +1053,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case PaneHeightsSavedMsg:
-		// Pane heights saved (or failed) - just ignore errors silently
+		if m.preferences != nil && msg.Error != nil {
+			m.StatusMessage = "Monitor pane preferences: " + msg.Error.Error()
+			m.StatusIsError = true
+		}
+		// Preserve legacy SQLite fire-and-forget behavior.
 		return m, nil
 
 	case boardEditorDebounceMsg:
@@ -1026,6 +1068,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case BoardEditorSaveResultMsg:
+		if m.BoardSource != nil {
+			if !m.BoardEditorPending || msg.Request != m.BoardEditorRequest {
+				return m, nil
+			}
+			m.BoardEditorPending = false
+		}
+
 		if msg.Error != nil {
 			m.StatusMessage = "Error: " + msg.Error.Error()
 			m.StatusIsError = true
@@ -1037,7 +1086,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.StatusMessage = action + " board: " + msg.Board.Name
 		m.StatusIsError = false
-		m.closeBoardEditorModal()
+		if m.BoardSource == nil || msg.Generation == m.BoardEditorGeneration {
+			m.closeBoardEditorModal()
+		}
 		// Refresh boards list to pick up changes
 		return m, tea.Batch(
 			m.fetchBoards(),
@@ -1045,6 +1096,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case BoardEditorDeleteResultMsg:
+		if m.BoardSource != nil {
+			if !m.BoardEditorPending || msg.Request != m.BoardEditorRequest {
+				return m, nil
+			}
+			m.BoardEditorPending = false
+		}
+
 		if msg.Error != nil {
 			m.StatusMessage = "Error: " + msg.Error.Error()
 			m.StatusIsError = true
@@ -1052,7 +1110,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.StatusMessage = "Board deleted"
 		m.StatusIsError = false
-		m.closeBoardEditorModal()
+		if m.BoardSource == nil || msg.Generation == m.BoardEditorGeneration {
+			m.closeBoardEditorModal()
+		}
 		// If the deleted board was the active board, exit board mode
 		if m.BoardMode.Board != nil && m.BoardMode.Board.ID == msg.BoardID {
 			m.TaskListMode = TaskListModeCategorized

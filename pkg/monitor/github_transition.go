@@ -96,6 +96,7 @@ func (m Model) transitionRemoteIssue(action string) (tea.Model, tea.Cmd) {
 	m.WorkflowRequest++
 	request := m.WorkflowRequest
 	m.WorkflowPending = true
+	m.WorkflowWriting = true
 	return m, func() tea.Msg {
 		return MonitorTransitionedMsg{IssueID: id, Action: action, Request: request, Error: store.Transition(action)}
 	}
@@ -105,6 +106,7 @@ func (m Model) handleRemoteTransitioned(msg MonitorTransitionedMsg) (tea.Model, 
 		return m, nil
 	}
 	m.WorkflowPending = false
+	m.WorkflowWriting = false
 	if msg.Action == "record-review" {
 		m.RecordStore = nil
 	}

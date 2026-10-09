@@ -177,6 +177,7 @@ func (m Model) submitRemoteForm() (tea.Model, tea.Cmd) {
 	deps := m.FormState.GetDependencies()
 	m.WorkflowRequest++
 	m.WorkflowPending = true
+	m.WorkflowWriting = true
 	request, formRequest := m.WorkflowRequest, m.FormAutofillRequest
 	return m, func() tea.Msg {
 		return MonitorFormSavedMsg{IssueID: issue.ID, Request: request, FormRequest: formRequest, Error: store.SaveEdit(issue, deps)}

@@ -131,7 +131,7 @@ func TestGitHubFormSaveUIKeepsDraftOnErrorAndClosesOnlyAfterSuccess(t *testing.T
 		}
 		pending, cmd := m.submitForm()
 		m = pending.(Model)
-		if cmd == nil || !m.WorkflowPending || !m.FormOpen {
+		if cmd == nil || !m.WorkflowPending || !m.PendingRemoteWrite() || !m.FormOpen {
 			t.Fatal("submission mutated optimistic display")
 		}
 		if _, duplicate := m.submitForm(); duplicate != nil {

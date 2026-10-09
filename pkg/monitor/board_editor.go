@@ -41,6 +41,8 @@ func (m Model) openBoardEditorCreate() (Model, tea.Cmd) {
 // openBoardEditorModal opens the board editor modal.
 // board == nil means create mode; non-nil means edit (or info for builtin).
 func (m Model) openBoardEditorModal(board *models.Board) Model {
+	m.BoardEditorGeneration++
+	m.BoardEditorCreateAttempted = false
 	m.BoardEditorOpen = true
 	m.BoardEditorWriter = nil
 	m.BoardEditorBoard = board
@@ -93,6 +95,7 @@ func (m Model) openBoardEditorModal(board *models.Board) Model {
 
 // closeBoardEditorModal closes the board editor modal
 func (m *Model) closeBoardEditorModal() {
+	m.BoardEditorGeneration++
 	if source, ok := m.BoardSource.(interface{ CancelPreview() }); ok {
 		source.CancelPreview()
 	}
@@ -345,6 +348,10 @@ func (m *Model) createBoardEditorDeleteConfirmModal() *modal.Modal {
 
 // executeBoardEditorSave saves or creates the board
 func (m Model) executeBoardEditorSave() (Model, tea.Cmd) {
+	if m.BoardSource != nil && m.BoardEditorPending {
+		m.StatusMessage = "Board write is still running"
+		return m, nil
+	}
 
 	if m.BoardEditorNameInput == nil || m.BoardEditorQueryInput == nil {
 		return m, nil
@@ -369,15 +376,24 @@ func (m Model) executeBoardEditorSave() (Model, tea.Cmd) {
 	isNew := m.BoardEditorMode == "create"
 	if m.BoardSource != nil {
 		if isNew {
+			if m.BoardEditorCreateAttempted {
+				m.StatusMessage = "Board creation was already attempted; inspect GitHub before creating another board"
+				m.StatusIsError = true
+				return m, nil
+			}
 			source, ok := m.BoardSource.(BoardEditorSource)
 			if !ok {
 				m.StatusMessage = "Board creation store unavailable"
 				m.StatusIsError = true
 				return m, nil
 			}
+			m.BoardEditorPending = true
+			m.BoardEditorCreateAttempted = true
+			m.BoardEditorRequest++
+			request, generation := m.BoardEditorRequest, m.BoardEditorGeneration
 			return m, func() tea.Msg {
 				b, err := source.CreateBoard(name, queryStr)
-				return BoardEditorSaveResultMsg{Board: b, IsNew: true, Error: err}
+				return BoardEditorSaveResultMsg{Board: b, IsNew: true, Error: err, Request: request, Generation: generation}
 			}
 		}
 		editor := m.BoardEditorWriter
@@ -386,9 +402,12 @@ func (m Model) executeBoardEditorSave() (Model, tea.Cmd) {
 			m.StatusIsError = true
 			return m, nil
 		}
+		m.BoardEditorPending = true
+		m.BoardEditorRequest++
+		request, generation := m.BoardEditorRequest, m.BoardEditorGeneration
 		return m, func() tea.Msg {
 			b, err := editor.Save(name, queryStr)
-			return BoardEditorSaveResultMsg{Board: b, Error: err}
+			return BoardEditorSaveResultMsg{Board: b, Error: err, Request: request, Generation: generation}
 		}
 	}
 
@@ -415,6 +434,10 @@ func (m Model) executeBoardEditorSave() (Model, tea.Cmd) {
 
 // executeBoardEditorDelete deletes the board
 func (m Model) executeBoardEditorDelete() (Model, tea.Cmd) {
+	if m.BoardSource != nil && m.BoardEditorPending {
+		m.StatusMessage = "Board write is still running"
+		return m, nil
+	}
 
 	if m.BoardEditorBoard == nil {
 		return m, nil
@@ -427,7 +450,12 @@ func (m Model) executeBoardEditorDelete() (Model, tea.Cmd) {
 			m.StatusIsError = true
 			return m, nil
 		}
-		return m, func() tea.Msg { return BoardEditorDeleteResultMsg{BoardID: boardID, Error: editor.Delete()} }
+		m.BoardEditorPending = true
+		m.BoardEditorRequest++
+		request, generation := m.BoardEditorRequest, m.BoardEditorGeneration
+		return m, func() tea.Msg {
+			return BoardEditorDeleteResultMsg{BoardID: boardID, Error: editor.Delete(), Request: request, Generation: generation}
+		}
 	}
 
 	return m, func() tea.Msg {

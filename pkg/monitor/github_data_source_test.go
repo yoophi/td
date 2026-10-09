@@ -104,11 +104,17 @@ func TestGitHubMonitorSlowRefreshDoesNotQueueSweeps(t *testing.T) {
 	done := make(chan RefreshDataMsg, 1)
 	go func() { done <- source.Fetch("old", false, SortByPriority) }()
 	<-f.entered
+	if !source.IsRefreshing() {
+		t.Fatal("running refresh not visible")
+	}
 	if msg := source.Fetch("new", false, SortByPriority); !msg.Skipped || msg.Error != nil {
 		t.Fatal("overlap queued or misreported", msg)
 	}
 	close(f.release)
 	msg := <-done
+	if source.IsRefreshing() {
+		t.Fatal("finished refresh still busy")
+	}
 	if msg.Error != nil || msg.remoteFilter == nil || msg.remoteFilter.search != "old" {
 		t.Fatal(msg)
 	}

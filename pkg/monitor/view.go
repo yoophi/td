@@ -2474,7 +2474,27 @@ func (m Model) renderFooter() string {
 		statusToast = style.Render(fmt.Sprintf(" %s ", m.StatusMessage))
 	}
 
-	refresh := styles.timestamp.Render(fmt.Sprintf("Last: %s", formatLocalTime(m.LastRefresh, "15:04:05")))
+	refreshText := fmt.Sprintf("Last: %s", formatLocalTime(m.LastRefresh, "15:04:05"))
+	if source, ok := m.DataSource.(interface{ IsRefreshing() bool }); ok && source.IsRefreshing() {
+		refreshText = "GitHub loading (Ctrl+C: cancel)"
+	}
+	if m.DataSource != nil && (m.DeletePreparing || (m.WorkflowPending && !m.WorkflowWriting)) {
+		refreshText = "GitHub loading (Ctrl+C: cancel)"
+	}
+	if m.PendingRemoteWrite() {
+		refreshText = "GitHub saving (Ctrl+C: cancel request)"
+	}
+	refresh := styles.timestamp.Render(refreshText)
+	if m.DataSource != nil {
+		// The layout already reserves three footer rows. Keep request state
+		// visible even when help keys and an error fill a narrow terminal.
+		width := max(0, m.Width)
+		return strings.Join([]string{
+			ansi.Truncate(" "+keys, width, "…"),
+			ansi.Truncate(" "+statusToast+sessionsIndicator+handoffAlert+reviewAlert+updateNotif, width, "…"),
+			ansi.Truncate(" "+refresh, width, "…"),
+		}, "\n")
+	}
 
 	// Calculate spacing
 	padding := m.Width - lipgloss.Width(keys) - lipgloss.Width(sessionsIndicator) - lipgloss.Width(handoffAlert) - lipgloss.Width(reviewAlert) - lipgloss.Width(updateNotif) - lipgloss.Width(statusToast) - lipgloss.Width(refresh) - 2

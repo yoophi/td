@@ -28,6 +28,7 @@ type githubBoardClient interface {
 	ObserveMonitorReview(context.Context, *ghstore.Record, string) (*ghstore.MonitorReviewFacts, error)
 }
 type GitHubBoardSource struct {
+	preferences    *localMonitorPreferences
 	previewMu      sync.Mutex
 	previewCancel  context.CancelFunc
 	ctx            context.Context
@@ -49,23 +50,36 @@ func (s *GitHubBoardSource) ListBoards() ([]models.Board, error) {
 	}
 	boards := make([]models.Board, 0, len(records))
 	for _, r := range records {
-		boards = append(boards, r.Board)
+		board, err := s.displayBoard(r.Board)
+		if err != nil {
+			return nil, err
+		}
+		boards = append(boards, *board)
 	}
 	return boards, nil
 }
 func (s *GitHubBoardSource) LastViewedBoard() (*models.Board, error) {
+	if s.preferences == nil {
+		return nil, nil
+	}
+	prefs, err := s.preferences.Load()
+	if err != nil {
+		return nil, err
+	}
+	if prefs.LastBoardID == "" {
+		return nil, nil
+	}
 	boards, err := s.ListBoards()
 	if err != nil {
 		return nil, err
 	}
-	var last *models.Board
-	for _, b := range boards {
-		if b.LastViewedAt != nil && (last == nil || b.LastViewedAt.After(*last.LastViewedAt) || b.LastViewedAt.Equal(*last.LastViewedAt) && strings.Compare(b.ID, last.ID) < 0) {
-			copy := b
-			last = &copy
+	for _, board := range boards {
+		if board.ID == prefs.LastBoardID {
+			return &board, nil
 		}
 	}
-	return last, nil
+	// Removed boards do not prevent startup and are not resurrected.
+	return nil, nil
 }
 func (s *GitHubBoardSource) LoadBoard(id string, statuses map[models.Status]bool) BoardIssuesMsg {
 	fail := func(err error) BoardIssuesMsg { return BoardIssuesMsg{BoardID: id, Error: err} }
@@ -155,5 +169,9 @@ func (s *GitHubBoardSource) LoadBoard(id string, statuses map[models.Status]bool
 		cards[i].Category = string(category)
 	}
 	// Stable positional order is already applied; never fall back to a DB read.
-	return BoardIssuesMsg{BoardID: id, Issues: slices.Clone(cards), RejectedIDs: rejected, Board: &b.Board, ViewStore: &githubBoardView{source: s, observed: *b}, MoveStore: &githubBoardMove{source: s, observed: *b, candidates: slices.Clone(candidates)}}
+	display, err := s.displayBoard(b.Board)
+	if err != nil {
+		return fail(err)
+	}
+	return BoardIssuesMsg{BoardID: id, Issues: slices.Clone(cards), RejectedIDs: rejected, Board: display, ViewStore: &githubBoardView{source: s, observed: *b}, MoveStore: &githubBoardMove{source: s, observed: *b, candidates: slices.Clone(candidates)}}
 }

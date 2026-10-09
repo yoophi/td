@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/marcus/td/internal/features"
@@ -27,6 +28,7 @@ type monitorRefreshFilter struct {
 
 type GitHubDataSource struct {
 	refreshMu      sync.Mutex
+	refreshing     atomic.Bool
 	ctx            context.Context
 	baseDir, actor string
 	branch         string
@@ -43,6 +45,8 @@ func (s *GitHubDataSource) Fetch(search string, includeClosed bool, sort SortMod
 		return RefreshDataMsg{Skipped: true}
 	}
 	defer s.refreshMu.Unlock()
+	s.refreshing.Store(true)
+	defer s.refreshing.Store(false)
 	defer func() { result.remoteFilter = &monitorRefreshFilter{search, includeClosed, sort} }()
 	fail := func(err error) RefreshDataMsg { return RefreshDataMsg{Error: err} }
 	if err := s.ctx.Err(); err != nil {
@@ -70,3 +74,5 @@ func (s *GitHubDataSource) Fetch(search string, includeClosed bool, sort SortMod
 	msg.Transitions = s.transitionHandles(msg.observedIssues)
 	return *msg
 }
+
+func (s *GitHubDataSource) IsRefreshing() bool { return s.refreshing.Load() }

@@ -78,6 +78,7 @@ func (m Model) executeRemoteClose() (tea.Model, tea.Cmd) {
 	m.WorkflowRequest++
 	request := m.WorkflowRequest
 	m.WorkflowPending = true
+	m.WorkflowWriting = true
 	return m, func() tea.Msg {
 		return MonitorTransitionedMsg{IssueID: id, Action: "close", Request: request, Error: store.Close(reason)}
 	}

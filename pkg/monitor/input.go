@@ -1263,6 +1263,10 @@ func (m Model) savePaneHeightsAsync() tea.Cmd {
 	heights := m.PaneHeights
 	baseDir := m.BaseDir
 	return func() tea.Msg {
+		if m.preferences != nil {
+			err := m.preferences.Update(func(p *monitorPreferences) { p.PaneHeights = heights })
+			return PaneHeightsSavedMsg{Error: err}
+		}
 		err := config.SetPaneHeights(baseDir, heights)
 		return PaneHeightsSavedMsg{Error: err}
 	}

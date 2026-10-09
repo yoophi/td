@@ -84,3 +84,22 @@ func TestGitHubClipboardLoadingModalReadsItsIssueWithoutSQLite(t *testing.T) {
 		t.Fatal("wrong modal ID or missing clipboard error")
 	}
 }
+
+func TestGitHubSendToWorktreeIsAsyncWithoutSQLite(t *testing.T) {
+	f := &clipboardSourceFixture{result: IssueDetailsMsg{Issue: &models.Issue{ID: "gh-1", Title: "Selected task"}}}
+	m := Model{DataSource: f, ActivePanel: PanelCurrentWork, CurrentWorkRows: []string{"gh-1"}}
+	_, cmd := m.sendToWorktree()
+	if cmd == nil || f.id != "" {
+		t.Fatal("worktree send blocked the UI or touched DB")
+	}
+	sent := cmd().(SendTaskToWorktreeMsg)
+	if sent.TaskID != "gh-1" || sent.TaskTitle != "Selected task" || f.id != "gh-1" {
+		t.Fatal(sent)
+	}
+	f.result.Error = errors.New("permission denied")
+	_, cmd = m.sendToWorktree()
+	result, _ := m.Update(cmd())
+	if !result.(Model).StatusIsError {
+		t.Fatal("worktree send read error hidden")
+	}
+}

@@ -85,7 +85,7 @@ func TestGitHubBoardSourceClassificationWithoutSQLite(t *testing.T) {
 		t.Fatalf("stale %+v", msg)
 	}
 	last, err := source.LastViewedBoard()
-	if err != nil || last.ID != "bd-gh-9" {
+	if err != nil || last != nil {
 		t.Fatalf("%+v %v", last, err)
 	}
 	f.records[0].Details.Dependencies = []string{"gh-99"}
@@ -100,7 +100,10 @@ func TestGitHubBoardSourceClassificationWithoutSQLite(t *testing.T) {
 
 func TestBoardSourceModelReadsAndErrorsDoNotTouchSQLite(t *testing.T) {
 	f := &boardSourceFixture{boards: []ghstore.BoardRecord{{Board: models.Board{ID: "bd-gh-9"}, Details: ghstore.BoardDetails{Version: 1, ViewMode: "backlog"}}}, records: []ghstore.Record{{Issue: models.Issue{ID: "gh-1", Status: models.StatusOpen, Priority: models.PriorityP2}}}}
-	source := &GitHubBoardSource{ctx: context.Background(), baseDir: t.TempDir(), actor: "actual-monitor", open: func(context.Context) (githubBoardClient, error) { return f, nil }}
+	source := &GitHubBoardSource{ctx: context.Background(), preferences: testMonitorPreferences(t), baseDir: t.TempDir(), actor: "actual-monitor", open: func(context.Context) (githubBoardClient, error) { return f, nil }}
+	if err := source.preferences.Update(func(p *monitorPreferences) { p.LastBoardID = "bd-gh-9" }); err != nil {
+		t.Fatal(err)
+	}
 	m := Model{SessionID: "actual-monitor", BoardSource: source, BoardMode: BoardMode{Board: &models.Board{ID: "bd-gh-9"}, StatusFilter: DefaultBoardStatusFilter()}}
 	if msg := m.fetchBoards()().(BoardsDataMsg); msg.Error != nil || len(msg.Boards) != 1 {
 		t.Fatalf("%+v", msg)

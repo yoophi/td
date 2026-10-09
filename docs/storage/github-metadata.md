@@ -623,7 +623,27 @@ reviews, deletion, board editing, ordering, details and summaries. Slow dashboar
 polls do not queue overlapping API sweeps; responses for superseded filters do
 not replace the current display. Failed reads retain the previous dashboard.
 
-The CLI and embedded entry points are not yet switched to this constructor.
-Before activating them, board visits/view choices and monitor screen settings
-must be moved to device-local preferences, all keybindings audited, and actual
-TUI behavior verified. These adapters and their tests do not prove #6 complete.
+The CLI and both embedded entry points now select this constructor for a
+configured gh-issue project. Missing gh, authentication/remote errors and invalid
+preferences stop initialization explicitly. The owner closes/cancels requests on
+exit; cancelling a pending write cannot undo a request GitHub has accepted, so
+the CLI prints an inspection warning when a write outcome is still pending.
+
+Pane heights, search/sort/type/closed filters, onboarding state, last board and
+per-board view modes are private device settings under the repository/worktree
+context directory. They do not update the shared project config or GitHub board
+carrier, do not depend on session rotation, and never create a builtin carrier.
+Concurrent preference writes use a local lock and atomic private-file replacement.
+Malformed/future preference files are preserved and reported rather than reset.
+Shared board name/query/order changes still use observed carrier writes.
+
+Board editor writes reject overlapping submissions. Delayed results cannot close
+a new draft opened after the original editor closed. An uncertain creation keeps
+the draft and disallows another creation attempt within that form: inspect GitHub
+before reopening it. Request state and errors occupy separate footer rows so
+long key hints do not hide loading/saving/cancellation feedback.
+
+The N-key notes UI is not wired for either store yet; help and the action state
+this explicitly. Follow-up #44 depends on #20 and is an implementation task,
+not an impossible-work exception. Runtime verification and the remaining #6
+acceptance audit are recorded on that issue before completion is claimed.
