@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func snapshotFixture(issues, comments any, commentErr error) (*Client, *[]string) {
@@ -112,5 +113,32 @@ func TestSnapshotEmptyRepositorySkipsCommentRead(t *testing.T) {
 	s, err := c.ReadSnapshot(context.Background(), true)
 	if err != nil || s == nil || len(*calls) != 1 {
 		t.Fatalf("%v %v %v", s, *calls, err)
+	}
+}
+
+func TestSnapshotAggregateConsumersHaveNoPerIssueRequests(t *testing.T) {
+	issues := [][]apiIssue{{}}
+	for n := 1; n <= 45; n++ {
+		issues[0] = append(issues[0], apiIssue{Number: n, State: "open"})
+	}
+	for _, kind := range []string{"stats", "json export"} {
+		t.Run(kind, func(t *testing.T) {
+			c, calls := snapshotFixture(issues, [][]apiComment{{}}, nil)
+			switch kind {
+			case "stats":
+				stats, err := c.ExtendedStats(context.Background(), time.Now())
+				if err != nil || stats.Total != 45 {
+					t.Fatalf("%v %v", stats, err)
+				}
+			case "json export":
+				rows, err := c.ExportIssues(context.Background(), true, true)
+				if err != nil || len(rows) != 45 {
+					t.Fatalf("rows=%d err=%v", len(rows), err)
+				}
+			}
+			if len(*calls) != 2 {
+				t.Fatalf("45 issues cost %d requests: %v", len(*calls), *calls)
+			}
+		})
 	}
 }

@@ -19,6 +19,30 @@ type ExportedIssue struct {
 }
 
 func (c *Client) ExportIssues(ctx context.Context, all, includeActivity bool) ([]ExportedIssue, error) {
+	if includeActivity {
+		snapshot, err := c.ReadSnapshot(ctx, true)
+		if err != nil {
+			return nil, err
+		}
+		result := []ExportedIssue{}
+		records := map[int]Record{}
+		for _, r := range snapshot.Issues(true) {
+			records[r.Number] = r
+		}
+		for _, entry := range snapshot.entries {
+			item := entry.Issue
+			r, ok := records[item.Number]
+			if !ok || (!all && (item.State != "open" || r.DeletedAt != nil)) {
+				continue
+			}
+			activity, err := snapshot.Activity(r.ID)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, ExportedIssue{Version: 1, Repository: c.repo, Record: r, Body: item.Body, NativeState: item.State, Author: item.User.Login, Activity: activity})
+		}
+		return result, nil
+	}
 	state := "open"
 	if all {
 		state = "all"
@@ -53,12 +77,6 @@ func (c *Client) ExportIssues(ctx context.Context, all, includeActivity bool) ([
 				continue
 			}
 			activity := []models.Activity{}
-			if includeActivity {
-				activity, err = c.readIssueActivity(ctx, r)
-				if err != nil {
-					return nil, fmt.Errorf("export %s activity: %w", r.ID, err)
-				}
-			}
 			result = append(result, ExportedIssue{Version: 1, Repository: c.repo, Record: *r, Body: item.Body, NativeState: item.State, Author: item.User.Login, Activity: activity})
 		}
 	}

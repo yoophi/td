@@ -112,7 +112,20 @@ func (s *Server) EnableGitHubMonitor(store *GitHubReadStore, sessions SessionSto
 	})
 }
 func fetchGitHubMonitor(ctx context.Context, c githubMonitorClient, actor string, mode reviewpolicy.Mode, focus *string, search, searchMode string, includeClosed bool, sortMode monitor.SortMode, now time.Time) (*monitor.RefreshDataMsg, error) {
-	records, err := c.ListIncludingDeleted(ctx, true)
+	var observed *ghstore.Snapshot
+	var records []ghstore.Record
+	var err error
+	if bulk, ok := c.(ghstore.SnapshotReader); ok {
+		observed, err = bulk.ReadSnapshot(ctx, true)
+		if err == nil && observed == nil {
+			err = fmt.Errorf("GitHub snapshot observation missing")
+		}
+		if err == nil {
+			records = observed.Issues(true)
+		}
+	} else {
+		records, err = c.ListIncludingDeleted(ctx, true)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +151,12 @@ func fetchGitHubMonitor(ctx context.Context, c githubMonitorClient, actor string
 				msg.InProgress = append(msg.InProgress, record.Issue)
 			}
 		}
-		activities, err := c.ListActivityIncludingDeleted(ctx, record.ID)
+		var activities []models.Activity
+		if observed != nil {
+			activities, err = observed.Activity(record.ID)
+		} else {
+			activities, err = c.ListActivityIncludingDeleted(ctx, record.ID)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("monitor activities on %s: %w", record.ID, err)
 		}

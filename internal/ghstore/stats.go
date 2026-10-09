@@ -11,12 +11,18 @@ import (
 
 // ExtendedStats counts visible issues, but retains logs/handoffs on deleted
 // issues like SQLite. It never mixes device-local analytics into shared totals.
-// Listing and activity reads are separate observations, not an atomic snapshot.
+// The complete repository observation is not an atomic snapshot.
 func (c *Client) ExtendedStats(ctx context.Context, now time.Time) (*models.ExtendedStats, error) {
-	records, err := c.ListIncludingDeleted(ctx, true)
+	snapshot, err := c.ReadSnapshot(ctx, true)
 	if err != nil {
 		return nil, err
 	}
+	return snapshot.ExtendedStats(now)
+}
+
+// ExtendedStats derives shared totals without additional API requests.
+func (snapshot *Snapshot) ExtendedStats(now time.Time) (*models.ExtendedStats, error) {
+	records := snapshot.Issues(true)
 	stats, err := aggregateIssueStats(records, now)
 	if err != nil {
 		return nil, err
@@ -24,7 +30,7 @@ func (c *Client) ExtendedStats(ctx context.Context, now time.Time) (*models.Exte
 	sessions := map[string]int{}
 	seen := map[string]bool{}
 	for _, record := range records {
-		activities, err := c.ListActivityIncludingDeleted(ctx, record.ID)
+		activities, err := snapshot.Activity(record.ID)
 		if err != nil {
 			return nil, fmt.Errorf("read statistics activity on %s: %w", record.ID, err)
 		}

@@ -34,12 +34,12 @@ func TestExportIssuesPaginationAuthorsDeletedAndCost(t *testing.T) {
 			if failure {
 				return nil, errors.New("HTTP 403: API rate limit exceeded")
 			}
-			return json.Marshal([][]apiComment{{{ID: 1, Body: "native comment", CreatedAt: now, UpdatedAt: now}}})
+			return json.Marshal([][]apiComment{{{ID: 1, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: "native comment", CreatedAt: now, UpdatedAt: now}}})
 		}
 		return json.Marshal(pages)
 	}}
 	rows, err := c.ExportIssues(context.Background(), true, true)
-	if err != nil || len(rows) != 2 || rows[0].Author != "original-author" || rows[1].Record.DeletedAt == nil || rows[1].Body != body || len(rows[0].Activity) != 1 || len(calls) != 3 {
+	if err != nil || len(rows) != 2 || rows[0].Author != "original-author" || rows[1].Record.DeletedAt == nil || rows[1].Body != body || len(rows[0].Activity) != 1 || len(calls) != 2 {
 		t.Fatalf("rows=%+v calls=%v err=%v", rows, calls, err)
 	}
 	calls = nil

@@ -58,7 +58,7 @@ if [ "$4" = repos/owner/repo ]; then printf '{"full_name":"owner/repo","has_issu
 case "$6" in
  'repos/owner/repo/issues?state=all&per_page=100') printf '[[{"number":1,"title":"First","state":"open","body":""}]]' ;;
  'repos/owner/repo/issues/1') printf '{"number":1,"title":"First","state":"open","body":""}' ;;
- 'repos/owner/repo/issues/1/comments?per_page=100')
+ 'repos/owner/repo/issues/comments?per_page=100')
   if [ "$TD_CONTEXT_FAIL" = yes ]; then echo 'history unavailable' >&2;exit 1;fi
   printf '[[]]' ;;
  *) echo 'unexpected request' >&2;exit 3 ;;

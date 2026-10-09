@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/marcus/td/internal/models"
 	"slices"
 	"strings"
@@ -61,35 +62,38 @@ func TestStatisticsRetainsDeletedActivityAndFailsWithoutPartialTotals(t *testing
 					if mode == "permission" {
 						return nil, errors.New("permission denied")
 					}
-					id := int64(1)
-					kind := "log"
-					session := "ses-b"
-					if strings.Contains(endpoint, "/2/") {
-						id = 2
-						session = "ses-a"
+
+					comments := []apiComment{}
+					for n := 1; n <= 3; n++ {
+						id := int64(n)
+						kind, session := "log", "ses-b"
+						if n == 2 {
+							session = "ses-a"
+						}
+						if n == 3 {
+							kind = "handoff"
+						}
+						data := activityData{Kind: kind, OperationID: fmt.Sprintf("op-%d", n), SessionID: session}
+						if kind == "log" {
+							data.Message = "progress"
+							data.LogType = models.LogTypeProgress
+						} else {
+							data.Done = []string{"done"}
+						}
+						text, err := renderActivity(data)
+						if err != nil {
+							return nil, err
+						}
+						if mode == "malformed" {
+							text = activityPrefix + " invalid"
+						}
+						if mode == "duplicate" {
+							id = 1
+						}
+						issueURL := fmt.Sprintf("https://api.github.com/repos/owner/repo/issues/%d", n)
+						comments = append(comments, apiComment{ID: id, IssueURL: issueURL, Body: text}, apiComment{ID: int64(n + 100), IssueURL: issueURL, Body: "native comment"})
 					}
-					if strings.Contains(endpoint, "/3/") {
-						id = 3
-						kind = "handoff"
-					}
-					data := activityData{Kind: kind, OperationID: endpoint, SessionID: session}
-					if kind == "log" {
-						data.Message = "progress"
-						data.LogType = models.LogTypeProgress
-					} else {
-						data.Done = []string{"done"}
-					}
-					text, err := renderActivity(data)
-					if err != nil {
-						return nil, err
-					}
-					if mode == "malformed" {
-						text = activityPrefix + " invalid"
-					}
-					if mode == "duplicate" {
-						id = 1
-					}
-					return json.Marshal([][]apiComment{{{ID: id, Body: text}, {ID: id + 100, Body: "native comment"}}})
+					return json.Marshal([][]apiComment{comments})
 				}
 				return base(ctx, bin, input, args...)
 			}

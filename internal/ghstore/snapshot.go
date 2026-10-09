@@ -14,6 +14,11 @@ import (
 	"github.com/marcus/td/internal/models"
 )
 
+// SnapshotReader provides a complete repository observation to aggregate readers.
+type SnapshotReader interface {
+	ReadSnapshot(context.Context, bool) (*Snapshot, error)
+}
+
 // Snapshot is a complete read-only observation, not an atomic repository
 // revision. Callers must still obtain fresh observations before mutations.
 type Snapshot struct {

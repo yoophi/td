@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 )
 
@@ -53,7 +54,19 @@ func (s *GitHubDataSource) Handoffs() HandoffsDataMsg {
 	if err != nil {
 		return fail(err)
 	}
-	records, err := c.ListIncludingDeleted(s.ctx, true)
+	var observed *ghstore.Snapshot
+	var records []ghstore.Record
+	if bulk, ok := c.(ghstore.SnapshotReader); ok {
+		observed, err = bulk.ReadSnapshot(s.ctx, true)
+		if err == nil && observed == nil {
+			err = fmt.Errorf("GitHub snapshot observation missing")
+		}
+		if err == nil {
+			records = observed.Issues(true)
+		}
+	} else {
+		records, err = c.ListIncludingDeleted(s.ctx, true)
+	}
 	if err != nil {
 		return fail(err)
 	}
@@ -68,7 +81,12 @@ func (s *GitHubDataSource) Handoffs() HandoffsDataMsg {
 			return fail(fmt.Errorf("handoff listing repeated %s", r.ID))
 		}
 		tasks[r.ID] = true
-		events, err := c.ListActivityIncludingDeleted(s.ctx, r.ID)
+		var events []models.Activity
+		if observed != nil {
+			events, err = observed.Activity(r.ID)
+		} else {
+			events, err = c.ListActivityIncludingDeleted(s.ctx, r.ID)
+		}
 		if err != nil {
 			return fail(fmt.Errorf("handoffs on %s: %w", r.ID, err))
 		}

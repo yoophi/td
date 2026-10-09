@@ -65,3 +65,12 @@ The snapshot is not atomic and is never final mutation authorization.
 Consumer conversion (#47), lazy review display (#48), persistent cache (#52),
 and incremental reconciliation (#50) remain separate implementation tasks.
 The existing running server must use the new build to benefit from this change.
+
+Aggregate readers now consume the same bulk observation: monitor/context for
+serve and TUI, TUI handoffs, shared statistics, and JSON export. In native tests
+on the 52-task repository, HTTP monitor, CLI context and JSON export each used
+three HTTP responses including preflight. Basic info remained two responses
+because it does not need comment history. Markdown export still uses issue
+pages only. Review eligibility event checks remain tracked separately in #48;
+these measurements do not claim zero extra review requests for in-review tasks.
+Persistent reuse between independent dashboard/event requests is #52/#50.
