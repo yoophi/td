@@ -7,6 +7,7 @@ import (
 
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
+	"github.com/marcus/td/internal/reviewpolicy"
 	"github.com/marcus/td/internal/workflow"
 	"github.com/spf13/cobra"
 )
@@ -27,11 +28,18 @@ var workflowCmd = &cobra.Command{
 	Short: "Show issue status workflow",
 	Long: `Displays the issue status workflow state machine.
 
-Shows all valid status transitions and any guards applied.`,
+Shows status transitions and state-machine guards. Review/close commands also
+enforce review_policy_mode independently of these guards. The default review
+policy is trusted; project settings can override it. This command describes
+the policies without reading issue data or selecting the project's policy.`,
 	GroupID: "system",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		showMermaid, _ := cmd.Flags().GetBool("mermaid")
 		showDot, _ := cmd.Flags().GetBool("dot")
+		if showMermaid && showDot {
+			return fmt.Errorf("choose only one workflow diagram format: --mermaid or --dot")
+		}
 
 		if jsonMode(cmd) {
 			// --json combined with a diagram flag still honours the diagram:
@@ -40,13 +48,15 @@ Shows all valid status transitions and any guards applied.`,
 			switch {
 			case showMermaid:
 				return output.JSON(map[string]interface{}{
-					"format":  "mermaid",
-					"diagram": renderMermaidDiagram(),
+					"format":        "mermaid",
+					"diagram":       renderMermaidDiagram(),
+					"review_policy": workflowReviewPolicyJSON(),
 				})
 			case showDot:
 				return output.JSON(map[string]interface{}{
-					"format":  "dot",
-					"diagram": renderDotDiagram(),
+					"format":        "dot",
+					"diagram":       renderDotDiagram(),
+					"review_policy": workflowReviewPolicyJSON(),
 				})
 			}
 			return output.JSON(workflowJSON())
@@ -60,6 +70,27 @@ Shows all valid status transitions and any guards applied.`,
 		}
 		return printWorkflow()
 	},
+}
+
+const workflowReviewPolicyNote = "State-machine guard modes do not disable command review policy. Default review policy: trusted (not the project's resolved setting). Trusted permits --reviewed-by attribution or --self-review --reason; attribution is an unverifiable attestation. Delegated/strict require reviewer independence. Minor tasks retain their review exemption. gh-issue writes use best-effort conflict detection, not atomic transactions."
+
+var workflowReviewModeDocs = []struct {
+	Name        reviewpolicy.Mode `json:"name"`
+	Description string            `json:"description"`
+}{
+	{reviewpolicy.ModeTrusted, "Independent review preferred; involved sessions need --reviewed-by or --self-review --reason. Attribution is not verified by td."},
+	{reviewpolicy.ModeDelegated, "Implementation involvement blocks recording approval; creators who did not implement may review. An active approval permits subsequent close."},
+	{reviewpolicy.ModeStrict, "Any prior involvement blocks recording approval or close."},
+	{reviewpolicy.ModeBalanced, "Legacy creator exception for a different implementer; implementation involvement blocks approval."},
+}
+
+func workflowReviewPolicyJSON() map[string]interface{} {
+	return map[string]interface{}{
+		"default_mode":            reviewpolicy.ModeTrusted,
+		"project_policy_resolved": false,
+		"modes":                   workflowReviewModeDocs,
+		"note":                    workflowReviewPolicyNote,
+	}
 }
 
 // workflowGuardDoc describes a guard for both the human listing and --json, so
@@ -109,10 +140,11 @@ func workflowJSON() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"statuses":    statuses,
-		"transitions": transitions,
-		"modes":       workflowModeDocs,
-		"guards":      workflowGuardDocs,
+		"statuses":      statuses,
+		"transitions":   transitions,
+		"modes":         workflowModeDocs,
+		"guards":        workflowGuardDocs,
+		"review_policy": workflowReviewPolicyJSON(),
 	}
 }
 
@@ -166,6 +198,11 @@ func printWorkflow() error {
 		fmt.Printf("  • %-22s - %s\n", g.Name, g.Description)
 	}
 	fmt.Println()
+	fmt.Println("COMMAND REVIEW POLICY (independent of state-machine guard modes):")
+	fmt.Println("  " + workflowReviewPolicyNote)
+	for _, m := range workflowReviewModeDocs {
+		fmt.Printf("  • %s - %s\n", m.Name, m.Description)
+	}
 
 	return nil
 }
@@ -178,6 +215,13 @@ func renderMermaidDiagram() string {
 	var sb strings.Builder
 	sb.WriteString("```mermaid\n")
 	sb.WriteString("stateDiagram-v2\n")
+	fmt.Fprintf(&sb, "    %%%% %s\n", workflowReviewPolicyNote)
+	sb.WriteString("    note right of in_review\n")
+	sb.WriteString("        Command review policy applies separately.\n")
+	sb.WriteString("        Default trusted permits attributed or acknowledged self-review.\n")
+	sb.WriteString("        Project overrides may require independent review.\n")
+	sb.WriteString("        gh-issue conflicts are best-effort, not atomic.\n")
+	sb.WriteString("    end note\n")
 	for _, from := range workflow.AllStatuses() {
 		for _, to := range sm.GetAllowedTransitions(from) {
 			name := workflow.TransitionName(from, to)

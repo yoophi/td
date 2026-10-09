@@ -51,3 +51,16 @@ ignored. Use global `--json` for helper JSON. These commands do not fetch issue
 data or resolve actual session placeholders; explain is parsing, not query
 execution. CLI tests cover both feature modes, successful/error JSON, absence
 of gh calls/SQLite files and validation of every advertised field/example.
+
+`workflow` describes the status graph without resolving project policy or
+fetching issues. Its state-machine guard modes (`liberal/advisory/strict`) are
+separate from the command review policy (`trusted/delegated/strict/balanced`).
+Human output, JSON (including diagram envelopes) and Mermaid source describe
+that separation, the default trusted acknowledgement paths and gh-issue's
+best-effort conflict boundary. JSON explicitly reports
+`review_policy.project_policy_resolved=false`; the default is not a claim about
+the current project's override. Existing transition/guard JSON fields remain.
+Extra positional arguments and simultaneous `--mermaid --dot` now fail rather
+than silently ignoring input. Tests compare documented implementer-approval
+boundaries with the real policy evaluator and run the CLI in both feature modes
+with analytics enabled, proving no gh, SQLite database or issue context creation.
