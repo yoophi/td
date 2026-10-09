@@ -13,14 +13,6 @@ import (
 
 // Watch the ancestor chain and every direct child used to decide completion.
 // These are optimistic, paginated reads, not a GitHub transaction or lock.
-func (c *Client) parentGraph(ctx context.Context, root string) (map[string]Record, []string, error) {
-	records, err := c.listWithRoot(ctx, root)
-	if err != nil {
-		return nil, nil, err
-	}
-	return c.parentGraphFromRecords(ctx, root, records)
-}
-
 func (c *Client) parentGraphFromRecords(ctx context.Context, root string, records []Record) (map[string]Record, []string, error) {
 	all := make(map[string]Record, len(records))
 	for _, record := range records {
@@ -60,7 +52,15 @@ func (c *Client) parentGraphFromRecords(ctx context.Context, root string, record
 }
 
 func (c *Client) verifyParentGraph(ctx context.Context, root string, expected map[string]Record, parents []string) error {
-	actual, chain, err := c.parentGraph(ctx, root)
+	records, err := c.listWithRoot(ctx, root)
+	if err != nil {
+		return err
+	}
+	return c.verifyParentGraphRecords(ctx, root, expected, parents, records)
+}
+
+func (c *Client) verifyParentGraphRecords(ctx context.Context, root string, expected map[string]Record, parents []string, records []Record) error {
+	actual, chain, err := c.parentGraphFromRecords(ctx, root, records)
 	if err != nil {
 		return err
 	}
@@ -100,8 +100,9 @@ func (c *Client) transitionWithParents(ctx context.Context, id, action string, o
 	o.expectedRevision = &root.revision
 	var result *Record
 	var noop bool
+	var verified []Record
 	if action == "review" {
-		result, noop, err = c.transitionReviewWithRecords(ctx, rootID, o, records)
+		result, noop, verified, err = c.transitionReviewWithRecords(ctx, rootID, o, records)
 	} else {
 		result, noop, err = c.transitionWithLocalCascades(ctx, rootID, action, o)
 	}
@@ -126,7 +127,12 @@ func (c *Client) transitionWithParents(ctx context.Context, id, action string, o
 	fail := func(err error) (*Record, bool, error) {
 		return nil, false, fmt.Errorf("%s saved for %s; parent cascade stopped (earlier changes remain; inspect current state before retrying): %w", action, strings.Join(completed, ", "), err)
 	}
-	if err := c.verifyParentGraph(ctx, rootID, graph, parents); err != nil {
+	if verified != nil {
+		err = c.verifyParentGraphRecords(ctx, rootID, graph, parents, verified)
+	} else {
+		err = c.verifyParentGraph(ctx, rootID, graph, parents)
+	}
+	if err != nil {
 		return fail(err)
 	}
 	target := result.Status

@@ -37,7 +37,7 @@ func TestReviewCascadeSharesInitialHierarchyObservation(t *testing.T) {
 		t.Fatalf("initial hierarchy listings = %d; want one shared fresh observation", initialListings)
 	}
 	// Both parent writes still require fresh before/after graph observations.
-	if listings < 6 {
-		t.Fatalf("post-write conflict checks disappeared: %d listings", listings)
+	if listings != 6 {
+		t.Fatalf("hierarchy listings = %d; want initial + shared post-review + before/after each of two parents", listings)
 	}
 }

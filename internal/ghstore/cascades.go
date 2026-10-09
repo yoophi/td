@@ -35,46 +35,48 @@ func (c *Client) transitionWithLocalCascades(ctx context.Context, id, action str
 	if action != "review" {
 		return c.Transition(ctx, id, action, o)
 	}
-	return c.transitionReviewWithRecords(ctx, id, o, nil)
+	result, noop, _, err := c.transitionReviewWithRecords(ctx, id, o, nil)
+	return result, noop, err
 }
 
 // Initial hierarchy records may be shared with parent discovery only when no
 // remote write intervened. Every subsequent graph verification remains fresh.
-func (c *Client) transitionReviewWithRecords(ctx context.Context, id string, o TransitionOptions, records []Record) (*Record, bool, error) {
+func (c *Client) transitionReviewWithRecords(ctx context.Context, id string, o TransitionOptions, records []Record) (*Record, bool, []Record, error) {
 	const action = "review"
 	if err := ValidateReviewOptions(action, o); err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	n, err := Number(id)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	rootID := fmt.Sprintf("gh-%d", n)
 	if records == nil {
 		records, err = c.listWithRoot(ctx, rootID)
 		if err != nil {
-			return nil, false, err
+			return nil, false, nil, err
 		}
 	}
 	graph, descendants, err := reviewGraphFromRecords(records, rootID)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	root := graph[rootID]
 	if o.expectedRevision != nil && root.revision != *o.expectedRevision {
-		return nil, false, &ConflictError{ID: rootID}
+		return nil, false, nil, &ConflictError{ID: rootID}
 	}
 	o.expectedRevision = &root.revision
 	result, noop, err := c.Transition(ctx, rootID, action, o)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	graph[rootID] = *result
 	completed := []string{rootID}
-	fail := func(err error) (*Record, bool, error) {
-		return nil, false, fmt.Errorf("review saved for %s; descendant cascade stopped (earlier changes remain; inspect current state before retrying): %w", strings.Join(completed, ", "), err)
+	fail := func(err error) (*Record, bool, []Record, error) {
+		return nil, false, nil, fmt.Errorf("review saved for %s; descendant cascade stopped (earlier changes remain; inspect current state before retrying): %w", strings.Join(completed, ", "), err)
 	}
-	if err := c.verifyReviewGraph(ctx, rootID, graph); err != nil {
+	verified, err := c.verifyReviewGraphRecords(ctx, rootID, graph)
+	if err != nil {
 		return fail(err)
 	}
 	for _, child := range descendants {
@@ -92,19 +94,12 @@ func (c *Client) transitionReviewWithRecords(ctx context.Context, id string, o T
 		graph[child.ID] = *updated
 		completed = append(completed, child.ID)
 		result.CascadedReviews = append(result.CascadedReviews, *updated)
-		if err := c.verifyReviewGraph(ctx, rootID, graph); err != nil {
+		verified, err = c.verifyReviewGraphRecords(ctx, rootID, graph)
+		if err != nil {
 			return fail(err)
 		}
 	}
-	return result, noop, nil
-}
-
-func (c *Client) reviewGraph(ctx context.Context, root string) (map[string]Record, []Record, error) {
-	records, err := c.listWithRoot(ctx, root)
-	if err != nil {
-		return nil, nil, err
-	}
-	return reviewGraphFromRecords(records, root)
+	return result, noop, verified, nil
 }
 
 func reviewGraphFromRecords(records []Record, root string) (map[string]Record, []Record, error) {
@@ -128,19 +123,25 @@ func reviewGraphFromRecords(records []Record, root string) (map[string]Record, [
 // Re-read membership as well as revisions. This detects reparenting, newly
 // added children and edits to previously processed children. Reads themselves
 // are paginated, not atomic; a later concurrent edit can still escape detection.
-func (c *Client) verifyReviewGraph(ctx context.Context, root string, expected map[string]Record) error {
-	actual, _, err := c.reviewGraph(ctx, root)
+// Return the full fresh listing so an immediately adjacent parent check can
+// validate the same observation, without another read or intervening write.
+func (c *Client) verifyReviewGraphRecords(ctx context.Context, root string, expected map[string]Record) ([]Record, error) {
+	records, err := c.listWithRoot(ctx, root)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	actual, _, err := reviewGraphFromRecords(records, root)
+	if err != nil {
+		return nil, err
 	}
 	if len(actual) != len(expected) {
-		return fmt.Errorf("descendant membership changed for %s: %w", root, &ConflictError{ID: root, AfterWrite: true})
+		return nil, fmt.Errorf("descendant membership changed for %s: %w", root, &ConflictError{ID: root, AfterWrite: true})
 	}
 	for id, previous := range expected {
 		current, ok := actual[id]
 		if !ok || current.revision != previous.revision {
-			return &ConflictError{ID: id, AfterWrite: true}
+			return nil, &ConflictError{ID: id, AfterWrite: true}
 		}
 	}
-	return nil
+	return records, nil
 }

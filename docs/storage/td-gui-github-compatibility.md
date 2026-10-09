@@ -161,3 +161,34 @@ The next work is reducing duplicate post-write graph observations without
 removing membership/revision conflict detection, then repeating the original
 20-second reproduction. Approval/rejection and other outstanding acceptance
 checks remain required before #55 closes.
+
+### Shared post-review hierarchy verification
+
+The final fresh descendant check now returns its complete listing. The
+immediately adjacent parent check validates ancestor membership, direct
+children and revisions from that same observation; no remote write intervenes.
+Each subsequent parent write still has its own fresh before/after graph checks.
+The two-parent regression failed with seven listings before this change and
+passes with six afterward (initial + shared post-review + two per parent).
+The full ghstore race suite and Mac/Linux lint pass, including existing
+reparenting, concurrent edits and partial-write conflict cases.
+
+The original 20-second proxy reproduction now completed for new sample
+gh-122 with one epic parent gh-121: HTTP 200 in 19.879 seconds, both child and
+parent in_review, available transitions approve/reject. This completed request
+made 27 API invocations and observed 31 HTTP responses (preflight 1, issue
+listing 4 invocations/8 pages, issue detail 7, issue comments 1, label setup 1,
+review validation 7, write readback 3, writes 3). Earlier timeout measurements
+were incomplete totals. The measured success has only about 0.12 seconds of
+margin; it does not guarantee ordinary network variation or larger cascades
+will fit the GUI timeout.
+
+On the same owned GUI proxy, an honest self-review record-only request
+`POST /v1/issues/gh-122/reviews` returned 201 in 7.439 seconds and preserved
+the real web actor with self_review=true. Subsequent reject returned 200 in
+6.521 seconds, reset the child to open and cleared active review attribution.
+These are HTTP contract checks, not new browser click evidence or independent
+human review. The upstream source checkout a9aefa5 contains explicit mutually
+exclusive attributed/self-review UI choices; no fabricated reviewer was used.
+Both fixtures were logically deleted and the owned GUI/backend stopped.
+#55 remains in progress for the outstanding complete acceptance audit.
