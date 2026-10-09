@@ -174,7 +174,7 @@ func logAnalytics(err error) {
 
 	// Build event using captured command (set in PersistentPostRun) or args fallback
 	event := buildCommandEvent(executedCmd, err)
-	event.SessionID = diagnosticSessionID(dir)
+	event.SessionID = diagnosticCommandSessionID(executedCmd, dir)
 
 	// If no command was captured (e.g., unknown command), find first non-flag arg
 	if event.Command == "" {
@@ -229,7 +229,7 @@ func logAgentErrorDetails(args []string, errMsg string, conflict *db.GitHubConfl
 	}
 
 	// Try to get session ID (may fail if not initialized)
-	sessionID := diagnosticSessionID(dir)
+	sessionID := diagnosticCommandSessionID(executedCmd, dir)
 
 	// Log the error (silently fails if project not initialized)
 	_ = db.LogAgentErrorWithConflict(dir, args, errMsg, sessionID, conflict)

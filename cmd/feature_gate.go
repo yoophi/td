@@ -44,6 +44,9 @@ func autosyncGateOpen(baseDir string) bool {
 }
 
 func runGatedSyncStartupHook(cmd *cobra.Command) {
+	if skipImplicitIssueAccess(cmd) {
+		return
+	}
 	if syncFeatureHooks.OnStartup == nil {
 		return
 	}
@@ -54,6 +57,9 @@ func runGatedSyncStartupHook(cmd *cobra.Command) {
 }
 
 func runGatedSyncMutationHook(cmd *cobra.Command) {
+	if skipImplicitIssueAccess(cmd) {
+		return
+	}
 	if syncFeatureHooks.OnAfterMutation == nil {
 		return
 	}
