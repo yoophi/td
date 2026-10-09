@@ -108,7 +108,7 @@ def issue(n,details={}):return {'number':n,'title':'Schedule fixture '+str(n),'s
 state=json.loads(f.read_text()) if f.exists() else {'issues':{'1':issue(1),'2':issue(2,{'defer_until':'2099-01-01'}),'3':issue(3,{'due_date':'2020-01-01','defer_until':'2099-01-01'}),'4':issue(4,{'deleted_at':'2026-01-01T00:00:00Z'}),'5':dict(issue(5),pull_request={})},'comments':[]}
 issues=state['issues']
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
-elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]]
+elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
 elif path.startswith('repos/owner/repo/issues?'):data=[list(issues.values())[:2],list(issues.values())[2:]]
 elif '/comments?' in path:data=[state['comments']]
 elif path.endswith('/comments') and method=='POST':

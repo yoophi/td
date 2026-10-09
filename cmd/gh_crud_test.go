@@ -38,7 +38,7 @@ func TestGitHubCRUDRichInputsClearAppendAndShortcuts(t *testing.T) {
 	}
 	execute(taskCreateCmd, "CRUD task shortcut fixture", "--description-file", description, "--acceptance-file", acceptance, "--minor", "--labels", "alpha,beta", "--points", "5")
 	r := read("6")
-	if r.Type != models.TypeTask || !r.Minor || r.Points != 5 || len(r.Labels) != 3 || !strings.Contains(r.Description, "한글 details\n") || !strings.HasSuffix(r.Acceptance, "Acceptance two\n") {
+	if r.Type != models.TypeTask || !r.Minor || r.Points != 5 || len(r.Labels) != 4 || !strings.Contains(r.Description, "한글 details\n") || !strings.HasSuffix(r.Acceptance, "Acceptance two\n") {
 		t.Fatal(r)
 	}
 	execute(epicCreateCmd, "CRUD epic shortcut fixture")
@@ -58,7 +58,7 @@ func TestGitHubCRUDRichInputsClearAppendAndShortcuts(t *testing.T) {
 	}
 	execute(updateCmd, "6", "--description", "", "--acceptance", "", "--sprint", "", "--labels", "")
 	r = read("6")
-	if r.Description != "" || r.Acceptance != "" || r.Sprint != "" || len(r.Labels) != 1 || r.Labels[0] != "td:open" {
+	if r.Description != "" || r.Acceptance != "" || r.Sprint != "" || len(r.Labels) != 2 || r.Labels[0] != "td:open" || r.Labels[1] != "td:priority:P2" {
 		t.Fatal("empty clear lost", r)
 	}
 	stdinCmd = githubTestCommand(updateCmd)

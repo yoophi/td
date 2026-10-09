@@ -19,6 +19,9 @@ func fixtureStateLabels() map[string]bool {
 	for label := range stateLabelColors {
 		labels[label] = true
 	}
+	for label := range priorityLabelColors {
+		labels[label] = true
+	}
 	return labels
 }
 
@@ -49,7 +52,7 @@ func TestStateLabelsPreserveUserLabelsAndFollowMetadata(t *testing.T) {
 	f := newReviewFixture(t)
 	f.issue["labels"] = []map[string]string{{"name": "bug"}, {"name": "td:custom"}, {"name": "TD:IN_REVIEW"}, {"name": "td:closed"}}
 	r := f.transition(t, "start", TransitionOptions{SessionID: "fixture-worker"})
-	if !reflect.DeepEqual(r.Labels, []string{"bug", "td:custom", "td:in_progress"}) {
+	if !reflect.DeepEqual(r.Labels, []string{"bug", "td:custom", "td:in_progress", "td:priority:P2"}) {
 		t.Fatalf("labels=%v", r.Labels)
 	}
 	if r.StateLabelWarning() != "" {
@@ -63,12 +66,12 @@ func TestStateLabelsPreserveUserLabelsAndFollowMetadata(t *testing.T) {
 	}
 	title := "Rename and repair"
 	r, err = f.client.Update(context.Background(), "1", Changes{Title: &title})
-	if err != nil || !reflect.DeepEqual(r.Labels, []string{"bug", "td:in_progress"}) {
+	if err != nil || !reflect.DeepEqual(r.Labels, []string{"bug", "td:in_progress", "td:priority:P2"}) {
 		t.Fatalf("repair: %+v %v", r, err)
 	}
 	clear := []string{}
 	r, err = f.client.Update(context.Background(), "1", Changes{Labels: &clear})
-	if err != nil || !reflect.DeepEqual(r.Labels, []string{"td:in_progress"}) {
+	if err != nil || !reflect.DeepEqual(r.Labels, []string{"td:in_progress", "td:priority:P2"}) {
 		t.Fatalf("clear erased state mirror: %+v %v", r, err)
 	}
 }

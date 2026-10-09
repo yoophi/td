@@ -33,7 +33,7 @@ def issue(n):return {'number':n,'title':'Fixture '+str(n),'state':'open','labels
 issues=json.loads(f.read_text()) if f.exists() else {str(n):issue(n) for n in [1,2,3]}
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
 elif '/comments?' in path:data=[[]]
-elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]]
+elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
 elif path.startswith('repos/owner/repo/issues?'):
  trigger=os.environ.get('TD_RO_MEMBERSHIP')
  if trigger:

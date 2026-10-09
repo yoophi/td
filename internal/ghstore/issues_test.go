@@ -152,7 +152,7 @@ func TestGitHubPatchOnlyChangesSpecifiedFields(t *testing.T) {
 						t.Fatalf("%q %+v %v", desc, meta, err)
 					}
 				case "clear-labels":
-					if !reflect.DeepEqual(patch["labels"], []any{"td:open"}) {
+					if !reflect.DeepEqual(patch["labels"], []any{"td:open", "td:priority:P1"}) {
 						t.Fatal(patch)
 					}
 				case "close":

@@ -45,7 +45,7 @@ def issue(n,typ='task',details=None):
  return {'number':n,'title':'Fixture '+str(n),'state':'open','body':'<!-- td:issue:v1\n'+json.dumps({'type':typ,'priority':'P2','points':0,'details':details or {}})+'\n-->','labels':[{'name':'td:open'}]}
 issues=json.loads(f.read_text()) if f.exists() else {'1':issue(1,'epic'),'2':issue(2,details={'parent_id':'gh-1','dependencies':['gh-3']}),'3':issue(3),'4':dict(issue(4),pull_request={'url':'https://example.test/pr'})}
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
-elif '/labels?' in path:data=[[{'name':'td:'+s} for s in ['open','in_progress','blocked','in_review','closed']]]
+elif '/labels?' in path:data=[[{'name':'td:'+s} for s in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
 elif path.startswith('repos/owner/repo/issues?'):
  data=[[v for k,v in issues.items() if k!='4' and (k!='3' or not os.environ.get('TD_REL_LAG'))]]
 else:

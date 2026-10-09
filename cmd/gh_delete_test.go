@@ -49,11 +49,13 @@ if args[3]=='repos/owner/repo':print(json.dumps({'full_name':'owner/repo','has_i
 method,path=args[4:6]
 p=os.environ['TD_TEST_DELETION_FILE']
 with open(p) as f: issue=json.load(f)
-if method=='GET' and '?state=' in path:print(json.dumps([[issue]]))
+if method=='GET' and '/labels?' in path:print(json.dumps([[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]))
+elif method=='GET' and '?state=' in path:print(json.dumps([[issue]]))
 elif path=='repos/owner/repo/issues/1':
  if method=='PATCH':
   patch=json.load(sys.stdin)
   assert 'state' not in patch
+  if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]
   issue.update(patch)
   with open(p,'w') as f:json.dump(issue,f)
  elif method!='GET':raise Exception('unexpected destructive operation')

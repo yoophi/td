@@ -246,6 +246,9 @@ func showGitHubHierarchy(cmd *cobra.Command, args []string, client *ghstore.Clie
 		if warning := r.StateLabelWarning(); warning != "" && !jsonMode(cmd) && format != "json" {
 			cmd.PrintErrln("Warning:", warning)
 		}
+		if warning := r.PriorityLabelWarning(); warning != "" && !jsonMode(cmd) && format != "json" {
+			cmd.PrintErrln("Warning:", warning)
+		}
 	}
 	short, _ := cmd.Flags().GetBool("short")
 	detailed := jsonMode(cmd) || format == "json" || (!short && format != "short")

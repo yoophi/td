@@ -145,14 +145,15 @@ type Record struct {
 	AutoUnblocked       []Record `json:"auto_unblocked,omitempty"`
 	ParentStatusUpdates []Record `json:"parent_status_updates,omitempty"`
 	models.Issue
-	StateLabelDiagnostic string `json:"state_label_warning,omitempty"`
-	Number               int    `json:"number"`
-	URL                  string `json:"url"`
-	meta                 metadata
-	managed              bool
-	revision             [32]byte
-	repository           string
-	Details              *IssueDetails `json:"details,omitempty"`
+	StateLabelDiagnostic    string `json:"state_label_warning,omitempty"`
+	PriorityLabelDiagnostic string `json:"priority_label_warning,omitempty"`
+	Number                  int    `json:"number"`
+	URL                     string `json:"url"`
+	meta                    metadata
+	managed                 bool
+	revision                [32]byte
+	repository              string
+	Details                 *IssueDetails `json:"details,omitempty"`
 }
 
 type apiIssue struct {
@@ -220,6 +221,7 @@ func (item apiIssue) record() (*Record, error) {
 		meta.Details.apply(&record.Issue)
 	}
 	record.StateLabelDiagnostic = record.StateLabelWarning()
+	record.PriorityLabelDiagnostic = record.PriorityLabelWarning()
 	return record, nil
 }
 
@@ -351,8 +353,11 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	if err != nil {
 		return nil, err
 	}
-	labels := mirroredLabels(issue.Labels, models.StatusOpen)
+	labels := mirroredPriorityLabels(mirroredLabels(issue.Labels, models.StatusOpen), issue.Priority)
 	if err := c.ensureStateLabel(ctx, "td:open"); err != nil {
+		return nil, err
+	}
+	if err := c.ensurePriorityLabel(ctx, issue.Priority); err != nil {
 		return nil, err
 	}
 	payload := map[string]any{"title": issue.Title, "body": body, "labels": labels}
@@ -581,9 +586,18 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 			base = *change.Labels
 		}
 		labels := mirroredLabels(base, status)
+		mirrorPriority := record.managed || metadataChanged
+		if mirrorPriority {
+			labels = mirroredPriorityLabels(labels, record.Priority)
+		}
 		if !sameLabels(labels, record.Labels) || change.Labels != nil {
 			if err := c.ensureStateLabel(ctx, "td:"+string(status)); err != nil {
 				return nil, err
+			}
+			if mirrorPriority {
+				if err := c.ensurePriorityLabel(ctx, record.Priority); err != nil {
+					return nil, err
+				}
 			}
 			payload["labels"] = labels
 			change.Labels = &labels

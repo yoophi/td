@@ -60,13 +60,13 @@ elif [ "$6" = "repos/owner/repo/issues?state=open&per_page=100" ] || [ "$6" = "r
  cat "$TD_TEST_ISSUE"
  printf ']]'
 elif [ "$6" = "repos/owner/repo/labels?per_page=100" ]; then
- printf '%s' '[[{"name":"td:open"},{"name":"td:in_progress"},{"name":"td:blocked"},{"name":"td:in_review"},{"name":"td:closed"}]]'
+ printf '%s' '[[{"name":"td:open"},{"name":"td:in_progress"},{"name":"td:blocked"},{"name":"td:in_review"},{"name":"td:closed"},{"name":"td:priority:P0"},{"name":"td:priority:P1"},{"name":"td:priority:P2"},{"name":"td:priority:P3"},{"name":"td:priority:P4"}]]'
 elif [ "$6" = "repos/owner/repo/issues/1/events?per_page=100" ]; then
  if grep -q '"state":"closed"' "$TD_TEST_ISSUE"; then
   printf '%s' '[[{"id":1,"event":"closed"}]]'
  else printf '%s' '[[]]'; fi
 elif [ "$5" = PATCH ]; then
- input=$(sed -E 's/"labels":\["([^"]*)"\]/"labels":[{"name":"\1"}]/')
+ input=$(python3 -c 'import sys,json; p=json.load(sys.stdin); p.update({"labels":[{"name":v} for v in p["labels"]]} if "labels" in p else {}); print(json.dumps(p,separators=(",",":")))')
  printf '{"number":1,"title":"Fixture",%s' "${input#?}" > "$TD_TEST_ISSUE"
  cat "$TD_TEST_ISSUE"
 elif [ "$5" = GET ]; then
