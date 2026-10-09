@@ -17,16 +17,22 @@ import (
 
 type gitHubShowDetail struct {
 	ghstore.Record
-	Logs          []map[string]any     `json:"logs"`
-	Handoff       map[string]any       `json:"handoff"`
-	Comments      []models.Comment     `json:"comments"`
-	ReviewHistory []models.IssueReview `json:"review_history"`
-	Files         []models.IssueFile   `json:"files"`
-	Dependencies  []string             `json:"dependencies"`
-	Blocks        []string             `json:"blocks"`
-	Git           map[string]any       `json:"git,omitempty"`
+	Logs          []map[string]any        `json:"logs"`
+	Handoff       map[string]any          `json:"handoff"`
+	Comments      []models.Comment        `json:"comments"`
+	ReviewHistory []gitHubDisplayedReview `json:"review_history"`
+	Files         []models.IssueFile      `json:"files"`
+	Dependencies  []string                `json:"dependencies"`
+	Blocks        []string                `json:"blocks"`
+	Git           map[string]any          `json:"git,omitempty"`
 	modelLogs     []models.Log
 	modelHandoff  *models.Handoff
+}
+
+type gitHubDisplayedReview struct {
+	models.IssueReview
+	RequestedBy string `json:"requested_by"`
+	Superseded  bool   `json:"superseded"`
 }
 
 func resolveGitHubShowSelection(cmd *cobra.Command, cfg *models.Config, client *ghstore.Client) ([]string, error) {
@@ -92,7 +98,7 @@ func loadGitHubShowDetails(cmd *cobra.Command, client *ghstore.Client, records [
 	}
 	result := map[string]gitHubShowDetail{}
 	for _, r := range records {
-		d := gitHubShowDetail{Record: r, Logs: []map[string]any{}, Comments: []models.Comment{}, ReviewHistory: []models.IssueReview{}, Files: []models.IssueFile{}, Dependencies: []string{}, Blocks: []string{}}
+		d := gitHubShowDetail{Record: r, Logs: []map[string]any{}, Comments: []models.Comment{}, ReviewHistory: []gitHubDisplayedReview{}, Files: []models.IssueFile{}, Dependencies: []string{}, Blocks: []string{}}
 		d.modelLogs, err = snapshot.GetLogs(r.ID, 0)
 		if err != nil {
 			return nil, fmt.Errorf("show %s logs: %w", r.ID, err)
@@ -119,7 +125,9 @@ func loadGitHubShowDetails(cmd *cobra.Command, client *ghstore.Client, records [
 			if len(reviews) > 3 {
 				reviews = reviews[len(reviews)-3:]
 			}
-			d.ReviewHistory = reviews
+			for _, review := range reviews {
+				d.ReviewHistory = append(d.ReviewHistory, gitHubDisplayedReview{IssueReview: review, RequestedBy: review.RequestedBySession, Superseded: review.SupersededAt != nil})
+			}
 			for _, event := range r.Details.Transitions {
 				if event.Action == "start" && event.Snapshot != nil {
 					s := event.Snapshot

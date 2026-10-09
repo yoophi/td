@@ -50,6 +50,8 @@ FIELDS:
   created     creation date (supports relative: -7d, today, this_week)
   updated     last update date
   closed      closure date
+  due/defer   shared calendar dates (due_date/defer_until aliases)
+  defer_count number of later deferrals
   implementer session that started work
   reviewer    session that reviewed
   parent      direct parent issue ID
@@ -334,6 +336,8 @@ func printQueryFields() {
 		{"created", "date", "ISO or relative (-7d, today, etc.)"},
 		{"updated", "date", "ISO or relative"},
 		{"closed", "date", "ISO or relative"},
+		{"due/defer", "date", "Calendar date; due_date/defer_until aliases"},
+		{"defer_count", "number", "Number of later deferrals"},
 	}
 
 	for _, f := range fields {

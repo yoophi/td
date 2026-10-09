@@ -343,6 +343,7 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 // Changes uses pointers so omitted fields, empty strings and cleared labels differ.
 type Changes struct {
 	ParentID                       *string
+	DueDate, DeferUntil            *string
 	Details                        *IssueDetails
 	Minor                          *bool
 	Sprint                         *string
@@ -379,7 +380,7 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	id := record.ID
 	var err error
 	if change.Details != nil {
-		if change.Minor != nil || change.Sprint != nil || change.ParentID != nil {
+		if change.Minor != nil || change.Sprint != nil || change.ParentID != nil || change.DueDate != nil || change.DeferUntil != nil {
 			return nil, fmt.Errorf("specify full details or individual detail fields, not both")
 		}
 		if err := change.Details.validate(); err != nil {
@@ -463,7 +464,7 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	if err := validateIssue(&record.Issue); err != nil {
 		return nil, err
 	}
-	metadataChanged := change.Details != nil || change.ParentID != nil || change.Minor != nil || change.Sprint != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Reason != nil
+	metadataChanged := change.Details != nil || change.ParentID != nil || change.Minor != nil || change.Sprint != nil || change.Acceptance != nil || change.Type != nil || change.Priority != nil || change.Points != nil || change.Reason != nil || change.DueDate != nil || change.DeferUntil != nil
 	if change.Description != nil || metadataChanged {
 		body := record.Description
 		if record.managed || metadataChanged {
@@ -471,7 +472,7 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 			if change.Details != nil {
 				meta.Details = change.Details
 			}
-			if change.Minor != nil || change.Sprint != nil || change.ParentID != nil {
+			if change.Minor != nil || change.Sprint != nil || change.ParentID != nil || change.DueDate != nil || change.DeferUntil != nil {
 				details := detailsFromIssue(&record.Issue)
 				if meta.Details != nil {
 					details = *meta.Details
@@ -484,6 +485,21 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 				}
 				if change.ParentID != nil {
 					details.ParentID = *change.ParentID
+				}
+				if change.DueDate != nil {
+					details.DueDate = change.DueDate
+					if *change.DueDate == "" {
+						details.DueDate = nil
+					}
+				}
+				if change.DeferUntil != nil {
+					if details.DeferUntil != nil && *change.DeferUntil > *details.DeferUntil {
+						details.DeferCount++
+					}
+					details.DeferUntil = change.DeferUntil
+					if *change.DeferUntil == "" {
+						details.DeferUntil = nil
+					}
 				}
 				meta.Details = &details
 			}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/issuestore"
@@ -23,6 +24,7 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 	open, _ := cmd.Flags().GetBool("open")
 	statuses, _ := cmd.Flags().GetStringArray("status")
 	statuses = mergeMultiValueFlag(statuses)
+	includeDeferred := all || slices.Contains(statuses, "all")
 	for _, status := range statuses {
 		if !slices.Contains([]string{"open", "in_progress", "blocked", "in_review", "closed", "all"}, status) {
 			return fmt.Errorf("gh-issue status must be open, in_progress, blocked, in_review, closed or all")
@@ -117,7 +119,15 @@ func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) err
 		records = append(records, issuestore.Record{Issue: r.Issue, Number: r.Number, URL: r.URL, StateLabelDiagnostic: r.StateLabelDiagnostic})
 	}
 	filtered := make([]issuestore.Record, 0)
+	today := time.Now()
+	schedule := gitHubScheduleFilterFromFlags(cmd, includeDeferred)
 	for _, record := range records {
+		if !all && record.Status == models.StatusClosed {
+			continue
+		}
+		if !schedule.matches(record.Issue, today) {
+			continue
+		}
 		if len(statuses) > 0 && !slices.Contains(statuses, "all") && !slices.Contains(statuses, string(record.Status)) {
 			continue
 		}

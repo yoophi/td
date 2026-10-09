@@ -10,7 +10,7 @@ import (
 )
 
 func (c Changes) HasFields() bool {
-	return c.ParentID != nil || c.Title != nil || c.Description != nil || c.Acceptance != nil || c.Type != nil || c.Priority != nil || c.Points != nil || c.Labels != nil || c.Details != nil || c.Minor != nil || c.Sprint != nil || c.Reason != nil
+	return c.DueDate != nil || c.DeferUntil != nil || c.ParentID != nil || c.Title != nil || c.Description != nil || c.Acceptance != nil || c.Type != nil || c.Priority != nil || c.Points != nil || c.Labels != nil || c.Details != nil || c.Minor != nil || c.Sprint != nil || c.Reason != nil
 }
 
 // UpdateWorkflow applies edits before evaluating the requested transition, so

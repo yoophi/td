@@ -391,6 +391,10 @@ func (e *Evaluator) combineConditions(conds []SQLCondition, op string) SQLCondit
 
 func (e *Evaluator) mapFieldToColumn(field string) string {
 	switch field {
+	case "due":
+		return "due_date"
+	case "defer":
+		return "defer_until"
 	case "created":
 		return "created_at"
 	case "updated":
@@ -707,6 +711,23 @@ func (e *Evaluator) getFieldGetter(field string) func(models.Issue) interface{} 
 		return func(i models.Issue) interface{} { return i.Sprint }
 	case "minor":
 		return func(i models.Issue) interface{} { return i.Minor }
+	case "defer_count":
+		return func(i models.Issue) interface{} { return i.DeferCount }
+	case "due", "due_date", "defer", "defer_until":
+		return func(i models.Issue) interface{} {
+			date := i.DueDate
+			if field == "defer" || field == "defer_until" {
+				date = i.DeferUntil
+			}
+			if date == nil {
+				return nil
+			}
+			value, err := time.ParseInLocation("2006-01-02", *date, e.location())
+			if err != nil {
+				return nil
+			}
+			return value
+		}
 	case "created", "created_at":
 		return func(i models.Issue) interface{} { return i.CreatedAt }
 	case "updated", "updated_at":

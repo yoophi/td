@@ -454,3 +454,39 @@ commit counts are omitted, not reported as zero. Available comparisons include
 current commit/branch, dirty files, commits since start and committed diff totals.
 These are observations of local Git state, not a remote snapshot or a transaction
 with GitHub issue/history reads.
+
+### Calendar dates and deferral
+
+`due ID DATE`, `due ID --clear`, `defer ID DATE`, and `defer ID --clear` write
+shared `details.due_date`, `details.defer_until`, and `details.defer_count`
+through the observed metadata PATCH/read-back path. They append a shared progress
+log afterwards; a failed log explicitly reports that the date was saved and
+must not trigger an automatic retry. A date together with `--clear` is rejected
+as ambiguous before any write. Missing/deleted IDs, PRs, invalid dates and
+permission failures are explicit errors without a SQLite fallback.
+
+`create` and `update` (including aliases and task/epic shortcuts) accept `--due`
+and `--defer`. Relative dates use the same `dateparse` implementation as SQLite.
+An empty update value clears the date. The first deferral has count zero;
+moving an existing deferral later increments the count, while moving earlier,
+repeating a date, or clearing it preserves the count. Dates are shared calendar
+strings, `YYYY-MM-DD`, and are not converted to UTC instants.
+
+List applies calendar filters before sorting/limit. By default it hides
+`defer_until > today`; `--all` and `--status all` include these issues. An explicit
+`--status closed` alone still hides future deferrals. `--deferred` selects future
+deferrals, `--overdue` selects past due dates except closed issues, `--surfacing`
+selects deferrals at/before today with a positive count, and `--due-soon` selects
+today through three days ahead. Multiple date flags use SQLite's precedence:
+deferred, overdue, surfacing, due-soon, then the default deferral exclusion.
+
+TDQ fields `due`/`due_date`, `defer`/`defer_until`, and `defer_count` use the same
+stored values and calendar-day evaluator for GitHub snapshots, board queries,
+and SQLite. For example, `due <= today AND (defer = NULL OR defer <= today)`
+selects due tasks that are available today. Query expressions remain subject to
+their explicit status conditions; they do not implicitly apply list defaults.
+
+Create label spellings keep SQLite's first non-empty precedence:
+`--labels`, `--label`, `--tags`, `--tag`. Each accepts repeated/comma-separated
+values. File/stdin rich-text input uses the command's configured input stream;
+multiple stdin consumers or inline/file conflicts fail before issue writes.

@@ -159,6 +159,11 @@ var KnownFields = map[string]string{
 	"created":     "date",
 	"updated":     "date",
 	"closed":      "date",
+	"due":         "date",
+	"due_date":    "date",
+	"defer":       "date",
+	"defer_until": "date",
+	"defer_count": "number",
 
 	// Cross-entity prefixes (validated separately)
 	"log":     "prefix",

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/marcus/td/internal/config"
+	"github.com/marcus/td/internal/dateparse"
 	"github.com/marcus/td/internal/ghcontext"
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
@@ -42,11 +43,11 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 	allowed := " json work-dir help "
 	switch operation {
 	case "create":
-		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file minor parent epic depends-on blocks "
+		allowed += "title type priority points labels label tags tag description desc body notes description-file acceptance acceptance-file minor parent epic depends-on blocks due defer "
 	case "update":
-		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint parent depends-on blocks "
+		allowed += "title type priority points labels description desc body description-file acceptance acceptance-file append status comment note sprint parent depends-on blocks due defer "
 	case "list":
-		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager parent epic "
+		allowed += "all open status type priority labels id search sort reverse limit long short format no-pager parent epic deferred overdue due-soon surfacing "
 	case "show":
 		allowed += "long short format tree children render-markdown "
 	}
@@ -301,6 +302,9 @@ func newGitHubIssue(cmd *cobra.Command, args []string) (*models.Issue, error) {
 			issue.Type, issue.Title = extracted, title
 		}
 	}
+	if strings.TrimSpace(issue.Title) == "" {
+		return nil, fmt.Errorf("issue title is required")
+	}
 	min, max, err := config.GetTitleLengthLimits(getBaseDir())
 	if err != nil {
 		return nil, err
@@ -330,11 +334,36 @@ func newGitHubIssue(cmd *cobra.Command, args []string) (*models.Issue, error) {
 	if change.ParentID != nil {
 		issue.ParentID = *change.ParentID
 	}
+	issue.DueDate, issue.DeferUntil = change.DueDate, change.DeferUntil
+	if issue.DueDate != nil && *issue.DueDate == "" {
+		issue.DueDate = nil
+	}
+	if issue.DeferUntil != nil && *issue.DeferUntil == "" {
+		issue.DeferUntil = nil
+	}
 	return issue, nil
 }
 
 func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 	change := ghstore.Changes{}
+	for _, flag := range []string{"due", "defer"} {
+		if !cmd.Flags().Changed(flag) {
+			continue
+		}
+		value, _ := cmd.Flags().GetString(flag)
+		if value != "" {
+			parsed, err := dateparse.ParseDate(value)
+			if err != nil {
+				return change, fmt.Errorf("invalid --%s date: %w", flag, err)
+			}
+			value = parsed
+		}
+		if flag == "due" {
+			change.DueDate = &value
+		} else {
+			change.DeferUntil = &value
+		}
+	}
 	parentFlags := []string{"parent"}
 	if create {
 		parentFlags = append(parentFlags, "epic")
@@ -417,12 +446,14 @@ func gitHubChanges(cmd *cobra.Command, create bool) (ghstore.Changes, error) {
 	}
 	for _, flag := range labelFlags {
 		if cmd.Flags().Changed(flag) {
-			if change.Labels != nil {
-				return change, fmt.Errorf("specify only one labels flag spelling")
-			}
 			values, _ := cmd.Flags().GetStringArray(flag)
 			labels := mergeMultiValueFlag(values)
+			// Create follows SQLite's first non-empty alias precedence.
+			if create && len(labels) == 0 {
+				continue
+			}
 			change.Labels = &labels
+			break
 		}
 	}
 	if !create {

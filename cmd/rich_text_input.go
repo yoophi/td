@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/marcus/td/internal/input"
@@ -49,7 +48,7 @@ func resolveRichTextField(cmd *cobra.Command, inlineFlags []string, fileFlag str
 		return "", false, stdinUsed, fmt.Errorf("%s requires a path or - for stdin", formatLongFlag(fileFlag))
 	}
 
-	value, stdinUsed, err := input.ReadText(source, os.Stdin, stdinUsed)
+	value, stdinUsed, err := input.ReadText(source, cmd.InOrStdin(), stdinUsed)
 	if err != nil {
 		if errors.Is(err, input.ErrStdinAlreadyUsed) {
 			return "", false, stdinUsed, fmt.Errorf("%s cannot read from stdin more than once in a single command", formatLongFlag(fileFlag))

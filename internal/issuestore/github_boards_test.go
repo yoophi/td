@@ -29,6 +29,16 @@ func (f *boardReaderFixture) AppendActivity(context.Context, string, models.Acti
 	panic("read wrote activity")
 }
 
+func TestGitHubBoardScheduleQueryMatchesSnapshot(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	future := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	f := &boardReaderFixture{expression: "due <= today AND (defer = NULL OR defer <= today)", records: []ghstore.Record{{Issue: models.Issue{ID: "gh-1", Status: models.StatusOpen, DueDate: &today}}, {Issue: models.Issue{ID: "gh-2", Status: models.StatusOpen, DueDate: &today, DeferUntil: &future}}, {Issue: models.Issue{ID: "gh-3", Status: models.StatusClosed, DueDate: &today}}}}
+	got, err := GitHubBoardCandidates(context.Background(), f, &ghstore.BoardRecord{}, false)
+	if err != nil || len(got) != 1 || got[0].ID != "gh-1" {
+		t.Fatal(got, err)
+	}
+}
+
 func TestGitHubBoardCandidatesQueryAndStatusScope(t *testing.T) {
 	now := time.Now().UTC()
 	f := &boardReaderFixture{records: []ghstore.Record{
