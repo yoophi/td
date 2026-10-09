@@ -20,7 +20,7 @@ type ExportedIssue struct {
 
 func (c *Client) ExportIssues(ctx context.Context, all, includeActivity bool) ([]ExportedIssue, error) {
 	if includeActivity {
-		snapshot, err := c.ReadSnapshot(ctx, true)
+		snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
 		if err != nil {
 			return nil, err
 		}

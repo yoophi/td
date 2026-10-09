@@ -39,10 +39,14 @@ func init() {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(status)
 		}
 		cmd.Printf("GitHub snapshot cache: enabled=%t repository=%s TTL=%ds\n", status.Enabled, status.Repository, status.TTLSeconds)
+		cmd.Printf("Full reconciliation interval: %ds\n", status.FullReconciliationSeconds)
 		for _, entry := range status.Snapshots {
 			cmd.Printf("%s: %s (%d bytes) %s\n", entry.Scope, entry.State, entry.Bytes, entry.Path)
 			if entry.CollectedAt != nil {
 				cmd.Printf("  collected_at: %s\n", entry.CollectedAt.Format("2006-01-02T15:04:05Z07:00"))
+				if entry.FullReconciledAt != nil {
+					cmd.Printf("  observation: %s; full_reconciled_at: %s\n", entry.ObservationMode, entry.FullReconciledAt.Format("2006-01-02T15:04:05Z07:00"))
+				}
 			}
 		}
 		return nil

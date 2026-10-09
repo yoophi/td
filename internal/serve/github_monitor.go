@@ -132,6 +132,8 @@ func fetchGitHubMonitor(ctx context.Context, c githubMonitorClient, actor string
 	msg := &monitor.RefreshDataMsg{Timestamp: now}
 	if observed != nil && !observed.ObservedAt().IsZero() {
 		msg.Timestamp = observed.ObservedAt()
+		msg.FullReconciledAt = observed.FullReconciledAt()
+		msg.ObservationMode = observed.ObservationMode()
 	}
 	cache := &monitorActivityCache{githubMonitorClient: c, activities: map[string][]models.Activity{}}
 	byID := map[string]ghstore.Record{}

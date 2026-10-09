@@ -15,23 +15,38 @@ import (
 	"github.com/marcus/td/internal/models"
 )
 
-// SnapshotReader provides a complete repository observation to aggregate readers.
+// SnapshotReader provides validated repository observations to aggregate readers.
 type SnapshotReader interface {
 	ReadSnapshot(context.Context, bool) (*Snapshot, error)
 }
 
-// Snapshot is a complete read-only observation, not an atomic repository
-// revision. Callers must still obtain fresh observations before mutations.
+// Snapshot is a validated full or incremental read-only observation, not an
+// atomic repository revision. Callers must obtain fresh reads before mutations.
 type Snapshot struct {
-	records     []Record
-	activities  map[string][]models.Activity
-	entries     []snapshotEntry
-	fullHistory bool
-	observedAt  time.Time
+	records          []Record
+	activities       map[string][]models.Activity
+	entries          []snapshotEntry
+	fullHistory      bool
+	observedAt       time.Time
+	fullReconciledAt time.Time
+	pullRequests     []int
 }
 
 // ObservedAt reports when collection began, including when reused from cache.
 func (s *Snapshot) ObservedAt() time.Time { return s.observedAt }
+
+// FullReconciledAt is the last complete scan, which can observe physical deletions.
+func (s *Snapshot) FullReconciledAt() time.Time { return s.fullReconciledAt }
+
+func (s *Snapshot) ObservationMode() string {
+	if s.fullReconciledAt.IsZero() {
+		return "unknown"
+	}
+	if s.fullReconciledAt.Before(s.observedAt) {
+		return "incremental"
+	}
+	return "full"
+}
 
 type snapshotEntry struct {
 	Issue    apiIssue
@@ -86,6 +101,7 @@ func (c *Client) readSnapshotRemote(ctx context.Context, includeActivity bool) (
 	defer func() {
 		if snapshot != nil {
 			snapshot.observedAt = started
+			snapshot.fullReconciledAt = started
 		}
 	}()
 	data, err := c.request(ctx, "GET", "/issues?state=all&per_page=100", nil, true)
@@ -139,6 +155,7 @@ func (c *Client) assembleSnapshot(pages [][]apiIssue, comments [][]apiComment, i
 			seen[item.Number] = true
 			if len(item.PullRequest) > 0 && string(item.PullRequest) != "null" {
 				prs[item.Number] = true
+				s.pullRequests = append(s.pullRequests, item.Number)
 				continue
 			}
 			record, err := item.record()
@@ -206,6 +223,7 @@ func (c *Client) assembleSnapshot(pages [][]apiIssue, comments [][]apiComment, i
 		})
 	}
 	sort.Slice(s.entries, func(i, j int) bool { return s.entries[i].Issue.Number < s.entries[j].Issue.Number })
+	sort.Ints(s.pullRequests)
 	return s, nil
 }
 

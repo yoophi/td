@@ -2478,6 +2478,9 @@ func (m Model) renderFooter() string {
 	}
 
 	refreshText := fmt.Sprintf("Last: %s", formatLocalTime(m.LastRefresh, "15:04:05"))
+	if m.DataSource != nil && m.GitHubObservationMode != "" {
+		refreshText += fmt.Sprintf(" (%s; full %s)", m.GitHubObservationMode, formatLocalTime(m.LastFullReconciliation, "15:04:05"))
+	}
 	if source, ok := m.DataSource.(interface{ IsRefreshing() bool }); ok && source.IsRefreshing() {
 		refreshText = "GitHub loading (Ctrl+C: cancel)"
 	}

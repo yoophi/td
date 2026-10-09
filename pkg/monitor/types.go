@@ -379,19 +379,21 @@ type TickMsg time.Time
 
 // RefreshDataMsg carries refreshed data
 type RefreshDataMsg struct {
-	Skipped        bool
-	remoteFilter   *monitorRefreshFilter
-	Transitions    map[string]MonitorTransitionStore `json:"-"`
-	observedIssues map[string]ghstore.Record
-	Error          error
-	FocusedIssue   *models.Issue
-	InProgress     []models.Issue
-	Activity       []ActivityItem
-	TaskList       TaskListData
-	RecentHandoffs []RecentHandoff
-	ActiveSessions []string
-	HasIssues      bool // any non-deleted issue exists in the project DB
-	Timestamp      time.Time
+	FullReconciledAt time.Time
+	ObservationMode  string
+	Skipped          bool
+	remoteFilter     *monitorRefreshFilter
+	Transitions      map[string]MonitorTransitionStore `json:"-"`
+	observedIssues   map[string]ghstore.Record
+	Error            error
+	FocusedIssue     *models.Issue
+	InProgress       []models.Issue
+	Activity         []ActivityItem
+	TaskList         TaskListData
+	RecentHandoffs   []RecentHandoff
+	ActiveSessions   []string
+	HasIssues        bool // any non-deleted issue exists in the project DB
+	Timestamp        time.Time
 }
 
 // IssueDetailsMsg carries fetched issue details for the modal

@@ -20,6 +20,7 @@ import (
 )
 
 const snapshotCacheTTL = 30 * time.Second
+const snapshotFullReconciliationInterval = 5 * time.Minute
 const snapshotCacheMaxFile = 32 << 20
 const snapshotCacheMaxTotal = 256 << 20
 const snapshotCacheMaxAge = 7 * 24 * time.Hour
@@ -45,11 +46,13 @@ type cacheEnvelope struct {
 	CredentialContext string          `json:"credential_context"`
 	Scope             string          `json:"scope"`
 	CollectedAt       time.Time       `json:"collected_at"`
+	FullReconciledAt  time.Time       `json:"full_reconciled_at"`
+	PullRequests      []int           `json:"pull_requests,omitempty"`
 	Complete          bool            `json:"complete"`
 	Generation        string          `json:"generation"`
 	ChangeToken       string          `json:"change_token,omitempty"`
 	Entries           []snapshotEntry `json:"entries"`
-	// Full reconciliation is used initially; no incremental cursor is implied.
+	// Cursor advances only after successful page/metadata validation.
 	Cursor string `json:"cursor,omitempty"`
 }
 
@@ -253,6 +256,10 @@ func readCacheFile(path string) ([]byte, error) {
 }
 
 func (s *snapshotCache) load(c *Client, history bool, generation string, now time.Time) (*Snapshot, error) {
+	return s.loadObservation(c, history, generation, now, false)
+}
+
+func (s *snapshotCache) loadObservation(c *Client, history bool, generation string, now time.Time, allowExpired bool) (*Snapshot, error) {
 	data, err := readCacheFile(s.path(history))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -264,10 +271,19 @@ func (s *snapshotCache) load(c *Client, history bool, generation string, now tim
 	if json.Unmarshal(data, &envelope) != nil {
 		return nil, nil
 	}
-	if envelope.Version != 1 || envelope.Host != "github.com" || envelope.Repository != s.repo || envelope.CredentialContext != s.credential || envelope.Scope != s.scope(history) || !envelope.Complete || envelope.Generation != generation || envelope.CollectedAt.IsZero() || envelope.CollectedAt.After(now) || now.Sub(envelope.CollectedAt) >= snapshotCacheTTL || envelope.Entries == nil {
+	if envelope.Version != 1 || envelope.Host != "github.com" || envelope.Repository != s.repo || envelope.CredentialContext != s.credential || envelope.Scope != s.scope(history) || !envelope.Complete || envelope.Generation != generation || envelope.CollectedAt.IsZero() || envelope.CollectedAt.After(now) || envelope.Entries == nil || envelope.FullReconciledAt.IsZero() || envelope.FullReconciledAt.After(envelope.CollectedAt) || envelope.Cursor != envelope.CollectedAt.Format(time.RFC3339Nano) {
+		return nil, nil
+	}
+	if !allowExpired && now.Sub(envelope.CollectedAt) >= snapshotCacheTTL {
+		return nil, nil
+	}
+	if allowExpired && now.Sub(envelope.FullReconciledAt) >= snapshotFullReconciliationInterval {
 		return nil, nil
 	}
 	issues, comments := []apiIssue{}, []apiComment{}
+	for _, number := range envelope.PullRequests {
+		issues = append(issues, apiIssue{Number: number, PullRequest: json.RawMessage(`{}`)})
+	}
 	for _, entry := range envelope.Entries {
 		issues = append(issues, entry.Issue)
 		comments = append(comments, entry.Comments...)
@@ -277,6 +293,7 @@ func (s *snapshotCache) load(c *Client, history bool, generation string, now tim
 		return nil, nil
 	}
 	snapshot.observedAt = envelope.CollectedAt
+	snapshot.fullReconciledAt = envelope.FullReconciledAt
 	if history {
 		token, err := snapshot.ChangeToken()
 		if err != nil || token != envelope.ChangeToken {
@@ -288,7 +305,7 @@ func (s *snapshotCache) load(c *Client, history bool, generation string, now tim
 }
 
 func (s *snapshotCache) publish(ctx context.Context, snapshot *Snapshot, generation string, collectedAt time.Time) error {
-	envelope := cacheEnvelope{Version: 1, Host: "github.com", Repository: s.repo, CredentialContext: s.credential, Scope: s.scope(snapshot.fullHistory), Complete: true, Generation: generation, CollectedAt: collectedAt, Entries: snapshot.entries}
+	envelope := cacheEnvelope{Version: 1, Host: "github.com", Repository: s.repo, CredentialContext: s.credential, Scope: s.scope(snapshot.fullHistory), Complete: true, Generation: generation, CollectedAt: collectedAt, FullReconciledAt: snapshot.FullReconciledAt(), Cursor: collectedAt.Format(time.RFC3339Nano), PullRequests: snapshot.pullRequests, Entries: snapshot.entries}
 	if snapshot.fullHistory {
 		token, err := snapshot.ChangeToken()
 		if err != nil {
@@ -376,7 +393,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 	}
 	cache := c.cache
 	generation := ""
-	var cached *Snapshot
+	var cached, baseline *Snapshot
 	err := cache.withLock(ctx, func() error {
 		var err error
 		generation, err = cache.generation()
@@ -384,7 +401,11 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 			return err
 		}
 		if ctx.Value(freshSnapshotKey{}) != true {
-			cached, err = cache.load(c, history, generation, time.Now())
+			now := time.Now()
+			baseline, err = cache.loadObservation(c, history, generation, now, true)
+			if baseline != nil && now.Sub(baseline.ObservedAt()) < snapshotCacheTTL {
+				cached = baseline
+			}
 		}
 		return err
 	})
@@ -404,7 +425,13 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 		key += ":fresh"
 	}
 	result := snapshotFlights.DoChan(key, func() (any, error) {
-		snapshot, err := c.readSnapshotRemote(ctx, history)
+		var snapshot *Snapshot
+		var err error
+		if baseline != nil {
+			snapshot, err = c.readSnapshotIncremental(ctx, baseline)
+		} else {
+			snapshot, err = c.readSnapshotRemote(ctx, history)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -424,21 +451,24 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 
 // CacheStatus describes reusable observations without exposing credentials or bodies.
 type CacheStatus struct {
-	Enabled    bool               `json:"enabled"`
-	Repository string             `json:"repository"`
-	TTLSeconds int                `json:"ttl_seconds"`
-	Snapshots  []CacheScopeStatus `json:"snapshots"`
+	Enabled                   bool               `json:"enabled"`
+	Repository                string             `json:"repository"`
+	TTLSeconds                int                `json:"ttl_seconds"`
+	FullReconciliationSeconds int                `json:"full_reconciliation_seconds"`
+	Snapshots                 []CacheScopeStatus `json:"snapshots"`
 }
 type CacheScopeStatus struct {
-	Scope       string     `json:"scope"`
-	Path        string     `json:"path"`
-	State       string     `json:"state"`
-	CollectedAt *time.Time `json:"collected_at,omitempty"`
-	Bytes       int        `json:"bytes"`
+	Scope            string     `json:"scope"`
+	Path             string     `json:"path"`
+	State            string     `json:"state"`
+	CollectedAt      *time.Time `json:"collected_at,omitempty"`
+	FullReconciledAt *time.Time `json:"full_reconciled_at,omitempty"`
+	ObservationMode  string     `json:"observation_mode,omitempty"`
+	Bytes            int        `json:"bytes"`
 }
 
 func (c *Client) CacheStatus(ctx context.Context) (*CacheStatus, error) {
-	status := &CacheStatus{Enabled: c.cache != nil, Repository: c.repo, TTLSeconds: int(snapshotCacheTTL / time.Second), Snapshots: []CacheScopeStatus{}}
+	status := &CacheStatus{Enabled: c.cache != nil, Repository: c.repo, TTLSeconds: int(snapshotCacheTTL / time.Second), FullReconciliationSeconds: int(snapshotFullReconciliationInterval / time.Second), Snapshots: []CacheScopeStatus{}}
 	if c.cache == nil {
 		return status, nil
 	}
@@ -460,6 +490,13 @@ func (c *Client) CacheStatus(ctx context.Context) (*CacheStatus, error) {
 				var envelope cacheEnvelope
 				if json.Unmarshal(data, &envelope) == nil && !envelope.CollectedAt.IsZero() {
 					item.CollectedAt = &envelope.CollectedAt
+					if !envelope.FullReconciledAt.IsZero() {
+						item.FullReconciledAt = &envelope.FullReconciledAt
+						item.ObservationMode = "full"
+						if envelope.FullReconciledAt.Before(envelope.CollectedAt) {
+							item.ObservationMode = "incremental"
+						}
+					}
 				}
 				snapshot, err := cache.load(c, history, generation, time.Now())
 				if err == nil && snapshot != nil {

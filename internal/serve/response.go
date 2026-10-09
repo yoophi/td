@@ -548,13 +548,15 @@ func ActivityItemsToDTOs(items []monitor.ActivityItem) []ActivityItemDTO {
 
 // MonitorDTO is the API representation of the full monitor state.
 type MonitorDTO struct {
-	FocusedIssue   *IssueDTO          `json:"focused_issue"`
-	InProgress     []IssueDTO         `json:"in_progress"`
-	Activity       []ActivityItemDTO  `json:"activity"`
-	TaskList       TaskListDTO        `json:"task_list"`
-	RecentHandoffs []RecentHandoffDTO `json:"recent_handoffs"`
-	ActiveSessions []string           `json:"active_sessions"`
-	Timestamp      string             `json:"timestamp"`
+	FullReconciledAt string             `json:"full_reconciled_at,omitempty"`
+	ObservationMode  string             `json:"observation_mode,omitempty"`
+	FocusedIssue     *IssueDTO          `json:"focused_issue"`
+	InProgress       []IssueDTO         `json:"in_progress"`
+	Activity         []ActivityItemDTO  `json:"activity"`
+	TaskList         TaskListDTO        `json:"task_list"`
+	RecentHandoffs   []RecentHandoffDTO `json:"recent_handoffs"`
+	ActiveSessions   []string           `json:"active_sessions"`
+	Timestamp        string             `json:"timestamp"`
 }
 
 // TaskListDTO is the API representation of categorized task lists.
@@ -584,6 +586,11 @@ func MonitorDataToDTO(msg *monitor.RefreshDataMsg) MonitorDTO {
 		Timestamp:      msg.Timestamp.Format(time.RFC3339),
 		ActiveSessions: msg.ActiveSessions,
 	}
+
+	if !msg.FullReconciledAt.IsZero() {
+		dto.FullReconciledAt = msg.FullReconciledAt.Format(time.RFC3339)
+	}
+	dto.ObservationMode = msg.ObservationMode
 
 	// Ensure active sessions is never null
 	if dto.ActiveSessions == nil {

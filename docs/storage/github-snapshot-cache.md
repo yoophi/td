@@ -48,7 +48,10 @@ file in the same directory, syncs, closes and atomically renames it only after a
 pages and metadata have succeeded. The envelope records identity, scope, complete,
 collected_at, generation, canonical raw issue/comment entries and full-history
 change token. PR data is excluded; retained task and auxiliary entries are kept.
-Incremental cursor is absent: the collector performs full reconciliation.
+New envelopes retain a validated `cursor` (collection-start timestamp),
+`full_reconciled_at` and known pull-request numbers for comment classification.
+Older envelopes without this evidence are treated as misses and replaced by a
+full collection. Pull-request bodies/comments are not retained.
 
 A short filesystem lock protects publication/generation comparisons, never HTTP.
 A repository generation fence spans all credential/scope caches; all-clear also
@@ -86,9 +89,10 @@ No write is automatically retried, and after expiry the caller must issue a
 new request. An explicitly blocked write performs no cache invalidation because
 no attempt was made. This is a cooldown gate, not an account-wide quota scheduler.
 
-This is one completed part of #50. Incremental cursors, periodic full comparison
-and further sweep coordination remain outstanding; the existing full
-collector and 30-second TTL are unchanged.
+The shared gate and preflight merging are completed parts of #50. Incremental
+collection and periodic full comparison are described below. Further sweep
+coordination for explicitly disabled/unavailable persistent caching remains
+outstanding; #50 is still in progress.
 
 ## User controls and storage limits
 
@@ -172,3 +176,75 @@ their own local auth invocation. With persistent caching disabled, their issue
 collections remained independent in this smoke: this verifies preflight merging,
 not completion of all sweep coordination or incremental collection in #50.
 The verification server was stopped.
+
+## Incremental observations and full comparison (#50)
+
+The display TTL remains **30 seconds**. A fresh validated snapshot can be reused.
+After TTL expiry, an identity/scope/generation-valid baseline whose last full
+scan began less than **5 minutes** ago supports paginated issue and repository
+comment `since` queries. The boundary overlaps the prior successful collection
+start by **2 seconds**, rounded down to the API's UTC second precision. Feeds
+sort by updated time ascending, with `state=all` for issues. This is one issue
+collection and, for activity scope with tasks, one comment collection: no
+per-issue detail/comment/event requests. Empty activity repositories and
+issue-only observations omit the comment collection.
+
+[GitHub issue list documentation](https://docs.github.com/en/rest/issues/issues#list-repository-issues)
+and [repository comment documentation](https://docs.github.com/en/rest/issues/comments#list-issue-comments-for-a-repository)
+define `since` in terms of updated time. The lists do not supply a deletion
+tombstone. Therefore incremental merging is an observation, not proof that
+retained entities still exist. A physically deleted/transferred issue or deleted
+comment may remain until full comparison. On the next successful read after
+the **5-minute** full-scan deadline, the collector reads both complete lists
+again. There is no background timer solely for cache reconciliation: observation
+delay also includes the reader's polling interval, collection time and any
+rate-limit/outage. Monitor keeps its user-requested **1-minute default /
+30-second minimum**; the existing SSE interval remains 5 minutes.
+
+Delta IDs are deduplicated across page overlap using newest updated timestamps.
+Conflicting same-timestamp versions within a delta fail explicitly; same-second
+edits relative to the older baseline are accepted. Older versions cannot replace
+a newer baseline. All pages and applicable td metadata are validated before
+publication. Rate-limit, malformed, incomplete or conflicting results leave the
+old file and cursor unchanged and return the original error. A previously unseen
+comment owner triggers a bounded full sweep to distinguish new issues/PRs; it
+never triggers a per-issue lookup. Known PR comments remain excluded.
+
+Only successful assembly advances `cursor`/`collected_at`; `full_reconciled_at`
+advances only on full scans. Generation fences still reject obsolete publication.
+Writes invalidate their baseline; `--refresh` forces full collection. JSON
+export always forces full collection, even when the display cache is fresh, so
+it cannot export ghosts retained by incremental observation. Actual mutation
+verification uses fresh individual API reads, never these display observations.
+
+The TUI footer displays observation mode and last full scan alongside the last
+observation time. HTTP monitor DTOs add `observation_mode` and
+`full_reconciled_at`; SQLite responses omit them. Cache status exposes those
+fields and the 300-second full comparison interval. A failed refresh preserves
+the previous observation time and shows the error. This does not assume remote
+reads are atomic; clock skew/eventual consistency can defer changes to full
+comparison despite the overlap window.
+
+### #50 incremental verification (2026-10-10)
+
+Full ghstore race tests and GitHub consumer race tests for serve/monitor/CLI
+passed, together with full macOS/Linux lint. Tests cover reopen/edit/new entities,
+unchanged baseline preservation, multi-page duplicate IDs, physical deletion
+retention followed by full comparison, forced-full export, cursor publication,
+PR filtering and unknown-owner full fallback. Malformed/partial/rate-limited
+results preserve the previous cache bytes and cursor. TUI tests verify visible
+mode/full time and unchanged timestamps after failure; DTO tests verify additive
+GitHub fields and omission on SQLite.
+
+Real `yoophi/td-sample` smoke used disposable issue #116 and comment 6087201736.
+The initial full scan observed two issue pages and one comment page (4 HTTP
+responses including preflight). A direct GitHub title edit and physical comment
+deletion were then performed without td cache invalidation. After TTL expiry,
+monitor returned `incremental`, the edited title, and the retained deleted
+comment, with 3 responses (preflight 1 + issue delta page 1 + comment delta page 1).
+`full_reconciled_at` remained the initial scan time. JSON export without an
+explicit `--refresh` forced a full scan (4 responses) and excluded the deleted
+comment; the next cached monitor returned mode `full` and excluded it too.
+The comment was physically deleted and the test issue logically deleted during
+cleanup; the port 7778 server was stopped. This verifies incremental behavior,
+not completion of the remaining cache-disabled sweep sharing in #50.

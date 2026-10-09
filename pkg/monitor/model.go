@@ -76,23 +76,25 @@ type Model struct {
 	HasIssues      bool            // Any non-deleted issue exists (board empty-state copy)
 
 	// UI state
-	ActivePanel         Panel
-	ScrollOffset        map[Panel]int
-	Cursor              map[Panel]int    // Per-panel cursor position (selected row)
-	SelectedID          map[Panel]string // Per-panel selected issue ID (preserved across refresh)
-	ScrollIndependent   map[Panel]bool   // True when user scrolled viewport away from cursor
-	HelpOpen            bool             // Whether help modal is open
-	HelpScroll          int              // Current scroll position in help
-	HelpTotalLines      int              // Cached total line count in help
-	HelpFilter          string           // Filter text for help search
-	HelpFilterMode      bool             // Whether typing in help filter
-	ShowTDQHelp         bool             // Show TDQ query syntax help (when in search mode)
-	TDQHelpModal        *modal.Modal     // Declarative modal instance for TDQ help
-	TDQHelpMouseHandler *mouse.Handler   // Mouse handler for TDQ help modal
-	LastRefresh         time.Time
-	StartedAt           time.Time // When monitor started, to track new handoffs
-	Err                 error     // Last error, if any
-	Embedded            bool      // When true, skip footer (embedded in sidecar)
+	ActivePanel            Panel
+	ScrollOffset           map[Panel]int
+	Cursor                 map[Panel]int    // Per-panel cursor position (selected row)
+	SelectedID             map[Panel]string // Per-panel selected issue ID (preserved across refresh)
+	ScrollIndependent      map[Panel]bool   // True when user scrolled viewport away from cursor
+	HelpOpen               bool             // Whether help modal is open
+	HelpScroll             int              // Current scroll position in help
+	HelpTotalLines         int              // Cached total line count in help
+	HelpFilter             string           // Filter text for help search
+	HelpFilterMode         bool             // Whether typing in help filter
+	ShowTDQHelp            bool             // Show TDQ query syntax help (when in search mode)
+	TDQHelpModal           *modal.Modal     // Declarative modal instance for TDQ help
+	TDQHelpMouseHandler    *mouse.Handler   // Mouse handler for TDQ help modal
+	LastRefresh            time.Time
+	LastFullReconciliation time.Time
+	GitHubObservationMode  string
+	StartedAt              time.Time // When monitor started, to track new handoffs
+	Err                    error     // Last error, if any
+	Embedded               bool      // When true, skip footer (embedded in sidecar)
 
 	// Flattened rows for selection
 	TaskListRows    []TaskListRow // Flattened task list for selection
@@ -932,6 +934,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ActiveSessions = msg.ActiveSessions
 		m.HasIssues = msg.HasIssues
 		m.LastRefresh = msg.Timestamp
+		m.LastFullReconciliation = msg.FullReconciledAt
+		m.GitHubObservationMode = msg.ObservationMode
 
 		// Build flattened rows for selection
 		m.buildCurrentWorkRows()
