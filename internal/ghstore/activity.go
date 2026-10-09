@@ -194,6 +194,7 @@ func (c *Client) readIssueActivity(ctx context.Context, issue *Record) ([]models
 		return nil, fmt.Errorf("invalid GitHub comments response: %w", err)
 	}
 	result := make([]models.Activity, 0)
+	comments := []apiComment{}
 	seen := map[int64]bool{}
 	operations := map[string]string{}
 	for _, page := range pages {
@@ -213,9 +214,14 @@ func (c *Client) readIssueActivity(ctx context.Context, issue *Record) ([]models
 				operations[activity.OperationID] = activity.ID
 			}
 			result = append(result, activity)
+			comments = append(comments, comment)
 		}
 	}
-	return result, nil
+	snapshot := &Snapshot{entries: []snapshotEntry{{Issue: apiIssue{Number: issue.Number}, Comments: comments}}, activities: map[string][]models.Activity{issue.ID: result}}
+	if err := annotateImportHistory(snapshot); err != nil {
+		return nil, err
+	}
+	return snapshot.activities[issue.ID], nil
 }
 
 func (c *Client) AppendActivity(ctx context.Context, id string, input models.Activity) (*models.Activity, error) {

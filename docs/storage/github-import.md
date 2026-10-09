@@ -214,9 +214,30 @@ one-phase intent upgrade, no duplicate PATCHes, and external intermediate edits.
 Skipped or history-only rows must already have the mapped relationships instead
 of silently losing them.
 
-The normal CLI write path remains gated until preserved history reads/exports
-and complete round-trip verification are implemented. Native provenance comments currently
-remain passive comments rather than active log/handoff/workflow events.
+Shared snapshot activity, direct per-issue activity reads and full JSON exports
+now expose `preserved_history` on the first available native comment of each
+archive set. Its kind/source/digests and present/expected counts identify the
+archive. A complete set includes decoded original JSON in `data`; a partial set
+explicitly reports `complete=false` and omits decoded data, including when its
+first piece is missing. Complete sets verify the full digest and source identity
+before exposure. When a completion receipt declares an archive, missing or
+edited source/prior-destination parts are an explicit read error, including
+when the entire archive disappeared; they are not silently omitted. No extra
+API call or individual issue decoration is added to
+bulk reads. Cached snapshots reconstruct the same derived representation.
+
+The original activity message stays intact for lossless raw history export.
+The derived activity remains `kind=comment`, `native=true`, with no current
+session/operation identity. Original log/handoff/review actors and timestamps are
+inside passive `data`; they do not become current workflow events or approvals.
+Returned derived payload bytes are copied so readers cannot mutate cached history.
+Formatted JSON export/reparse validates the payload after whitespace compaction,
+its digest/part counts, and passive authority flags before any import writes.
+
+The normal CLI write path remains gated. Human log/handoff views and portable
+top-level log/handoff export still need historical projection; full SQLite/GitHub
+round-trip and CLI execution verification remain required. JSON archival exposure
+does not by itself prove these remaining requirements complete.
 
 The shared import envelope keeps SQLite's historical lenient deserialization;
 strict input and semantic validation apply to the GitHub importer. Local import

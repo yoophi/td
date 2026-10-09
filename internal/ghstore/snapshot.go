@@ -78,7 +78,15 @@ func (s *Snapshot) Activity(id string) ([]models.Activity, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s is absent from the snapshot", id)
 	}
-	return append([]models.Activity{}, activity...), nil
+	result := append([]models.Activity{}, activity...)
+	for i := range result {
+		if doc := result[i].PreservedHistory; doc != nil {
+			clone := *doc
+			clone.Data = append([]byte(nil), doc.Data...)
+			result[i].PreservedHistory = &clone
+		}
+	}
+	return result, nil
 }
 
 func (s *Snapshot) ChangeToken() (string, error) {
@@ -224,6 +232,11 @@ func (c *Client) assembleSnapshot(pages [][]apiIssue, comments [][]apiComment, i
 	}
 	sort.Slice(s.entries, func(i, j int) bool { return s.entries[i].Issue.Number < s.entries[j].Issue.Number })
 	sort.Ints(s.pullRequests)
+	if includeActivity {
+		if err := annotateImportHistory(s); err != nil {
+			return nil, err
+		}
+	}
 	return s, nil
 }
 

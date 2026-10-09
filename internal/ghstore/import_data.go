@@ -249,6 +249,9 @@ func ValidateImportItems(items []ImportItem) error {
 			}
 			seen := map[string]bool{}
 			for _, a := range g.Activity {
+				if err := validatePreservedHistoryActivity(a); err != nil {
+					return fmt.Errorf("source preserved history for %s: %w", e.Issue.ID, err)
+				}
 				if a.ID == "" || seen[a.ID] || (a.IssueID != "" && a.IssueID != e.Issue.ID) {
 					return fmt.Errorf("invalid or duplicate source activity for %s", e.Issue.ID)
 				}
