@@ -8,11 +8,22 @@ import (
 	"github.com/marcus/td/internal/models"
 )
 
-// Internal batch execution. The CLI remains gated until graph transitions and
-// preserved history reads/exports have been validated end to end.
-type importBatchResult struct {
-	Plan                                                          *ImportPlan
-	Created, Applied, Detached, ArchivedParts, Completed, Skipped int
+// ImportResult reports only confirmed stages; uncertain writes may also exist
+// remotely and must be recovered through a fresh plan before another attempt.
+type ImportResult struct {
+	Plan          *ImportPlan `json:"plan,omitempty"`
+	Created       int         `json:"created"`
+	Applied       int         `json:"applied"`
+	Detached      int         `json:"detached"`
+	ArchivedParts int         `json:"archived_parts"`
+	Completed     int         `json:"completed"`
+	Skipped       int         `json:"skipped"`
+}
+
+type importBatchResult = ImportResult
+
+func (c *Client) Import(ctx context.Context, items []ImportItem, force bool) (*ImportResult, error) {
+	return c.executeImport(ctx, items, force)
 }
 
 type importDestinationArchive struct {

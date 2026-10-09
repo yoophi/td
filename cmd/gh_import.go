@@ -60,13 +60,27 @@ func githubImport(cmd *cobra.Command, base, file string) (bool, error) {
 		return true, err
 	}
 	force, _ := cmd.Flags().GetBool("force")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	if !dryRun {
+		result, err := client.Import(cmd.Context(), items, force)
+		if err != nil {
+			return true, err
+		}
+		if jsonMode(cmd) {
+			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+		}
+		for _, row := range result.Plan.Rows {
+			cmd.Printf("%s %s -> %s\n", row.Action, row.SourceKey, row.TargetID)
+		}
+		for _, warning := range result.Plan.Warnings {
+			cmd.Printf("Note: %s\n", warning)
+		}
+		cmd.Printf("\nImport complete: %d completed, %d skipped, %d created, %d applied, %d detached, %d archived parts in %s\n", result.Completed, result.Skipped, result.Created, result.Applied, result.Detached, result.ArchivedParts, result.Plan.Repository)
+		return true, nil
+	}
 	plan, err := client.PlanImport(cmd.Context(), items, force)
 	if err != nil {
 		return true, err
-	}
-	dryRun, _ := cmd.Flags().GetBool("dry-run")
-	if !dryRun && len(items) > 0 {
-		return true, fmt.Errorf("GitHub import writes are not yet available; validated %d items, no remote changes made; use --dry-run to inspect the plan", len(items))
 	}
 	plan.DryRun = dryRun
 	if jsonMode(cmd) {

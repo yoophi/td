@@ -1,10 +1,9 @@
 # GitHub issue import
 
-The #24 implementation is in progress. Input validation and `--dry-run`
-are available; internal batch execution and graph detachments are implemented,
-while preserved history reads/exports and import/export round-trip
-verification remain required. A regular nonempty
-GitHub import currently exits with an explicit error and makes no remote changes.
+The #24 implementation now connects validated batch execution to the CLI.
+`--dry-run` is read-only; a regular import performs checked creation, archival,
+field/relationship updates and completion publication. Native GitHub verification
+and task review/closure remain pending; local fixture tests are not live proof.
 
 `td import FILE --format json|md --dry-run [--force] [--json] [--source NAME]` reads a file;
 `FILE=-` reads stdin. A `.md` extension selects Markdown with the default format.
@@ -39,8 +38,12 @@ The shared internal creation path can use this identity and retains normal
 validation, state/priority mirrors and uncertain-write diagnostics. Tests
 simulate a POST that creates an issue but loses its response, then recover
 the allocated ID from a fresh repository listing without a second POST.
-The CLI still refuses nonempty writes pending history reads/exports and complete
-round-trip verification; internal execution is described below.
+The CLI uses the same resumable batch path. Success reports confirmed created,
+applied, detached, archived-part, completed and skipped counts, plus the executed
+decision plan in JSON mode. The plan describes decisions rather than a new
+post-import repository snapshot. Failure exits with the underlying error and
+confirmed stage counts; uncertain writes may also exist. Re-read remote state
+before retrying. It never falls back to SQLite.
 
 The planner reads a fresh complete issue/comment snapshot using two bulk
 collections (each paginated by gh), even when a reusable cache exists. It
@@ -253,8 +256,12 @@ rows from impersonating the active source worker when imported into SQLite.
 Read views restore the original attribution from those portable rows. Session
 namespacing and historical event IDs remain stable on repeat export/import.
 
-The normal CLI write path remains gated pending complete SQLite/GitHub round-trip
-and CLI execution verification. Monitor activity/work-context projections remain
+CLI tests execute import, no-write repeat, full export/reparse, same-repository
+snapshot reimport, restore portable rows into temporary SQLite, and resume after
+an explicit denied PATCH without recreating allocated targets. Original log/
+handoff content and historical session keys survive SQLite restoration. The
+configured GitHub project never opens a SQLite DB during these operations.
+Native validation remains pending. Monitor activity/work-context projections remain
 native-only; their historical display needs a separate audit to avoid marking
 old imported work as current activity.
 
