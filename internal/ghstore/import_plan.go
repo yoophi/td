@@ -26,6 +26,7 @@ type ImportPlanRow struct {
 	destinationArchiveDigest string
 	destinationArchiveBasis  string
 	capture                  *importCapture
+	detaching                bool
 }
 
 // The creation operation is stored atomically with the issue body. Using the

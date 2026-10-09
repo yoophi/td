@@ -2,6 +2,7 @@ package ghstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/marcus/td/internal/models"
@@ -10,8 +11,8 @@ import (
 // Internal batch execution. The CLI remains gated until graph transitions and
 // preserved history reads/exports have been validated end to end.
 type importBatchResult struct {
-	Plan                                                *ImportPlan
-	Created, Applied, ArchivedParts, Completed, Skipped int
+	Plan                                                          *ImportPlan
+	Created, Applied, Detached, ArchivedParts, Completed, Skipped int
 }
 
 type importDestinationArchive struct {
@@ -59,7 +60,7 @@ func addImportParts(inventory importProvenanceInventory, parts []importProvenanc
 func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bool) (*importBatchResult, error) {
 	result := &importBatchResult{}
 	fail := func(stage, id string, err error) (*importBatchResult, error) {
-		return result, fmt.Errorf("import %s %s failed (created=%d, applied=%d, archived_parts=%d, completed=%d); writes may already have occurred; refresh remote state before resuming, no automatic retry: %w", stage, id, result.Created, result.Applied, result.ArchivedParts, result.Completed, err)
+		return result, fmt.Errorf("import %s %s failed (created=%d, applied=%d, detached=%d, archived_parts=%d, completed=%d); writes may already have occurred; refresh remote state before resuming, no automatic retry: %w", stage, id, result.Created, result.Applied, result.Detached, result.ArchivedParts, result.Completed, err)
 	}
 	plan, err := c.PlanImport(ctx, items, force)
 	if err != nil {
@@ -106,8 +107,21 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 		return fail("relationships", "", err)
 	}
 	order, err := importGraphOrder(plan, relations)
-	if err != nil {
+	var detachRequired *importDetachRequiredError
+	detach := errors.As(err, &detachRequired)
+	for _, row := range plan.Rows {
+		if row.intent != nil && row.intent.DetachedBasis != "" && row.ResumeState != "after_apply" {
+			detach = true
+		}
+	}
+	if err != nil && !errors.As(err, &detachRequired) {
 		return fail("graph order", "", err)
+	}
+	if detach {
+		order, err = importDetachedGraphOrder(plan, relations)
+		if err != nil {
+			return fail("detached graph order", "", err)
+		}
 	}
 	inventory, err := snapshotImportProvenance(plan.snapshot)
 	if err != nil {
@@ -170,6 +184,42 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 			return fail("archive source", row.TargetID, err)
 		}
 		addImportParts(inventory, parts)
+	}
+	if detach {
+		for i, row := range plan.Rows {
+			if row.Action == "skip" || row.Action == "resume_history" || row.ResumeState == "after_apply" {
+				continue
+			}
+			prepared, err := c.prepareImportDetach(ctx, items[i], row, relations[row.SourceKey])
+			if err != nil {
+				return fail("prepare detach", row.TargetID, err)
+			}
+			_, _, patched, err := c.applyImportIssue(ctx, items[i], prepared, relations[row.SourceKey])
+			if patched {
+				result.Detached++
+			}
+			if err != nil {
+				return fail("detach", row.TargetID, err)
+			}
+		}
+		plan, err = c.PlanImport(ctx, items, force)
+		if err != nil {
+			return fail("replan after detach", "", err)
+		}
+		result.Plan = plan
+		order, err = importGraphOrder(plan, relations)
+		if err != nil {
+			return fail("graph order after detach", "", err)
+		}
+		inventory, err = snapshotImportProvenance(plan.snapshot)
+		if err != nil {
+			return fail("history after detach", "", err)
+		}
+		for _, row := range plan.Rows {
+			if err := verifyImportDestinationArchive(row, inventory); err != nil {
+				return fail("verify prior history after detach", row.TargetID, err)
+			}
+		}
 	}
 	// Graph checks remain the shared checked mutation path, including conflict
 	// fences around dependencies and parent chains.

@@ -10,8 +10,8 @@ import (
 const importIntentPrefix = "<!-- td:import-intent:"
 const importIntentStart = importIntentPrefix + "v1\n"
 
-// An intent precedes the issue PATCH. Either known content basis can be
-// resumed; a third state means a subsequent edit and must never be replaced.
+// An intent precedes issue PATCHes. Known before/detached/final bases can be
+// resumed; any other state means a subsequent edit and must not be replaced.
 type importIntent struct {
 	Version                  int    `json:"version"`
 	SourceKey                string `json:"source_key"`
@@ -19,6 +19,7 @@ type importIntent struct {
 	TargetID                 string `json:"target_id"`
 	BeforeBasis              string `json:"before_basis"`
 	AfterBasis               string `json:"after_basis"`
+	DetachedBasis            string `json:"detached_basis,omitempty"`
 	DestinationArchiveDigest string `json:"destination_archive_digest,omitempty"`
 	commentID                int64
 }
@@ -30,6 +31,9 @@ func (intent importIntent) validate() error {
 	}
 	if !importDigestPattern.MatchString(intent.AfterBasis) || (intent.DestinationArchiveDigest != "" && !importDigestPattern.MatchString(intent.DestinationArchiveDigest)) {
 		return fmt.Errorf("invalid import intent expected content basis")
+	}
+	if intent.DetachedBasis != "" && !importDigestPattern.MatchString(intent.DetachedBasis) {
+		return fmt.Errorf("invalid detached import content basis")
 	}
 	return nil
 }
@@ -76,6 +80,9 @@ func (intent importIntent) resumeState(sourceDigest, basis string) (string, erro
 	// Prefer after_apply for a no-op PATCH where both bases are identical.
 	if basis == intent.AfterBasis {
 		return "after_apply", nil
+	}
+	if intent.DetachedBasis != "" && basis == intent.DetachedBasis {
+		return "after_detach", nil
 	}
 	if basis == intent.BeforeBasis {
 		return "before_apply", nil

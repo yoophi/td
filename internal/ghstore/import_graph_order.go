@@ -5,6 +5,12 @@ import (
 	"slices"
 )
 
+type importDetachRequiredError struct{}
+
+func (*importDetachRequiredError) Error() string {
+	return "import graph transition requires intermediate detachments"
+}
+
 // Choose a field-write order against the observed graph, rather than relying on
 // input order. Final source DAGs can require removing an old edge first. Parent
 // and dependency graphs are independent and both must remain valid after each
@@ -57,7 +63,7 @@ func importGraphOrder(plan *ImportPlan, relations map[string]importRelations) ([
 			break
 		}
 		if !progressed {
-			return nil, fmt.Errorf("import graph transition requires intermediate detachments; no field PATCH attempted; inspect parent/dependency changes before retrying")
+			return nil, &importDetachRequiredError{}
 		}
 	}
 	return order, nil

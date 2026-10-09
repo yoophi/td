@@ -1,8 +1,8 @@
 # GitHub issue import
 
 The #24 implementation is in progress. Input validation and `--dry-run`
-are available; internal batch execution is implemented, while intermediate
-graph detachments, preserved history reads/exports and import/export round-trip
+are available; internal batch execution and graph detachments are implemented,
+while preserved history reads/exports and import/export round-trip
 verification remain required. A regular nonempty
 GitHub import currently exits with an explicit error and makes no remote changes.
 
@@ -39,8 +39,8 @@ The shared internal creation path can use this identity and retains normal
 validation, state/priority mirrors and uncertain-write diagnostics. Tests
 simulate a POST that creates an issue but loses its response, then recover
 the allocated ID from a fresh repository listing without a second POST.
-The CLI still refuses nonempty writes pending graph transition support and
-history reads/exports; internal execution is described below.
+The CLI still refuses nonempty writes pending deleted-reference import checks
+and history reads/exports; internal execution is described below.
 
 The planner reads a fresh complete issue/comment snapshot using two bulk
 collections (each paginated by gh), even when a reusable cache exists. It
@@ -77,8 +77,7 @@ Imported workflow actors/approvals are cleared from active metadata; status,
 dates, files, labels and mapped references remain portable fields. This stage
 does not publish a completion receipt or finish history restoration.
 
-Remaining batch cases include graph transitions requiring durable intermediate
-detachments and end-to-end logical-deletion ordering/reference verification.
+Remaining batch cases include end-to-end logical-deletion ordering/reference verification.
 Skipped-row consistency and prior destination archiving are now checked. These remain
 implementation work, not reasons to exclude the original import scope.
 
@@ -187,12 +186,25 @@ and graph conflict fences still incur direct reads and writes.
 
 The field order considers existing parent/dependency graphs, removing old
 edges before reversing their direction. If independent graphs demand mutually
-incompatible orders, execution explicitly rejects the transition before field
-PATCHes. A durable intermediate-detach phase remains to be implemented;
-allocation may already have occurred and is reported. Skipped or history-only
-rows must already have the mapped relationships instead of silently losing them.
+incompatible orders, a durable intermediate-detach phase removes outgoing
+relationships from unfinished changed rows first, then re-observes the full
+graph before final linking. Source and prior-destination archives precede these
+writes. The intent binds before, detached and final content bases;
+`resume_state=after_detach` recovers an interrupted intermediate PATCH. No
+completion receipt is published for an intermediate state. Other content is
+a conflict even with `--force`.
 
-The normal CLI write path remains gated until these graph transitions and
+The intermediate write applies the sanitized portable fields/status while
+leaving parent/dependencies empty; other clients may observe this partial import
+until final linking completes. Historical approvals stay inactive. Existing
+one-phase intents may be upgraded at their unchanged before state, keeping the
+same final basis and archive identity. Finished/skipped rows are not detached.
+Tests cover both graph reversals, lost prepare/detach/final/completion responses,
+one-phase intent upgrade, no duplicate PATCHes, and external intermediate edits.
+Skipped or history-only rows must already have the mapped relationships instead
+of silently losing them.
+
+The normal CLI write path remains gated until deleted-reference imports and
 preserved history reads/exports are supported and validated. Native provenance comments currently
 remain passive comments rather than active log/handoff/workflow events.
 

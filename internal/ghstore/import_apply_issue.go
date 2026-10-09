@@ -128,6 +128,19 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 	if err != nil {
 		return nil, "", false, err
 	}
+	finalBasis := after
+	if row.detaching {
+		detachedSource := source
+		detachedSource.Issue.ParentID = ""
+		change, expected, err = importIssueProjection(detachedSource, native, current, importRelations{})
+		if err != nil {
+			return nil, "", false, err
+		}
+		after, err = importTargetBasis(expected)
+		if err != nil {
+			return nil, "", false, err
+		}
+	}
 	digest, err := source.Digest()
 	if err != nil || digest != row.Digest {
 		return nil, "", false, fmt.Errorf("source changed since import plan; no issue PATCH attempted")
@@ -137,11 +150,14 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 		if err != nil {
 			return nil, "", false, err
 		}
-		if after != row.intent.AfterBasis {
+		if finalBasis != row.intent.AfterBasis || (row.detaching && after != row.intent.DetachedBasis) {
 			return nil, "", false, fmt.Errorf("import projection changed since preparation; inspect mappings before resuming")
 		}
-		if state == "after_apply" {
+		if state == "after_apply" || (row.detaching && state == "after_detach") {
 			return current, basis, false, nil
+		}
+		if !row.detaching && row.intent.DetachedBasis != "" && state == "before_apply" {
+			return nil, "", false, fmt.Errorf("prepared import requires graph detachment before final apply")
 		}
 	} else {
 		if row.basis == "" || basis != row.basis {
@@ -167,7 +183,10 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 				return nil, "", false, fmt.Errorf("unprepared imported issue differs from its creation payload; resume with original input or inspect subsequent edits: %w", &ConflictError{ID: row.TargetID})
 			}
 		}
-		intent := importIntent{Version: 1, SourceKey: row.SourceKey, SourceDigest: digest, TargetID: row.TargetID, BeforeBasis: basis, AfterBasis: after, DestinationArchiveDigest: row.destinationArchiveDigest}
+		intent := importIntent{Version: 1, SourceKey: row.SourceKey, SourceDigest: digest, TargetID: row.TargetID, BeforeBasis: basis, AfterBasis: finalBasis, DestinationArchiveDigest: row.destinationArchiveDigest}
+		if row.detaching {
+			intent.DetachedBasis = after
+		}
 		if err := c.prepareImport(ctx, intent); err != nil {
 			return nil, "", false, err
 		}
@@ -184,7 +203,11 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 	if basis == after {
 		return current, after, false, nil
 	}
-	dependencies, err := c.dependencyObservations(ctx, current.ID, relations.dependencies)
+	dependencyIDs := relations.dependencies
+	if row.detaching {
+		dependencyIDs = nil
+	}
+	dependencies, err := c.dependencyObservations(ctx, current.ID, dependencyIDs)
 	if err != nil {
 		return nil, "", false, err
 	}
