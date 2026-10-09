@@ -13,7 +13,8 @@ runner exercising the real `Client.ChangeToken` implementation measured 45 API
 invocations for each complete sweep, even with no changes or comments. Opening
 the store adds a repository verification request. With single-page responses,
 46 requests every 30 seconds is approximately 5,520 REST requests/hour, above
-the account's entire allowance. Pagination and `gh auth status` can add traffic.
+the account's entire allowance. Pagination and the former `gh auth status`
+preflight can add traffic.
 Only one td server was running at inspection. This establishes a sufficient
 exhaustion path, not attribution of every one of the account's 5,000 requests.
 
@@ -37,3 +38,10 @@ timestamp, followed by rate-limit/reset guidance. HTTP and SSE responses retain
 the same message and expose `rate_limited` plus retry guidance. No write is
 automatically retried. `TD_GH_DEBUG=1` emits numeric API invocation/HTTP response
 counts without credentials or response bodies.
+
+The installed CLI also exposed a second failure path: `gh auth status` made
+`GET /`, received HTTP 403 with core remaining zero, and reported the token
+as invalid, losing the real rate-limit cause. Repository preflight now uses
+`gh auth token` only to verify local credential availability, discards its
+output without logging it, and validates actual access through the repository
+API. Its rate-limit diagnostic and typed exception propagate unchanged.

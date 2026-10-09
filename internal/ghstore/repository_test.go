@@ -26,7 +26,7 @@ func TestResolveRepositoryUsesSelectedRemote(t *testing.T) {
 	want := [][]string{
 		{"git", "rev-parse", "--is-inside-work-tree"},
 		{"git", "remote", "get-url", "--", "upstream"},
-		{"gh", "auth", "status", "--hostname", "github.com"},
+		{"gh", "auth", "token", "--hostname", "github.com"},
 		{"gh", "api", "--hostname", "github.com", "repos/owner/project"},
 	}
 	replies := []string{"true\n", "git@github.com:owner/project.git\n", "", `{"full_name":"owner/renamed-project","has_issues":true}`}
@@ -81,5 +81,32 @@ func TestResolveRepositoryRejectsUnavailableStore(t *testing.T) {
 				t.Fatalf("error=%v calls=%d", err, calls)
 			}
 		})
+	}
+}
+
+func TestResolveRepositoryRateLimitNotReportedAsInvalidToken(t *testing.T) {
+	original := errors.New("gh: API rate limit exceeded (HTTP 403); request ID D352:CDDF; timestamp 2026-10-09 15:03:27 UTC")
+	limit := &RateLimitError{Cause: original}
+	run := func(_ context.Context, _ string, name string, args ...string) ([]byte, error) {
+		if name == "git" {
+			if args[0] == "rev-parse" {
+				return []byte("true"), nil
+			}
+			return []byte("https://github.com/owner/repo.git"), nil
+		}
+		if args[0] == "auth" {
+			if args[1] == "status" {
+				return nil, errors.New("the token in keyring is invalid")
+			}
+			if args[1] == "token" {
+				return []byte("fixture-token-must-not-appear-in-errors"), nil
+			}
+		}
+		return nil, limit
+	}
+	_, err := resolveRepository(context.Background(), "/project", "origin", run)
+	var limited *RateLimitError
+	if !errors.As(err, &limited) || !errors.Is(err, original) || !strings.Contains(err.Error(), original.Error()) || strings.Contains(err.Error(), "fixture-token") || strings.Contains(err.Error(), "authentication failed") {
+		t.Fatalf("rate limit misreported: %v", err)
 	}
 }

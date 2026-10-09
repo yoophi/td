@@ -93,7 +93,11 @@ func resolveRepository(ctx context.Context, baseDir, remote string, run runner) 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := run(ctx, baseDir, "gh", "auth", "status", "--hostname", "github.com"); err != nil {
+	// auth status probes REST / and can misreport a rate-limited token as
+	// invalid. Check local credential availability without that network probe;
+	// the repository API below validates access and preserves the real error.
+	// The returned credential is discarded and must never be logged.
+	if _, err := run(ctx, baseDir, "gh", "auth", "token", "--hostname", "github.com"); err != nil {
 		return nil, fmt.Errorf("GitHub authentication failed: %w; run 'gh auth login --hostname github.com'", err)
 	}
 	data, err = run(ctx, baseDir, "gh", "api", "--hostname", "github.com", "repos/"+repo)
