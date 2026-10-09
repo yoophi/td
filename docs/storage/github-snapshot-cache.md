@@ -4,8 +4,8 @@ GitHub aggregate issue/history observations are regenerable JSON data, separate
 from SQLite tasks, device sessions, configuration and pending-write state. The
 cache root comes from Go `os.UserCacheDir()`, not a hardcoded home directory:
 
-- macOS: `~/Library/Caches/td/gh-issue/v1/`
-- Linux: `$XDG_CACHE_HOME/td/gh-issue/v1/`, or `~/.cache/td/gh-issue/v1/`
+- macOS: `~/Library/Caches/td/gh-issue/v2/`
+- Linux: `$XDG_CACHE_HOME/td/gh-issue/v2/`, or `~/.cache/td/gh-issue/v2/`
 
 Each `<context-key>/snapshot.json` is isolated by schema version, `github.com`,
 normalized repository, credential fingerprint and issues-only/full-history scope.
@@ -14,7 +14,9 @@ The credential fingerprint is SHA-256 of the actual credential resolved by
 context, not a verified account display name. Tokens, auth headers and auth-token
 command output never appear in snapshots or diagnostics. A missing/unidentifiable
 credential context disables shared caching. `TD_GH_CACHE=off` explicitly disables
-shared snapshot reuse (useful for diagnosis and hermetic fixtures). Auth changes use a different key.
+persistent snapshot reuse (useful for diagnosis and hermetic fixtures). Same-process
+concurrent reads still share in-flight sweeps; completed results are not retained.
+Auth changes use a different key.
 Only github.com repositories are currently supported by the storage backend.
 
 ## Freshness and safety
@@ -28,7 +30,8 @@ invalid metadata, wrong version/scope/auth/repository or generation are misses.
 Every loaded snapshot passes the same issue/activity validation as remote data.
 
 Only bulk aggregate `ReadSnapshot` consumers use this cache: monitor/context,
-full statistics, full-history export, handoff summary and change-token reads.
+full statistics, handoff summary and change-token reads. JSON export forces a
+full remote sweep and can publish its validated result for later display reads.
 This does not cache every td command or every HTTP endpoint. Individual issue,
 review eligibility, event and mutation reads retain their fresh remote paths.
 A cache hit makes zero issue/comment HTTP calls; `Open` still validates Git,
@@ -89,10 +92,8 @@ No write is automatically retried, and after expiry the caller must issue a
 new request. An explicitly blocked write performs no cache invalidation because
 no attempt was made. This is a cooldown gate, not an account-wide quota scheduler.
 
-The shared gate and preflight merging are completed parts of #50. Incremental
-collection and periodic full comparison are described below. Further sweep
-coordination for explicitly disabled/unavailable persistent caching remains
-outstanding; #50 is still in progress.
+The shared gate, preflight/sweep merging, incremental collection and periodic
+full comparison implement #50; the completion audit appears below.
 
 ## User controls and storage limits
 
@@ -107,7 +108,7 @@ outstanding; #50 is still in progress.
   it does not change unaffected individual reads or auto-retry writes.
 
 A snapshot above **32 MiB** is not persisted. Published snapshot files are bounded
-in aggregate to **256 MiB**, evicting oldest-used files, and files unused for
+in aggregate within the current schema root to **256 MiB**, evicting oldest-used files, and files unused for
 **7 days** are removed on publication. Successful hits touch the file's usage
 mtime. Generation files and empty context directories are small and retained for
 invalidation correctness. Cleanup is best-effort; inaccessible files may remain
@@ -248,3 +249,49 @@ comment; the next cached monitor returned mode `full` and excluded it too.
 The comment was physically deleted and the test issue logically deleted during
 cleanup; the port 7778 server was stopped. This verifies incremental behavior,
 not completion of the remaining cache-disabled sweep sharing in #50.
+
+## Transient sharing, schema compatibility and completion audit (#50)
+
+Disabled or unavailable persistent caching does not disable concurrent sweep
+sharing. Repository/credential, activity scope, explicit refresh intent and a
+process-local repository generation separate in-flight collections. Complete
+results are discarded after delivery in this mode. An unidentifiable credential
+cannot safely share a sweep. Concurrent waiters receive the initiating request's
+result/error; a canceled waiter returns promptly, while cancellation of the
+initiator can fail the shared sweep. Network failures are not automatically retried.
+
+Every attempted write advances the process repository generation before and
+after the attempt, across credentials; a request blocked by cooldown advances
+nothing. Post-write readers cannot join an older flight. Persistent invalidation
+remains active for cache-disabled writers. If disk invalidation fails, the same
+process also rejects a baseline collected before its known write boundary.
+Other processes cannot share this in-memory fence: filesystem failures remain
+explicit warnings, and mutation authorization always uses fresh remote reads.
+
+Incremental-capable envelopes use **schema v2** and its own root/key namespace.
+Legacy v1 readers assume fresh envelopes are full observations, so they must
+never read v2 incremental data. v1 files are not migrated or reused. Writes,
+repository clear and all-clear invalidate an existing v1 root as well as v2,
+advancing its generation so an older in-flight publisher cannot republish
+pre-write data. An absent v1 root is not created. Snapshot size/cleanup bounds
+apply per schema root during coexistence; all-clear removes both known versions.
+No task, session, configuration or pending-write data is migrated/deleted.
+
+| Requirement | Verified evidence |
+| --- | --- |
+| Same-process dashboard/TUI/event-token reads share a sweep | External-gh regression concurrently runs actual HTTP stats, TUI Fetch and ChangeToken with 101 issues / 101 comments: total preflight 1 + issue pages 2 + comment pages 2; local auth invocations 3, individual detail/comment/events 0 |
+| Cache disabled/unavailable sharing | 12 concurrent uncached clients execute one sweep; completed result is not retained. Native simulated-gh server: concurrent monitor/stats return 200 with one preflight and one issue sweep; later monitor performs a new sweep |
+| Write/refresh boundaries | Cross-credential repository write fences separate old/new flights; uncertain cache-disabled writes invalidate persistent snapshots; process write knowledge rejects unchanged disk baselines; explicit fresh intent has a separate flight key |
+| Identity/scope isolation | Digest-based repo/auth keys, scope keys, existing cache isolation tests and per-repository test fixtures |
+| Successful-only cursor | Multi-page delta validation, exact two-second overlap, newest-ID merge; failed/rate/conflicting/malformed delta leaves original file/cursor unchanged |
+| Edit/delete/reopen and full comparison | Race tests and real sample #116 title edit / comment deletion; delta retains deletion ghost, forced-full export and next monitor remove it; 5-minute deadline tests force full scan |
+| Rate reset and writes | Shared cooldown across preflight/API/clients, original typed cause/reset retained, 100 blocked read/write calls make zero extra attempts; writes are never retried |
+| Visible freshness | TUI mode/full-time footer and failure timestamp tests; HTTP and cache DTO fields; native full → incremental → full observations |
+| Compatibility and limits | v2 namespace / legacy-envelope rejection, v1 generation fence regression; 30s TTL, 5m full deadline, polling/deletion delay, non-atomic reads and separate-process limitations documented above |
+
+Verification: full ghstore race tests, GitHub consumer race tests for
+serve/monitor/CLI, the concurrent actual-consumer test and full macOS/Linux lint
+passed. The native cache-disabled server used simulated gh responses with
+controlled latency; it made no real GitHub write and was stopped. Prior real
+GitHub incremental smoke evidence is recorded above. This closes #50's scope,
+not the remaining command parity, import, GUI or other project tasks.

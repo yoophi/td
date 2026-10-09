@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+const snapshotCacheVersion = 2
 const snapshotCacheTTL = 30 * time.Second
 const snapshotFullReconciliationInterval = 5 * time.Minute
 const snapshotCacheMaxFile = 32 << 20
@@ -64,7 +65,15 @@ func cacheHash(value string) string {
 func newSnapshotCache(repo string, token []byte) *snapshotCache {
 	// gh auth token resolves environment overrides and the actual active credential.
 	// Only its digest survives this function; token output/errors are never logged.
-	if os.Getenv("TD_GH_CACHE") == "off" || len(strings.TrimSpace(string(token))) == 0 {
+	if os.Getenv("TD_GH_CACHE") == "off" {
+		return nil
+	}
+	return newSnapshotCacheIdentity(repo, token)
+}
+
+// Writes retain cache invalidation even when reusable read caching is disabled.
+func newSnapshotCacheIdentity(repo string, token []byte) *snapshotCache {
+	if len(strings.TrimSpace(string(token))) == 0 {
 		return nil
 	}
 	root, err := os.UserCacheDir()
@@ -72,7 +81,7 @@ func newSnapshotCache(repo string, token []byte) *snapshotCache {
 		fmt.Fprintln(os.Stderr, "Warning: GitHub snapshot cache unavailable; using remote reads")
 		return nil
 	}
-	return &snapshotCache{root: filepath.Join(root, "td", "gh-issue", "v1"), repo: strings.ToLower(repo), credential: cacheHash("td-credential-v1:" + strings.TrimSpace(string(token)))}
+	return &snapshotCache{root: filepath.Join(root, "td", "gh-issue", fmt.Sprintf("v%d", snapshotCacheVersion)), repo: strings.ToLower(repo), credential: cacheHash("td-credential-v1:" + strings.TrimSpace(string(token)))}
 }
 
 func (s *snapshotCache) scope(history bool) string {
@@ -82,7 +91,7 @@ func (s *snapshotCache) scope(history bool) string {
 	return "issues-only"
 }
 func (s *snapshotCache) path(history bool) string {
-	key := cacheHash("1\ngithub.com\n" + s.repo + "\n" + s.credential + "\n" + s.scope(history))
+	key := cacheHash(fmt.Sprintf("%d\ngithub.com\n%s\n%s\n%s", snapshotCacheVersion, s.repo, s.credential, s.scope(history)))
 	return filepath.Join(s.root, key, "snapshot.json")
 }
 func (s *snapshotCache) warn(err error) {
@@ -213,6 +222,29 @@ func (s *snapshotCache) invalidate(ctx context.Context, all bool) error {
 	})
 }
 
+// Version 1 readers assume every fresh envelope is a full observation. Keep
+// incremental envelopes in v2, but invalidate legacy generations on writes so
+// running older processes cannot keep or republish their pre-write observation.
+func (s *snapshotCache) invalidateCompatible(ctx context.Context, all bool) error {
+	currentErr := s.invalidate(ctx, all)
+	if filepath.Base(s.root) != "v2" {
+		return currentErr
+	}
+	legacyRoot := filepath.Join(filepath.Dir(s.root), "v1")
+	info, err := os.Lstat(legacyRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return currentErr
+	}
+	if err != nil {
+		return errors.Join(currentErr, err)
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return errors.Join(currentErr, fmt.Errorf("invalid legacy cache directory"))
+	}
+	legacy := &snapshotCache{root: legacyRoot, repo: s.repo, credential: s.credential}
+	return errors.Join(currentErr, legacy.invalidate(ctx, all))
+}
+
 func validCacheKey(name string) bool {
 	if len(name) != 64 {
 		return false
@@ -271,7 +303,7 @@ func (s *snapshotCache) loadObservation(c *Client, history bool, generation stri
 	if json.Unmarshal(data, &envelope) != nil {
 		return nil, nil
 	}
-	if envelope.Version != 1 || envelope.Host != "github.com" || envelope.Repository != s.repo || envelope.CredentialContext != s.credential || envelope.Scope != s.scope(history) || !envelope.Complete || envelope.Generation != generation || envelope.CollectedAt.IsZero() || envelope.CollectedAt.After(now) || envelope.Entries == nil || envelope.FullReconciledAt.IsZero() || envelope.FullReconciledAt.After(envelope.CollectedAt) || envelope.Cursor != envelope.CollectedAt.Format(time.RFC3339Nano) {
+	if envelope.Version != snapshotCacheVersion || envelope.Host != "github.com" || envelope.Repository != s.repo || envelope.CredentialContext != s.credential || envelope.Scope != s.scope(history) || !envelope.Complete || envelope.Generation != generation || envelope.CollectedAt.IsZero() || envelope.CollectedAt.After(now) || envelope.Entries == nil || envelope.FullReconciledAt.IsZero() || envelope.FullReconciledAt.After(envelope.CollectedAt) || envelope.Cursor != envelope.CollectedAt.Format(time.RFC3339Nano) {
 		return nil, nil
 	}
 	if !allowExpired && now.Sub(envelope.CollectedAt) >= snapshotCacheTTL {
@@ -305,7 +337,7 @@ func (s *snapshotCache) loadObservation(c *Client, history bool, generation stri
 }
 
 func (s *snapshotCache) publish(ctx context.Context, snapshot *Snapshot, generation string, collectedAt time.Time) error {
-	envelope := cacheEnvelope{Version: 1, Host: "github.com", Repository: s.repo, CredentialContext: s.credential, Scope: s.scope(snapshot.fullHistory), Complete: true, Generation: generation, CollectedAt: collectedAt, FullReconciledAt: snapshot.FullReconciledAt(), Cursor: collectedAt.Format(time.RFC3339Nano), PullRequests: snapshot.pullRequests, Entries: snapshot.entries}
+	envelope := cacheEnvelope{Version: snapshotCacheVersion, Host: "github.com", Repository: s.repo, CredentialContext: s.credential, Scope: s.scope(snapshot.fullHistory), Complete: true, Generation: generation, CollectedAt: collectedAt, FullReconciledAt: snapshot.FullReconciledAt(), Cursor: collectedAt.Format(time.RFC3339Nano), PullRequests: snapshot.pullRequests, Entries: snapshot.entries}
 	if snapshot.fullHistory {
 		token, err := snapshot.ChangeToken()
 		if err != nil {
@@ -389,7 +421,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 	}
 	if c.cache == nil {
 		recordCacheCost(ctx, false)
-		return c.readSnapshotRemote(ctx, history)
+		return c.readSnapshotUncached(ctx, history)
 	}
 	cache := c.cache
 	generation := ""
@@ -403,6 +435,9 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 		if ctx.Value(freshSnapshotKey{}) != true {
 			now := time.Now()
 			baseline, err = cache.loadObservation(c, history, generation, now, true)
+			if baseline != nil && baseline.ObservedAt().Before(c.snapshotReadInvalidatedAt()) {
+				baseline = nil
+			}
 			if baseline != nil && now.Sub(baseline.ObservedAt()) < snapshotCacheTTL {
 				cached = baseline
 			}
@@ -412,7 +447,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 	if err != nil {
 		cache.warn(err)
 		recordCacheCost(ctx, false)
-		return c.readSnapshotRemote(ctx, history)
+		return c.readSnapshotUncached(ctx, history)
 	}
 	if cached != nil {
 		recordCacheCost(ctx, true)
@@ -420,7 +455,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, history bool) (*Snapshot, err
 	}
 	recordCacheCost(ctx, false)
 	// Generation and refresh intent separate in-flight reads across invalidation.
-	key := cache.path(history) + ":" + generation
+	key := fmt.Sprintf("%s:%s:%d", cache.path(history), generation, c.snapshotReadGeneration(false))
 	if ctx.Value(freshSnapshotKey{}) == true {
 		key += ":fresh"
 	}
@@ -515,7 +550,7 @@ func (c *Client) ClearCache(ctx context.Context) error {
 	if c.cache == nil {
 		return fmt.Errorf("GitHub snapshot cache is disabled for this authentication context")
 	}
-	return c.cache.invalidate(ctx, false)
+	return c.cache.invalidateCompatible(ctx, false)
 }
 
 // ClearAllSnapshotCaches deletes regenerable snapshots only, retaining generation
@@ -525,6 +560,6 @@ func ClearAllSnapshotCaches(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	cache := &snapshotCache{root: filepath.Join(root, "td", "gh-issue", "v1")}
-	return cache.invalidate(ctx, true)
+	cache := &snapshotCache{root: filepath.Join(root, "td", "gh-issue", fmt.Sprintf("v%d", snapshotCacheVersion))}
+	return cache.invalidateCompatible(ctx, true)
 }

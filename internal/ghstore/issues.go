@@ -20,12 +20,13 @@ import (
 
 // Client uses only the gh executable; it never opens the local issue database.
 type Client struct {
-	cache       *snapshotCache
-	cooldown    *apiCooldownScope
-	audit       func(auditlog.SecurityEvent) error
-	stateLabels map[string]bool
-	dir, repo   string
-	run         func(context.Context, string, []byte, ...string) ([]byte, error)
+	cache             *snapshotCache
+	invalidationCache *snapshotCache
+	cooldown          *apiCooldownScope
+	audit             func(auditlog.SecurityEvent) error
+	stateLabels       map[string]bool
+	dir, repo         string
+	run               func(context.Context, string, []byte, ...string) ([]byte, error)
 }
 
 // Open revalidates the selected remote on each invocation. A changed remote must
@@ -34,10 +35,11 @@ func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Clie
 	if cfg == nil || cfg.Remote == "" || cfg.Repo == "" {
 		return nil, fmt.Errorf("gh-issue repository is not configured; run 'td config set store gh-issue'")
 	}
-	var cache *snapshotCache
+	var cache, invalidationCache *snapshotCache
 	var cooldown *apiCooldownScope
 	resolved, err := resolveRepositoryCredential(ctx, dir, cfg.Remote, func(token []byte) {
 		cache = newSnapshotCache(cfg.Repo, token)
+		invalidationCache = newSnapshotCacheIdentity(cfg.Repo, token)
 		cooldown = newAPICooldown(cfg.Repo, token)
 	})
 	if err != nil {
@@ -46,7 +48,7 @@ func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Clie
 	if !strings.EqualFold(resolved.Repo, cfg.Repo) {
 		return nil, fmt.Errorf("git remote %q now resolves to %s, but the configured store is %s; run 'td config set store gh-issue --remote %s' to select it explicitly", cfg.Remote, resolved.Repo, cfg.Repo, cfg.Remote)
 	}
-	return &Client{dir: dir, repo: resolved.Repo, run: runAPI, cache: cache, cooldown: cooldown, audit: func(event auditlog.SecurityEvent) error { return auditlog.LogSecurityEvent(dir, event) }}, nil
+	return &Client{dir: dir, repo: resolved.Repo, run: runAPI, cache: cache, invalidationCache: invalidationCache, cooldown: cooldown, audit: func(event auditlog.SecurityEvent) error { return auditlog.LogSecurityEvent(dir, event) }}, nil
 }
 
 func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
@@ -106,14 +108,22 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload a
 	if paginate {
 		args = append(args, "--paginate", "--slurp")
 	}
-	if method != "GET" && c.cache != nil {
+	if method != "GET" {
+		c.snapshotReadGeneration(true)
+		defer c.snapshotReadGeneration(true)
+	}
+	invalidationCache := c.invalidationCache
+	if invalidationCache == nil {
+		invalidationCache = c.cache
+	}
+	if method != "GET" && invalidationCache != nil {
 		// Invalidate both before and after the attempt, including uncertain writes.
 		// Readers that started during a write must not publish its older state.
-		c.cache.warn(c.cache.invalidate(ctx, false))
+		invalidationCache.warn(invalidationCache.invalidateCompatible(ctx, false))
 		defer func() {
 			cleanup, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			c.cache.warn(c.cache.invalidate(cleanup, false))
+			invalidationCache.warn(invalidationCache.invalidateCompatible(cleanup, false))
 		}()
 	}
 	data, err := c.run(ctx, c.dir, body, args...)

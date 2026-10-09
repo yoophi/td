@@ -1,6 +1,7 @@
 package ghstore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,7 +31,8 @@ func newIncrementalFixture(t *testing.T) *incrementalFixture {
 		fullComments: [][]apiComment{{{ID: 1, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: "original", UpdatedAt: old}}},
 		deltaIssues:  [][]apiIssue{{}}, deltaComments: [][]apiComment{{}},
 	}
-	f.client = &Client{repo: "owner/repo", cache: &snapshotCache{root: filepath.Join(t.TempDir(), "td", "gh-issue", "v1"), repo: "owner/repo", credential: cacheHash(t.Name())}}
+	repo := "owner/repo-" + cacheHash(t.Name())[:12]
+	f.client = &Client{repo: repo, cache: &snapshotCache{root: filepath.Join(t.TempDir(), "td", "gh-issue", "v1"), repo: repo, credential: cacheHash(t.Name())}}
 	f.client.run = func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
 		endpoint := args[5]
 		f.calls = append(f.calls, endpoint)
@@ -59,6 +61,11 @@ func newIncrementalFixture(t *testing.T) *incrementalFixture {
 			return json.Marshal(f.fullIssues)
 		}
 		return nil, fmt.Errorf("unexpected individual endpoint: %s", endpoint)
+	}
+	run := f.client.run
+	f.client.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+		data, err := run(ctx, dir, payload, args...)
+		return bytes.ReplaceAll(data, []byte("repos/owner/repo/"), []byte("repos/"+repo+"/")), err
 	}
 	return f
 }

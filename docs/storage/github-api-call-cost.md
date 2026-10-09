@@ -251,3 +251,21 @@ serve, monitor and CLI packages. Full ghstore race tests (including partial,
 malformed and rate-limited pagination cache rejection) passed, as did full
 macOS and Linux lint. These checks do not claim completion of #50 or the
 remaining command/import tasks.
+
+### #50 completed coordination
+
+Repository/credential-identical overlapping preflights and bulk history sweeps
+now coalesce, including cache-disabled or cache-unavailable consumers. A
+concurrent real-consumer subprocess regression (HTTP stats, TUI Fetch and
+ChangeToken) with 101 issues and 101 comments observes **5 HTTP responses total**
+(preflight 1 + issue pages 2 + comment pages 2) and three local auth commands.
+It forbids per-issue detail/comment/event calls. Completed uncached results are
+not retained. Persistent display reuse still has a 30s TTL; expired baselines
+use validated since deltas until the 5-minute full comparison deadline.
+
+These changes supersede earlier pending-#50/#52 notes for aggregate display and
+event-token reads. The expensive repeated review collection noted in the #51
+native smoke is a separate mutation-path performance investigation (#55);
+mutation safety reads have not been replaced by display snapshots.
+See [cache and coordination policy](github-snapshot-cache.md) for cursor,
+physical deletion delay, fresh export, versioning and process limitations.
