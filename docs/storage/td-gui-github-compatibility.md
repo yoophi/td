@@ -1,6 +1,6 @@
 # td-gui와 GitHub 저장소 호환 조사
 
-2026-10-10. 설치된 td-gui는 v0.18.8이며 코드를 변경하지 않았다. 조사한 upstream main은 a9aefa5, 설치 버전 source tag v0.18.8도 비교했다.
+2026-10-10. 설치된 td-gui의 Go module 빌드 정보는 v0.18.8/VCS 32d3050이며 코드를 변경하지 않았다. 버전 배너는 ldflags 없이 빌드되어 `dev`로 출력된다. 조사한 upstream main은 a9aefa5, 설치 버전 source tag v0.18.8도 비교했다.
 
 ## 현재 결론
 
@@ -192,3 +192,39 @@ human review. The upstream source checkout a9aefa5 contains explicit mutually
 exclusive attributed/self-review UI choices; no fabricated reviewer was used.
 Both fixtures were logically deleted and the owned GUI/backend stopped.
 #55 remains in progress for the outstanding complete acceptance audit.
+
+### Native browser workflow and backend discovery audit
+
+With installed td edac4ab and the unchanged GUI, Chrome native UI verification
+on a separately owned sample GUI (7778) observed gh-123 Start→in_progress,
+Request review→in_review, Approve→closed and Reopen→open. Approval explicitly
+selected “I reviewed my own work” with an honest reason. The resulting screen
+displayed self-reviewed and the actual web actor, not a fabricated independent
+reviewer; reopening cleared the active reviewer fields. Backend responses
+were all 200: start4.929s, review16.570s, approve15.052s, reopen5.540s.
+
+`go version -m ~/.local/bin/td-gui` establishes module v0.18.8 and unmodified
+VCS32d3050cdb3ae415d717bc1e93928a683886e123. Its `-version` output remains dev;
+this is a build banner limitation, not proof of a different module release.
+
+The native UI rendered sample gh-123/gh-124 in All Issues swimlanes. Three
+coordinate drags of gh-124 toward In progress produced no transition panel,
+no server write and no status change. This is an unverified real drag/drop
+interaction; it does not establish an API bug or a requirement to fork GUI.
+Backlog position HTTP contracts were previously checked, but a successful
+real drag/drop still needs evidence before the complete #55 audit can pass.
+
+Starting a second unchanged GUI against the same sample while the first owned
+a bearer-protected backend exited1 with the explicit unknown-token error. It
+did not replace or stop the existing backend; the original GUI health remained
+200. This is the upstream manager's intentional authentication boundary, not
+a successful authenticated reuse. Unauthenticated existing-backend reuse is
+still a separate acceptance check.
+
+The full internal/serve race suite (GitHub and SQLite HTTP tests) passed.
+Owned browser tab and GUI/backend were stopped, both fixtures logically
+deleted, and the user's original7777 tab restored. Existing user servers were
+left intact. Evidence is recorded under the tracking checkout's
+artifacts/td-gui-compatibility/browser-workflow. #55 remains in_progress;
+real drag/drop, unauthenticated reuse and the remaining acceptance audit
+must not be inferred from these narrower successful workflow checks.
