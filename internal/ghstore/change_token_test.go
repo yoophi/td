@@ -23,7 +23,11 @@ func TestChangeTokenTracksIssueCommentAndDeletedEntityChanges(t *testing.T) {
 	comments := map[string][]apiComment{}
 	c.run = func(ctx context.Context, dir string, input []byte, args ...string) ([]byte, error) {
 		if strings.Contains(args[5], "/comments?") {
-			return json.Marshal([][]apiComment{comments[args[5]]})
+			page := comments[args[5]]
+			if page == nil {
+				page = []apiComment{}
+			}
+			return json.Marshal([][]apiComment{page})
 		}
 		return base(ctx, dir, input, args...)
 	}
@@ -35,8 +39,8 @@ func TestChangeTokenTracksIssueCommentAndDeletedEntityChanges(t *testing.T) {
 	if err != nil || again != token {
 		t.Fatal("unstable unchanged token")
 	}
-	endpoint := "repos/owner/repo/issues/3/comments?per_page=100"
-	comments[endpoint] = []apiComment{{ID: 90, Body: "comment on deleted issue"}}
+	endpoint := "repos/owner/repo/issues/comments?per_page=100"
+	comments[endpoint] = []apiComment{{ID: 90, IssueURL: "https://api.github.com/repos/owner/repo/issues/3", Body: "comment on deleted issue"}}
 	changed, err := c.ChangeToken(ctx)
 	if err != nil || changed == token {
 		t.Fatalf("deleted comment ignored: %v", err)
@@ -65,7 +69,7 @@ func TestChangeTokenTracksIssueCommentAndDeletedEntityChanges(t *testing.T) {
 	if err != nil || renamed == boardToken {
 		t.Fatal("board edit ignored")
 	}
-	comments[endpoint] = []apiComment{{ID: 90, Body: activityPrefix + "invalid"}}
+	comments[endpoint] = []apiComment{{ID: 90, IssueURL: "https://api.github.com/repos/owner/repo/issues/3", Body: activityPrefix + "invalid"}}
 	if token, err := c.ChangeToken(ctx); err == nil || token != "" {
 		t.Fatalf("corruption became token: %s %v", token, err)
 	}
@@ -82,7 +86,7 @@ func TestChangeTokenStableOrderingAndRejectsDuplicatePages(t *testing.T) {
 	duplicate := false
 	c := &Client{repo: "owner/repo", run: func(_ context.Context, _ string, _ []byte, args ...string) ([]byte, error) {
 		if strings.Contains(args[5], "/comments?") {
-			comments := []apiComment{{ID: 2, Body: "two"}, {ID: 1, Body: "one"}}
+			comments := []apiComment{{ID: 2, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: "two"}, {ID: 1, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: "one"}}
 			if reverse {
 				comments[0], comments[1] = comments[1], comments[0]
 			}

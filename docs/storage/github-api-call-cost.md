@@ -45,3 +45,23 @@ as invalid, losing the real rate-limit cause. Repository preflight now uses
 `gh auth token` only to verify local credential availability, discards its
 output without logging it, and validates actual access through the repository
 API. Its rate-limit diagnostic and typed exception propagate unchanged.
+
+## Repository-wide observation implementation (2026-10-10)
+
+`Client.ReadSnapshot` now collects all issue pages and repository issue-comment
+pages, joining on `issue_url`. `ChangeToken` uses that observation without
+per-issue requests. The 44-issue cost regression now expects two paginated gh
+invocations per complete sweep, instead of 45. Actual HTTP requests are I+C
+(issue pages plus repository comment pages), with repository preflight separate.
+On `yoophi/td`, 52 tasks and 99 comments were observed with three HTTP responses
+including preflight. More than 100 comments increase pagination cost.
+
+The snapshot includes retained/auxiliary issue comments, filters PR comments,
+rejects repeated identities/operations and malformed metadata, and reports an
+orphan comment as an incomplete observation if the repository changed during
+the read. Existing comment edits/deletions remain part of the fingerprint.
+The snapshot is not atomic and is never final mutation authorization.
+
+Consumer conversion (#47), lazy review display (#48), persistent cache (#52),
+and incremental reconciliation (#50) remain separate implementation tasks.
+The existing running server must use the new build to benefit from this change.

@@ -8,7 +8,7 @@ import (
 )
 
 // Keep the cost of the complete observation visible: detecting edits/deletions
-// in old comments currently requires visiting every issue's comment endpoint.
+// in old comments requires the complete repository comment collection.
 func TestChangeTokenRequestCost(t *testing.T) {
 	issues := make([]apiIssue, 44)
 	for i := range issues {
@@ -26,12 +26,12 @@ func TestChangeTokenRequestCost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if calls != 45 {
-		t.Fatalf("first sweep: got %d gh calls, want 45", calls)
+	if calls != 2 {
+		t.Fatalf("first sweep: got %d gh calls, want 2", calls)
 	}
 	again, err := c.ChangeToken(context.Background())
-	if err != nil || again != first || calls != 90 {
+	if err != nil || again != first || calls != 4 {
 		t.Fatalf("unchanged sweep: calls=%d err=%v", calls, err)
 	}
-	t.Log("44 issues: 45 gh API calls per sweep, including unchanged sweeps; repository preflight adds one call")
+	t.Log("44 issues: 2 gh API calls per sweep, including unchanged sweeps; repository preflight adds one call")
 }
