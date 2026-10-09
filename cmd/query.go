@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/marcus/td/internal/db"
@@ -113,18 +115,49 @@ BOARDS:
 	GroupID: "query",
 	Args:    cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		helpers := 0
+		for _, name := range []string{"examples", "fields", "explain"} {
+			if enabled, _ := cmd.Flags().GetBool(name); enabled {
+				helpers++
+			}
+		}
+		if helpers > 1 {
+			return fmt.Errorf("choose only one query helper: --examples, --fields or --explain")
+		}
+		if helpers != 0 {
+			for _, name := range []string{"output", "limit", "max-scan", "sort"} {
+				if cmd.Flags().Changed(name) {
+					return fmt.Errorf("--%s applies to query execution, not offline query helpers", name)
+				}
+			}
+		}
 		// Handle special flags
 		if showExamples, _ := cmd.Flags().GetBool("examples"); showExamples {
+			if len(args) != 0 {
+				return fmt.Errorf("query --examples does not accept an expression")
+			}
+			if jsonMode(cmd) {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"examples": queryExamples()})
+			}
 			printQueryExamples()
 			return nil
 		}
 
 		if showFields, _ := cmd.Flags().GetBool("fields"); showFields {
+			if len(args) != 0 {
+				return fmt.Errorf("query --fields does not accept an expression")
+			}
+			if jsonMode(cmd) {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(queryFieldInventory())
+			}
 			printQueryFields()
 			return nil
 		}
 
 		if len(args) == 0 {
+			if explain, _ := cmd.Flags().GetBool("explain"); explain {
+				return fmt.Errorf("query --explain requires an expression")
+			}
 			return cmd.Help()
 		}
 
@@ -148,6 +181,9 @@ BOARDS:
 
 		// Show explain if requested
 		if explain, _ := cmd.Flags().GetBool("explain"); explain {
+			if jsonMode(cmd) {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"query": queryStr, "parsed": parsedQuery.String(), "executed": false})
+			}
 			fmt.Printf("Query: %s\n", queryStr)
 			fmt.Printf("Parsed: %s\n", parsedQuery.String())
 			return nil
@@ -248,11 +284,13 @@ func printQuerySyntaxHelp() {
 	fmt.Fprintln(os.Stderr, "Run 'td query --examples' for more examples")
 }
 
-func printQueryExamples() {
-	examples := []struct {
-		query string
-		desc  string
-	}{
+type queryExampleDoc struct {
+	Query       string `json:"query"`
+	Description string `json:"description"`
+}
+
+func queryExamples() []queryExampleDoc {
+	return []queryExampleDoc{
 		// Basic queries
 		{"status = open", "All open issues"},
 		{"type = bug", "All bugs"},
@@ -301,77 +339,70 @@ func printQueryExamples() {
 		{"is(open) AND has(labels) AND labels ~ urgent", "Urgent labeled issues"},
 	}
 
+}
+
+func printQueryExamples() {
 	fmt.Println("TDQ Query Examples:")
 	fmt.Println()
-	for _, ex := range examples {
-		fmt.Printf("  td query %q\n", ex.query)
-		fmt.Printf("    → %s\n\n", ex.desc)
+	for _, ex := range queryExamples() {
+		fmt.Printf("  td query %q\n", ex.Query)
+		fmt.Printf("    → %s\n\n", ex.Description)
 	}
 }
 
+type queryFieldDoc struct {
+	Name          string   `json:"name"`
+	Type          string   `json:"type"`
+	AllowedValues []string `json:"allowed_values,omitempty"`
+}
+
+type queryFieldDocs struct {
+	IssueFields       []queryFieldDoc   `json:"issue_fields"`
+	CrossEntityFields []queryFieldDoc   `json:"cross_entity_fields"`
+	SpecialValues     map[string]string `json:"special_values"`
+	RelativeDates     []string          `json:"relative_dates"`
+}
+
+// The parser's validation registry is authoritative for both output formats.
+func queryFieldInventory() queryFieldDocs {
+	docs := queryFieldDocs{IssueFields: []queryFieldDoc{}, CrossEntityFields: []queryFieldDoc{}, SpecialValues: map[string]string{"@me": "Current session ID", "EMPTY": "Empty/null field", "NULL": "Null field"}, RelativeDates: []string{"today", "yesterday", "this_week", "last_week", "this_month", "last_month", "-Nd/-Nw/-Nm/-Nh", "+Nd/+Nw/+Nm/+Nh"}}
+	for name, typ := range query.KnownFields {
+		if typ != "prefix" {
+			docs.IssueFields = append(docs.IssueFields, queryFieldDoc{name, typ, query.EnumValues[name]})
+		}
+	}
+	for prefix, fields := range query.CrossEntityFields {
+		for field, typ := range fields {
+			name := prefix + "." + field
+			docs.CrossEntityFields = append(docs.CrossEntityFields, queryFieldDoc{name, typ, query.EnumValues[name]})
+		}
+	}
+	sort.Slice(docs.IssueFields, func(i, j int) bool { return docs.IssueFields[i].Name < docs.IssueFields[j].Name })
+	sort.Slice(docs.CrossEntityFields, func(i, j int) bool { return docs.CrossEntityFields[i].Name < docs.CrossEntityFields[j].Name })
+	return docs
+}
+
 func printQueryFields() {
+	docs := queryFieldInventory()
 	fmt.Println("TDQ Searchable Fields:")
 	fmt.Println()
-
 	fmt.Println("ISSUE FIELDS:")
-	fields := []struct {
-		name   string
-		typ    string
-		values string
-	}{
-		{"id", "string", "td-* format"},
-		{"title", "string", "any text"},
-		{"description", "string", "any text"},
-		{"status", "enum", "open, in_progress, blocked, in_review, closed"},
-		{"type", "enum", "bug, feature, task, epic, chore"},
-		{"priority", "ordinal", "P0, P1, P2, P3, P4"},
-		{"points", "number", "1, 2, 3, 5, 8, 13, 21"},
-		{"labels", "string", "comma-separated"},
-		{"parent", "string", "issue ID (direct parent)"},
-		{"epic", "string", "issue ID (ancestor epic)"},
-		{"implementer", "string", "session ID or @me"},
-		{"reviewer", "string", "session ID or @me"},
-		{"minor", "bool", "true, false"},
-		{"branch", "string", "git branch name"},
-		{"created", "date", "ISO or relative (-7d, today, etc.)"},
-		{"updated", "date", "ISO or relative"},
-		{"closed", "date", "ISO or relative"},
-		{"due/defer", "date", "Calendar date; due_date/defer_until aliases"},
-		{"defer_count", "number", "Number of later deferrals"},
+	for _, field := range docs.IssueFields {
+		fmt.Printf("  %-14s %-8s %s\n", field.Name, field.Type, strings.Join(field.AllowedValues, ", "))
 	}
-
-	for _, f := range fields {
-		fmt.Printf("  %-12s %-8s %s\n", f.name, f.typ, f.values)
-	}
-
 	fmt.Println()
 	fmt.Println("CROSS-ENTITY FIELDS:")
-	crossFields := []struct {
-		prefix string
-		fields string
-	}{
-		{"log.", "message, type (progress/blocker/decision/hypothesis/tried/result/orchestration), timestamp, session"},
-		{"comment.", "text, created, session"},
-		{"handoff.", "done, remaining, decisions, uncertain, timestamp"},
-		{"file.", "path, role (implementation/test/reference/config)"},
+	for _, field := range docs.CrossEntityFields {
+		fmt.Printf("  %-20s %-8s %s\n", field.Name, field.Type, strings.Join(field.AllowedValues, ", "))
 	}
-
-	for _, cf := range crossFields {
-		fmt.Printf("  %s\n", cf.prefix)
-		fmt.Printf("    %s\n", cf.fields)
-	}
-
 	fmt.Println()
 	fmt.Println("SPECIAL VALUES:")
-	fmt.Println("  @me     Current session ID")
-	fmt.Println("  EMPTY   Empty/null field")
-	fmt.Println("  NULL    Null field")
-
+	for _, name := range []string{"@me", "EMPTY", "NULL"} {
+		fmt.Printf("  %-7s %s\n", name, docs.SpecialValues[name])
+	}
 	fmt.Println()
 	fmt.Println("RELATIVE DATES:")
-	fmt.Println("  today, yesterday, this_week, last_week, this_month, last_month")
-	fmt.Println("  -Nd (days ago), -Nw (weeks ago), -Nm (months ago), -Nh (hours ago)")
-	fmt.Println("  +Nd (days from now), etc.")
+	fmt.Println("  " + strings.Join(docs.RelativeDates, ", "))
 }
 
 func init() {

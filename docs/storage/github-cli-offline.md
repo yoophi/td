@@ -18,3 +18,20 @@ instead of changing HOME or writing the user's real global settings. This
 proves the command contract, not native persistence validation of the user's
 actual configuration. The complete command/flag support matrix, other offline
 helpers, native acceptance and task review remain pending #31 work.
+
+`query --examples`, `query --fields` and `query EXPRESSION --explain` are also
+offline across issue stores. With `--json`, examples return query/description
+rows; fields return sorted issue/cross-entity fields, validation enum values,
+special values and relative-date forms; explain returns `query`, normalized
+`parsed` and `executed=false`. Examples share their definitions with human
+output, and the field inventory comes from the parser's actual validation
+registry. This includes sprint, note/dependency fields and date aliases instead
+of maintaining a separate incomplete field list.
+
+Choose only one helper. Fields/examples reject an unused expression; explain
+requires one and reports parse/validation failures. Execution-only output,
+limit, scan and sort options are rejected with helpers instead of being silently
+ignored. Use global `--json` for helper JSON. These commands do not fetch issue
+data or resolve actual session placeholders; explain is parsing, not query
+execution. CLI tests cover both feature modes, successful/error JSON, absence
+of gh calls/SQLite files and validation of every advertised field/example.
