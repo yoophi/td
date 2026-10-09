@@ -4,6 +4,7 @@ package ghstore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os/exec"
@@ -17,11 +18,21 @@ import (
 type runner func(context.Context, string, string, ...string) ([]byte, error)
 
 func runCommand(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+	if name == "gh" && len(args) > 0 && args[0] == "api" {
+		return runAPI(ctx, dir, nil, args...)
+	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	data, err := cmd.Output()
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
+	}
+	if err != nil && name == "gh" {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			err = fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exit.Stderr)))
+		}
+		err = classifyRateLimit(err)
 	}
 	return data, err
 }

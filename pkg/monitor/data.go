@@ -130,6 +130,12 @@ func categorizeInReviewIssue(
 	return CategoryReviewable
 }
 
+// CategorizeInReview applies the shared monitor policy to caller-provided,
+// verified involvement/approval observations. It performs no storage reads.
+func CategorizeInReview(issue *models.Issue, sessionID string, mode reviewpolicy.Mode, hasImplHistory, wasAnyInvolved, hasActiveApproval bool) TaskListCategory {
+	return categorizeInReviewIssue(issue, sessionID, mode, hasImplHistory, wasAnyInvolved, hasActiveApproval)
+}
+
 // StatsData holds statistics for the stats modal
 type StatsData struct {
 	ExtendedStats *models.ExtendedStats

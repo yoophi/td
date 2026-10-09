@@ -87,7 +87,16 @@ func (d IssueDetails) validate() error {
 	}
 
 	for _, entry := range d.Transitions {
-		if entry.OperationID == "" || entry.SessionID == "" || entry.At.IsZero() || !slices.Contains([]string{"start", "unstart", "block", "unblock", "review", "approve", "reject", "close", "reopen"}, entry.Action) {
+		if entry.Action == "add_dep" || entry.Action == "remove_dep" {
+			n, err := Number(entry.RelatedIssueID)
+			if err != nil || entry.RelatedIssueID != fmt.Sprintf("gh-%d", n) {
+				return fmt.Errorf("dependency history requires a canonical related issue ID")
+			}
+		} else if entry.RelatedIssueID != "" {
+			return fmt.Errorf("related issue ID requires dependency history")
+		}
+
+		if entry.OperationID == "" || entry.SessionID == "" || entry.At.IsZero() || !slices.Contains([]string{"start", "unstart", "block", "unblock", "review", "approve", "reject", "close", "reopen", "delete", "restore", "add_dep", "remove_dep"}, entry.Action) {
 			return fmt.Errorf("invalid transition history")
 		}
 		if !slices.Contains([]models.Status{models.StatusOpen, models.StatusInProgress, models.StatusInReview, models.StatusBlocked, models.StatusClosed}, entry.From) || !slices.Contains([]models.Status{models.StatusOpen, models.StatusInProgress, models.StatusBlocked, models.StatusInReview, models.StatusClosed}, entry.To) {

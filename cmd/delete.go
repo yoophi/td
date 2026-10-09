@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/marcus/td/internal/session"
 	"github.com/spf13/cobra"
@@ -15,6 +17,10 @@ var deleteCmd = &cobra.Command{
 	GroupID: "core",
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		reason, err := deletionReason(cmd)
+		if err != nil {
+			return err
+		}
 		baseDir := getBaseDir()
 
 		database, err := db.Open(baseDir)
@@ -36,6 +42,11 @@ var deleteCmd = &cobra.Command{
 				continue
 			}
 
+			if reason != "" {
+				if err := database.AddLog(&models.Log{IssueID: issueID, SessionID: sessionID, Type: models.LogTypeProgress, Message: "Deleted: " + reason}); err != nil {
+					return fmt.Errorf("%s was deleted but reason logging failed; inspect current state before retrying: %w", issueID, err)
+				}
+			}
 			fmt.Printf("DELETED %s\n", issueID)
 		}
 
@@ -49,6 +60,10 @@ var restoreCmd = &cobra.Command{
 	GroupID: "core",
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		reason, err := deletionReason(cmd)
+		if err != nil {
+			return err
+		}
 		baseDir := getBaseDir()
 
 		database, err := db.Open(baseDir)
@@ -70,6 +85,11 @@ var restoreCmd = &cobra.Command{
 				continue
 			}
 
+			if reason != "" {
+				if err := database.AddLog(&models.Log{IssueID: issueID, SessionID: sessionID, Type: models.LogTypeProgress, Message: "Restored: " + reason}); err != nil {
+					return fmt.Errorf("%s was restored but reason logging failed; inspect current state before retrying: %w", issueID, err)
+				}
+			}
 			fmt.Printf("RESTORED %s\n", issueID)
 		}
 
@@ -80,8 +100,20 @@ var restoreCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(restoreCmd)
+	deleteCmd.Flags().String("reason", "", "Reason for logical deletion")
+	restoreCmd.Flags().String("reason", "", "Reason for restoring a deleted issue")
 
 	// Accept --force and --yes as no-ops for LLM compatibility
 	deleteCmd.Flags().BoolP("force", "f", false, "No-op (delete always succeeds)")
 	deleteCmd.Flags().BoolP("yes", "y", false, "No-op (delete always succeeds, alias for --force)")
+}
+
+// Explicit empty acknowledgements should not silently become absent reasons.
+func deletionReason(cmd *cobra.Command) (string, error) {
+	reason, _ := cmd.Flags().GetString("reason")
+	reason = strings.TrimSpace(reason)
+	if cmd.Flags().Changed("reason") && reason == "" {
+		return "", fmt.Errorf("--reason requires a nonblank value")
+	}
+	return reason, nil
 }

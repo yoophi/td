@@ -64,6 +64,9 @@ func TestGitHubTypeShortcuts(t *testing.T) {
 	bin := t.TempDir()
 	script := `#!/bin/sh
 if [ "$1" = auth ]; then exit 0; fi
+for arg in "$@"; do
+ if [ "$arg" = --include ]; then printf 'HTTP/2.0 200 OK\nContent-Type: application/json\r\n\r\n'; break; fi
+done
 if [ "$4" = repos/owner/repo ]; then
  printf '%s' '{"full_name":"owner/repo","has_issues":true}'
 elif [ "$6" = "repos/owner/repo/issues?state=open&per_page=100" ]; then

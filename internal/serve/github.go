@@ -10,6 +10,7 @@ import (
 // adapters become available; unsupported operations must never reach a DB.
 func NewGitHubServer(baseDir, sessionID, repo string, config ServeConfig, sessions ...SessionStore) *Server {
 	s := &Server{baseDir: baseDir, sessionID: sessionID, config: config, mux: http.NewServeMux()}
+	s.githubRequests = newGitHubRequestLifecycle()
 	s.githubCapabilities = []string{}
 	s.githubEndpoints = []string{"GET /health", "GET /v1/project"}
 	if len(sessions) > 0 && sessions[0] != nil {
@@ -17,7 +18,13 @@ func NewGitHubServer(baseDir, sessionID, repo string, config ServeConfig, sessio
 		s.githubEndpoints = append(s.githubEndpoints, "GET /v1/sessions", "PUT /v1/focus")
 	}
 	s.mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		WriteSuccess(w, map[string]any{"status": "ok", "session_id": sessionID, "change_token": "", "store": "gh-issue"}, http.StatusOK)
+		token := ""
+		if s.githubEvents != nil {
+			s.githubEvents.mu.Lock()
+			token = s.githubEvents.token
+			s.githubEvents.mu.Unlock()
+		}
+		WriteSuccess(w, map[string]any{"status": "ok", "session_id": sessionID, "change_token": token, "store": "gh-issue"}, http.StatusOK)
 	})
 	s.mux.HandleFunc("GET /v1/project", func(w http.ResponseWriter, r *http.Request) {
 		min, max := titleLengthLimitsFor(HandlerContext{BaseDir: baseDir})

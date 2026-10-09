@@ -113,7 +113,7 @@ func TestStoreGitHubValidationAndSwitchPreservesIssues(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("TD_TEST_GH_RESPONSE", `{"full_name":"owner/source","has_issues":true}`)
+	t.Setenv("TD_TEST_GH_RESPONSE", "HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n"+`{"full_name":"owner/source","has_issues":true}`)
 	database, err := db.Initialize(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestStoreGitHubValidationAndSwitchPreservesIssues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TD_TEST_GH_RESPONSE", `{"full_name":"owner/fork","has_issues":false}`)
+	t.Setenv("TD_TEST_GH_RESPONSE", "HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n"+`{"full_name":"owner/fork","has_issues":false}`)
 	if _, err := executeStoreTest(t, configSetCmd, "", "store", "gh-issue"); err == nil {
 		t.Fatal("accepted disabled Issues")
 	}

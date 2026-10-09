@@ -295,9 +295,163 @@ before listening, retains the existing port/address/token/CORS settings, and
 uses a persistent web session separate from CLI sessions. The current HTTP
 support includes `/health`, `/v1/project`, `/v1/sessions`, `PUT /v1/focus`,
 and issue list/detail/create/update (`GET /v1/issues`, `GET /v1/issues/{id}`,
-`POST /v1/issues`, `PATCH /v1/issues/{id}`). HTTP create/update preserve the
+`POST /v1/issues`, `PATCH /v1/issues/{id}`, `DELETE /v1/issues/{id}`). HTTP create/update preserve the
 existing field contract, validate the current repository and web identity,
 and check `If-Match` plus observed GitHub revisions before an update.
+GitHub `delete`, `restore`, and `deleted` use shared logical deletion metadata.
+Deletion never invokes GitHub destructive deletion or changes native open/closed
+state. It retains workflow attribution, review evidence and relationships, and
+records the actor, timestamp and prior effective status in transition history.
+`delete` and `restore` accept optional `--reason`; an explicitly blank reason is
+an error before any issue mutation. GitHub reasons are stored with the shared
+transition. SQLite reasons use the existing progress log; if that later log
+write fails, the command reports the already saved deletion/restoration and
+requires inspecting current state before retrying.
+Normal list/detail/search reads omit deleted issues; `deleted` lists only deleted
+issues, and restore respects any intervening native state change. Repeated
+operations are no-ops after revision validation. Multi-ID CLI operations stop
+on the first failure and report earlier saved IDs. HTTP DELETE returns the
+existing `{"deleted": true}` payload, validates `If-Match` and observed revisions,
+and rejects unsupported fields/query parameters. `logical_delete` is exposed
+in `/v1/project`. Undo and import/export integration remain tracked in #18/#9.
+`POST /v1/issues/{id}/comments` returns `201 Created` with the existing comment
+DTO, stores a td comment activity, and uses the actual web session. The matching
+`DELETE /v1/issues/{id}/comments/{comment_id}` returns `200 OK` with
+`{"deleted": true}`. IDs use `ghc-N` (numeric IDs are also accepted). Deletion
+checks membership in the selected issue, direct GitHub issue URL, and an
+unchanged comment and issue revision before DELETE; it cannot remove td logs
+or handoffs. GitHub enforces deletion permissions. Missing comments, protected
+activity, observed conflicts and transport failures are explicit errors. A
+verified deletion is confirmed by a subsequent issue comment read; an uncertain
+DELETE or verification failure is never retried automatically. The checks do
+not make deletion atomic: a comment can still change between GET and DELETE,
+and listing visibility can lag. Unknown/malformed activity metadata blocks
+deletion rather than allowing protected records to be discarded. The `comments`
+capability and both endpoints are listed in `/v1/project`.
+GitHub board storage has a versioned auxiliary-issue schema and read foundation.
+It keeps board configuration out of task lists, validates TDQ/view/position data,
+and resolves `bd-gh-N` IDs or unambiguous names. Reads provide a virtual
+`bd-all-issues` builtin until its configuration is explicitly persisted; reads
+never create issues. Legacy board payloads, unknown metadata and duplicate
+builtin carriers produce explicit errors. The storage layer supports custom-board
+creation, rename/filter updates and logical deletion with observed-revision guards,
+actor history and explicit uncertain-write errors. The storage layer also persists view mode, last-viewed time, saved positions
+and moves in a single carrier write; explicit builtin persistence detects
+duplicate carriers. Request-scoped TDQ board candidates and positioned/query-ordered views are
+supported, along with moves anchored to a task ID that retain the query-ordered
+tail and hidden positions. `GET /v1/boards` and `GET /v1/boards/{id}` return
+board DTOs, slim cards and unresolved blockers from the same task listing. The
+`board_reads` capability advertises these routes. `board_crud` adds POST, PATCH
+and DELETE board routes using the actual web session, strict inputs and optional
+If-Match against the original carrier revision (returned in ETag/revision).
+`board_positions` adds slot positioning, ID-anchored movement and saved-position
+removal routes. Valid virtual-builtin writes materialize a carrier with explicit
+conflict/partial-write errors. CLI/TUI routing remains pending. See [board carrier schema](docs/storage/github-metadata.md#board-carrier-schema-read-foundation).
+
+GitHub-backed `GET /v1/monitor` returns the consolidated issue queues, global
+in-progress list, shared activity feed, recent handoffs and active log sessions.
+`include_closed`, `sort` (`priority`, `created`, `updated`), `search`, and
+`search_mode` (`auto`, `text`, `tdq`) are supported; unknown/repeated or invalid
+query parameters are errors. Search filters task queues while the focus,
+in-progress pane and activity remain global. Text search matches title and
+description; TDQ uses the shared GitHub snapshot with cached activity reads.
+The `ready_to_close` and `pending_other` queues are always arrays and are also
+preserved in SQLite monitor responses. Reviews use the actual web identity and
+common monitor policy. Stale review bases/native close-reopen histories go to
+pending_other, and observed revision or remote read failures return errors.
+Open issues with unclosed dependencies are blocked; missing/deleted dependency
+targets are explicit errors. Needs-rework uses reject/review timestamps, not
+metadata array order. Classification does not authorize a later mutation.
+
+Focus is read from the web scope, never the CLI scope; deleted/missing targets
+produce null focus without rewriting its saved selection. A changed web identity
+or corrupt local focus is an error. Recent activity includes td transitions,
+logs, native/td comments and handoffs, with deleted issue history retained; this
+is editable shared history, not an immutable action log. Native GitHub close/
+reopen operations and board/note actions are not synthesized as td activity
+rows. Handoffs cover the last 24 hours (at most 10); the unified feed has at most
+50 items. Active sessions are shared log authors active in the last five
+minutes, not claims that remote processes are alive. `/v1/project` advertises
+`monitor`. The response change_token is the last successful SSE observation,
+not an atomic token for all monitor reads. The endpoint opens no SQLite DB and
+never hides a remote error by returning an empty success. Large repositories
+require more activity API calls.
+
+GitHub CLI API calls use `--include` internally. Response headers are separated
+from JSON, including the page delimiters produced by `--paginate --slurp`.
+HTTP 429, HTTP 403 explicitly reporting a rate/abuse limit, and HTTP 403 with
+`x-ratelimit-remaining: 0` produce typed rate-limit errors. Ordinary permission
+errors keep their existing behavior. CLI operations stop without retrying.
+HTTP read, mutation, session, statistics and initial SSE errors return 429 with
+`rate_limited`. A valid `Retry-After` (seconds or HTTP date) takes precedence;
+otherwise remaining=0 uses `x-ratelimit-reset`. The HTTP delay rounds upward,
+and polling respects the observed deadline even beyond the normal backoff cap.
+The original diagnostic and uncertain-write warning remain. Without usable
+headers, `Retry-After: 60` is a minimum wait hint, not an observed reset deadline;
+inspect `gh api --include rate_limit` before retrying. A past deadline also uses
+a conservative minimum wait if the response still reports a limit. Inspect
+remote state before retrying any mutation; no mutation is retried automatically.
+Connected SSE emits `store_error` with `code: rate_limited` and the retry delay,
+keeping its last successful content token. Other response headers are discarded.
+See [GitHub's rate-limit guidance](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
+
+GitHub-backed `GET /v1/events` streams the existing `ping` and `refresh`
+event payloads. `Last-Event-ID` is compared with the current content token on
+reconnect; this invalidates client caches rather than replaying an event log.
+The fingerprint includes issue body/state/labels and all comments, including
+logically deleted issues and auxiliary board/note entities. Comment edits and
+deletions are observed independently of the issue's updated timestamp.
+`/health` exposes the last successful token. Initial observation pending or
+failed returns 503 before streaming. Poll failures emit `store_error` with the
+last successful token; recovery refreshes clients. Consumers must surface this
+event and refresh on recovery. Slow subscribers are disconnected to force
+resubscription rather than silently dropping their final update.
+GitHub poll intervals are at least 30 seconds (even when `--interval` is lower),
+with exponential retry delays up to five minutes after failures. Polls are
+serial and canceled on shutdown. Each observation reads all issue comments;
+large repositories cost more API calls. The token is an observation hash, not
+an atomic snapshot or a compare-and-swap revision. External edits appear at the
+next successful poll. `/v1/project` advertises the `events` capability.
+
+GitHub server shutdown cancels active HTTP request contexts before waiting for
+handlers to drain, so executing `gh` calls receive cancellation. A disconnected
+client cancels only its own request. Requests arriving after shutdown starts
+receive 503. Cancellation of a mutation does not prove that GitHub rejected it;
+inspect the remote issue before retrying an uncertain write. The server does
+not retry writes automatically. Stopped server instances cannot be restarted.
+
+GitHub-backed `GET /v1/stats` and `GET /v1/labels` preserve the SQLite
+response fields. Issue counts, points, status/type/priority groups and timeline
+cards exclude logically deleted issues. Logs and handoffs on deleted issues
+still count; native comments do not. Most-active-session counts shared td logs
+only, with lexical session-ID ties. Completion rate is a fraction from 0 to 1;
+point averages include all issue types. Today uses the server's local calendar,
+and this week is the trailing seven days, matching SQLite's date predicates.
+The label catalog includes labels actually used on visible open or closed
+issues, including status labels; unused repository labels are excluded and
+commas inside a label name remain literal. Empty catalogs return an empty array.
+Listing and comment reads are not an atomic snapshot. Remote permission,
+transport or malformed-metadata failures return an explicit error instead of
+partial totals or zero-valued success. These routes do not read local SQLite
+or device-local analytics. `/v1/project` advertises `statistics` and `labels`.
+
+Dependency writes are available through `POST /v1/issues/{id}/dependencies`
+(`depends_on`) and `DELETE /v1/issues/{id}/dependencies/{dep_id}`. They preserve
+the existing `201 dependency` and `200 removed` envelopes and deterministic
+`dep_id` values used by issue reads. Both validate the actual web session,
+source `If-Match`, and observed source revision. Add traverses the target's
+reachable dependency graph with direct GitHub reads, rejects self/circular,
+duplicate, missing/deleted targets and broken graphs, and verifies each graph
+observation before and after writing. Remove can clean a reference to a missing
+or deleted target and never removes an edge belonging to another source issue.
+Writes invalidate the source's review basis and supersede existing approval
+records, retain unrelated fields and append the actual actor and related issue
+to shared transition history. They leave native state unchanged and do not
+automatically unblock or cascade workflow states. Graph checks remain
+best-effort; post-write graph conflicts explicitly report the saved edge and
+are never retried automatically. `/v1/project` exposes `dependencies` and the
+two routes. Dependency CLI and undo/import/export integration remain separate
+work under #4/#9/#18.
 Conflict checks are best-effort; uncertain writes are never retried automatically. Issue reads
 support filters, pagination, TDQ and shared activity. GitHub issue listings and
 comments are separate reads, not an atomic snapshot. Workflow HTTP endpoints are connected to the shared CLI policy,

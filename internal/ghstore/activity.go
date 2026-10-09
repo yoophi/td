@@ -35,6 +35,7 @@ type activityData struct {
 
 type apiComment struct {
 	ID        int64     `json:"id"`
+	IssueURL  string    `json:"issue_url"`
 	Body      string    `json:"body"`
 	URL       string    `json:"html_url"`
 	CreatedAt time.Time `json:"created_at"`
@@ -158,7 +159,23 @@ func decodeActivity(comment apiComment, issueID string) (models.Activity, error)
 }
 
 func (c *Client) ListActivity(ctx context.Context, id string) ([]models.Activity, error) {
-	issue, err := c.Get(ctx, id)
+	return c.listActivity(ctx, id, false)
+}
+
+// ListActivityIncludingDeleted is for retained history and aggregate statistics;
+// ordinary issue reads and writes continue to reject logically deleted issues.
+func (c *Client) ListActivityIncludingDeleted(ctx context.Context, id string) ([]models.Activity, error) {
+	return c.listActivity(ctx, id, true)
+}
+
+func (c *Client) listActivity(ctx context.Context, id string, includeDeleted bool) ([]models.Activity, error) {
+	var issue *Record
+	var err error
+	if includeDeleted {
+		issue, err = c.GetIncludingDeleted(ctx, id)
+	} else {
+		issue, err = c.Get(ctx, id)
+	}
 	if err != nil {
 		return nil, err
 	}

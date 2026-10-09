@@ -116,6 +116,9 @@ func (s *githubSessionStore) SetFocus(ctx context.Context, id *string) (*string,
 }
 
 func sessionStoreError(w http.ResponseWriter, err error) {
+	if writeGitHubRateLimit(w, err) {
+		return
+	}
 	status, code := http.StatusBadGateway, "store_error"
 	if errors.Is(err, errWebSessionChanged) {
 		status, code = http.StatusConflict, ErrConflict
@@ -167,4 +170,32 @@ func (s *Server) registerSessionStore(store SessionStore) {
 		}
 		WriteSuccess(w, map[string]any{"focused_issue_id": id}, http.StatusOK)
 	})
+}
+
+// ReadFocus keeps the actual web scope/identity and does not change its focus.
+// The monitor has already revalidated its selected remote before calling this.
+func (s *githubSessionStore) ReadFocus(ctx context.Context) (*string, error) {
+	state, err := s.scope.Update(ctx, func(current *ghcontext.State) error {
+		if current.Session.ID != s.sessionID {
+			return errWebSessionChanged
+		}
+		if current.Focus != "" {
+			if _, err := ghstore.Number(current.Focus); err != nil {
+				return fmt.Errorf("invalid local web focus: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if state.Focus == "" {
+		return nil, nil
+	}
+	number, err := ghstore.Number(state.Focus)
+	if err != nil {
+		return nil, fmt.Errorf("invalid local web focus: %w", err)
+	}
+	focus := fmt.Sprintf("gh-%d", number)
+	return &focus, nil
 }

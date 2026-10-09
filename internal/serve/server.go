@@ -25,6 +25,8 @@ type ServeConfig struct {
 
 // Server is the td serve HTTP server.
 type Server struct {
+	githubEvents       *githubEventHub
+	githubRequests     *githubRequestLifecycle
 	githubEndpoints    []string
 	githubCapabilities []string
 	db                 *db.DB
@@ -67,6 +69,9 @@ func NewServer(database *db.DB, baseDir, sessionID string, config ServeConfig) *
 // Handler returns the mux wrapped in the middleware chain.
 func (s *Server) Handler() http.Handler {
 	h := http.Handler(s.mux)
+	if s.githubRequests != nil {
+		h = s.githubRequests.middleware(h)
+	}
 
 	// Wrap order: outermost first when applied, so we apply innermost first.
 	// Final order (outermost to innermost):
@@ -88,10 +93,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 
-	// Start SSE hub polling
-	if s.sseHub != nil {
-		s.sseHub.Start(ctx)
-	}
+	// Start backend background processes and bind request cancellation.
+	s.StartBackground(ctx)
+	defer s.StopBackground()
 
 	s.http = &http.Server{
 		Handler:      s.Handler(),
@@ -125,6 +129,12 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 // Shutdown gracefully stops the HTTP server. If the server has not been started,
 // this is a no-op.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.githubEvents != nil {
+		s.githubEvents.stop()
+	}
+	if s.githubRequests != nil {
+		s.githubRequests.stop()
+	}
 	if s.http == nil {
 		return nil
 	}
@@ -133,6 +143,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 // StartBackground starts long-lived background processes (SSE polling loop).
 func (s *Server) StartBackground(ctx context.Context) {
+	if s.githubEvents != nil {
+		s.githubEvents.start(ctx)
+	}
+	if s.githubRequests != nil {
+		s.githubRequests.start(ctx)
+	}
 	if s.sseHub != nil {
 		s.sseHub.Start(ctx)
 	}
@@ -140,6 +156,12 @@ func (s *Server) StartBackground(ctx context.Context) {
 
 // StopBackground stops long-lived background processes.
 func (s *Server) StopBackground() {
+	if s.githubEvents != nil {
+		s.githubEvents.stop()
+	}
+	if s.githubRequests != nil {
+		s.githubRequests.stop()
+	}
 	if s.sseHub != nil {
 		s.sseHub.Stop()
 	}

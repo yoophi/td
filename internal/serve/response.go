@@ -564,6 +564,8 @@ type TaskListDTO struct {
 	InProgress    []IssueDTO `json:"in_progress"`
 	Ready         []IssueDTO `json:"ready"`
 	PendingReview []IssueDTO `json:"pending_review"`
+	ReadyToClose  []IssueDTO `json:"ready_to_close"`
+	PendingOther  []IssueDTO `json:"pending_other"`
 	Blocked       []IssueDTO `json:"blocked"`
 	Closed        []IssueDTO `json:"closed"`
 }
@@ -626,6 +628,8 @@ func taskListDataToDTO(data *monitor.TaskListData) TaskListDTO {
 		InProgress:    issuesToDTOsNonNil(data.InProgress),
 		Ready:         issuesToDTOsNonNil(data.Ready),
 		PendingReview: issuesToDTOsNonNil(data.PendingReview),
+		ReadyToClose:  issuesToDTOsNonNil(data.ReadyToClose),
+		PendingOther:  issuesToDTOsNonNil(data.PendingOther),
 		Blocked:       issuesToDTOsNonNil(data.Blocked),
 		Closed:        issuesToDTOsNonNil(data.Closed),
 	}

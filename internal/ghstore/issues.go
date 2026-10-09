@@ -43,6 +43,7 @@ func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Clie
 }
 
 func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+	args = append(append([]string(nil), args...), "--include")
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=true")
@@ -53,10 +54,23 @@ func runAPI(ctx context.Context, dir string, payload []byte, args ...string) ([]
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	body, headers, headerErr := splitAPIHeaders(out)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		cause := fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return nil, rateLimitFromHeaders(cause, headers, time.Now())
 	}
-	return out, nil
+	if headerErr != nil {
+		return nil, headerErr
+	}
+	if err := requireAPIHeaders(headers); err != nil {
+		return nil, err
+	}
+	for _, response := range headers {
+		if response.Status >= 400 {
+			return nil, rateLimitFromHeaders(fmt.Errorf("gh returned HTTP %d without an exit error", response.Status), headers, time.Now())
+		}
+	}
+	return body, nil
 }
 
 func (c *Client) request(ctx context.Context, method, endpoint string, payload any, paginate bool) ([]byte, error) {
@@ -81,6 +95,7 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload a
 	}
 	data, err := c.run(ctx, c.dir, body, args...)
 	if err != nil {
+		err = classifyRateLimit(err)
 		hint := ""
 		if method != "GET" {
 			hint = "; the write may have reached GitHub: inspect the issue before retrying"

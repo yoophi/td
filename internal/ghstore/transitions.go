@@ -16,6 +16,7 @@ import (
 // TransitionRecord records the actor separately from sessions whose claims
 // were released. It is shared, editable issue metadata, not a distributed lock.
 type TransitionRecord struct {
+	RelatedIssueID     string              `json:"related_issue_id,omitempty"`
 	AdminReason        string              `json:"admin_reason,omitempty"`
 	SelfCloseException string              `json:"self_close_exception,omitempty"`
 	OperationID        string              `json:"operation_id"`

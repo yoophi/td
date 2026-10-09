@@ -35,6 +35,9 @@ func (s *Server) EnableGitHubReads(store *GitHubReadStore) {
 	})
 }
 func readError(w http.ResponseWriter, err error) {
+	if writeGitHubRateLimit(w, err) {
+		return
+	}
 	code, status := "store_error", http.StatusBadGateway
 	if strings.Contains(err.Error(), "HTTP 404") || strings.Contains(err.Error(), " is deleted; restore it before use") {
 		code, status = ErrNotFound, http.StatusNotFound

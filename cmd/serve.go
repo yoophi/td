@@ -90,11 +90,22 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 		sessionID = state.Session.ID
 		storageDescription = "gh-issue: " + cfg.GitHub.Repo
-		srv = serve.NewGitHubServer(dir, sessionID, cfg.GitHub.Repo, serverConfig, serve.NewGitHubSessionStore(dir, *cfg.GitHub, scope, sessionID))
-		srv.EnableGitHubReads(serve.NewGitHubReadStore(dir, *cfg.GitHub))
+		sessionStore := serve.NewGitHubSessionStore(dir, *cfg.GitHub, scope, sessionID)
+		srv = serve.NewGitHubServer(dir, sessionID, cfg.GitHub.Repo, serverConfig, sessionStore)
+		readStore := serve.NewGitHubReadStore(dir, *cfg.GitHub)
+		srv.EnableGitHubReads(readStore)
+		srv.EnableGitHubStats(readStore)
+		srv.EnableGitHubBoardReads(readStore)
+		srv.EnableGitHubEvents(readStore)
+		srv.EnableGitHubMonitor(readStore, sessionStore)
 		writeStore := serve.NewGitHubWriteStore(dir, *cfg.GitHub, scope, sessionID)
 		srv.EnableGitHubWrites(writeStore)
 		srv.EnableGitHubWorkflow(writeStore)
+		srv.EnableGitHubDeletion(writeStore)
+		srv.EnableGitHubComments(writeStore)
+		srv.EnableGitHubDependencies(writeStore)
+		srv.EnableGitHubBoardWrites(writeStore)
+		srv.EnableGitHubBoardPositions(writeStore)
 		go func() {
 			ticker := time.NewTicker(time.Minute)
 			defer ticker.Stop()

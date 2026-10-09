@@ -74,3 +74,93 @@ A missing/conflicting label produces `state_label_warning` in JSON reads and a
 warning in `td show`/`td list`. `td config sync-state-labels` repairs these from
 the effective metadata/native status. A closed native issue retains precedence
 over stale open-family metadata; mirroring does not infer approval from closure.
+
+## Dependency changes
+
+Dependency writes record `add_dep` / `remove_dep` transition actions with a
+canonical `related_issue_id` and actual session actor. Other transition actions
+must not carry this field. Older clients that reject these v1 fields/actions
+need upgrading before collaborating on issues using them. Review rows remain
+historical evidence with `superseded_at`; the effective reviewer/reviewed time
+and review basis are cleared after relation changes. The native state and
+implementer attribution are retained. A fresh review cycle is required for
+approval. Source revisions and reachable target graph observations are verified
+around writes, but GitHub offers no atomic graph lock or conditional PATCH.
+Removal can clean edges whose targets are deleted or missing.
+
+## Board carrier schema (read foundation)
+
+Board configurations use `entity_kind: "board"` and a separate `board` object
+with `version: 1`. It contains a validated TDQ `query`, `view_mode` (`swimlanes`
+or `backlog`), `builtin`, optional nonzero viewed/deleted timestamps, canonical
+`gh-N` position entries (nonnegative unique positions and IDs, `added_at`), and
+actor/operation/time-stamped board history. Unknown fields/versions, mixed issue
+and board details, malformed queries and duplicated positions/history fail
+closed. The carrier's native title and timestamps provide the board name and
+clocks. Ordinary board IDs are `bd-gh-N`; the builtin has `bd-all-issues`.
+
+General issue/task lists exclude board carriers. Board reads paginate all native
+states; a native close can archive a carrier without deleting its configuration.
+Explicit board `deleted_at` governs logical deletion. A builtin cannot have a
+filter or be logically deleted, and its carrier must be named `All Issues`.
+Duplicate builtin carriers and ambiguous names require explicit reconciliation;
+reads never silently select or merge them. Exact board IDs take precedence over
+names. Legacy board markers without the versioned payload remain recognized as
+auxiliary entities, but board API reads report a repair-needed error rather than
+guess their configuration. Until a builtin carrier exists, reads expose a
+virtual All Issues board with no native carrier/timestamps; they perform no
+GitHub creation. Custom-board storage writes create carriers, change names/queries,
+and record logical deletion. Writes preserve native state/labels and unrelated
+configuration. They check the original private observation before and after a
+write; GitHub does not provide atomic compare-and-swap, so intervening edits
+can still be overwritten in the request window. Names are checked before and
+after creation/rename, but concurrent clients can still create duplicates; an
+explicit saved-carrier error requires reconciliation. Writes are attempted once,
+and uncertain outcomes require inspection before retrying. View mode, last-viewed time and saved-position operations use the same
+private-observation guards. Moves among saved positions respace to positive
+sparse keys in one carrier write, retaining other entries' added timestamps.
+Setting/moving verifies a live task target; removing a saved position permits
+missing/deleted targets for cleanup. Target reads and carrier writes are not an
+atomic transaction. The shared board reader evaluates TDQ against a complete request-scoped task
+snapshot using the private observed board query. Positioned tasks sort first;
+unpositioned tasks retain query order. Closed-task filtering never bypasses
+the TDQ predicate or logical deletion. ID-anchored moves position the necessary
+prefix and retain query ordering below it; hidden saved sort keys stay unchanged.
+The caller must obtain candidates from that shared reader. Task membership and
+comments can change after the read, so this is not an atomic board snapshot.
+Sort-key overflow and missing anchors fail before a write.
+Explicit builtin persistence creates a carrier only on a write path, or reuses
+an existing single carrier; concurrent creation reports duplicates requiring
+reconciliation. `GET /v1/boards` and `GET /v1/boards/{id}` expose the existing board/card DTO
+contract through `board_reads`. Detail accepts only one `include_closed=true|false`
+parameter. Card dependency summaries include unresolved blockers outside the
+board query; missing/deleted blockers produce an explicit repair error. TDQ
+candidates and summaries use the same task listing. Virtual builtin clocks are
+empty strings because no GitHub carrier timestamps exist. Reads do not persist
+last-viewed settings or create carriers. `board_crud` adds `POST /v1/boards`,
+`PATCH /v1/boards/{id}` and `DELETE /v1/boards/{id}` with actual web-session
+actors and strict JSON fields. Creation returns 201; updates return 200 with
+the saved board, `revision` and ETag. Detail reads expose the same revision.
+If supplied, If-Match must match the original carrier observation; weak/multiple
+tags and wildcards do not match. Missing If-Match retains legacy behavior with
+backend pre/post observation guards; no atomic CAS is claimed. Builtin rename,
+filter and deletion fail with 403; logical deletion never closes/deletes the
+native carrier. `board_positions` adds `POST /v1/boards/{id}/issues` (visual
+slot among saved positions), `POST /v1/boards/{id}/move` (task-ID anchor, optional
+include_closed in body or query) and `DELETE /v1/boards/{id}/issues/{issue_id}`.
+Slots <= 1 mean the top, matching the existing API default; task IDs must be
+canonical gh-N. Position operations use the actual web actor and optional
+If-Match, returning saved revision/ETag. Move candidates preserve the board
+query even when a moved closed task bypasses the status filter.
+A virtual builtin is tied to its originating repository and materialized only
+after task/move validation. A carrier appearing after the virtual observation
+causes conflict, requiring refresh. Creation and position writes are separate
+GitHub requests: if positioning fails after creation, the error explicitly says
+the carrier was created. Removing a virtual position fails without creating a
+carrier; removing a saved position permits missing/deleted targets for cleanup.
+Restoration/undo and CLI/TUI adapters remain pending.
+
+Clients with strict v1 decoders must be upgraded before board carriers using the
+new field are written. Do not remove unknown fields or rewrite auxiliary bodies
+with an older client. Board history is shared editable metadata, not an immutable
+audit log or a claim that the named actor's identity is independently verified.
