@@ -112,7 +112,7 @@ func (c *Client) dependencyObservations(ctx context.Context, source string, targ
 			return nil
 		}
 		visiting[id] = true
-		r, err := c.Get(ctx, id)
+		r, err := c.getRelationObservation(ctx, id)
 		if err != nil {
 			return fmt.Errorf("read dependency %s: %w", id, err)
 		}

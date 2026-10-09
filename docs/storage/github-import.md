@@ -39,8 +39,8 @@ The shared internal creation path can use this identity and retains normal
 validation, state/priority mirrors and uncertain-write diagnostics. Tests
 simulate a POST that creates an issue but loses its response, then recover
 the allocated ID from a fresh repository listing without a second POST.
-The CLI still refuses nonempty writes pending deleted-reference import checks
-and history reads/exports; internal execution is described below.
+The CLI still refuses nonempty writes pending history reads/exports and complete
+round-trip verification; internal execution is described below.
 
 The planner reads a fresh complete issue/comment snapshot using two bulk
 collections (each paginated by gh), even when a reusable cache exists. It
@@ -77,9 +77,19 @@ Imported workflow actors/approvals are cleared from active metadata; status,
 dates, files, labels and mapped references remain portable fields. This stage
 does not publish a completion receipt or finish history restoration.
 
-Remaining batch cases include end-to-end logical-deletion ordering/reference verification.
-Skipped-row consistency and prior destination archiving are now checked. These remain
-implementation work, not reasons to exclude the original import scope.
+Logical deletion and historical parent/dependency references are preserved by
+the importer. Its shared graph observation/checks use a private context scope
+that includes deleted tasks; normal `Get`, update, parent/dependency mutations
+continue to require active tasks. There is no global client mode or exported
+permission switch. Native identity, parent/dependency cycle checks and revision
+fences remain enforced. A forced same-repository import can restore a previously
+deleted target while retaining its prior native state/comments in the archive.
+
+Tests cover deleted parents imported before live children, dependencies to a
+deleted task, closed/deleted field preservation, lost parent/child/completion
+responses, deleted intermediate graph detachment/resume, restoration and no-write
+repeat. They also verify that ordinary readers/mutations still reject deleted
+targets and that the import scope does not leak into later ordinary calls.
 
 The target basis includes the currently modeled native issue identity, author,
 state, title, body and label set. Native timestamps and label ordering are
@@ -204,8 +214,8 @@ one-phase intent upgrade, no duplicate PATCHes, and external intermediate edits.
 Skipped or history-only rows must already have the mapped relationships instead
 of silently losing them.
 
-The normal CLI write path remains gated until deleted-reference imports and
-preserved history reads/exports are supported and validated. Native provenance comments currently
+The normal CLI write path remains gated until preserved history reads/exports
+and complete round-trip verification are implemented. Native provenance comments currently
 remain passive comments rather than active log/handoff/workflow events.
 
 The shared import envelope keeps SQLite's historical lenient deserialization;

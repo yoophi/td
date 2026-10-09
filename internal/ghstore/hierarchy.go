@@ -24,7 +24,7 @@ func (c *Client) parentObservations(ctx context.Context, child, parent string) (
 			return nil, fmt.Errorf("parent relationship creates or enters a cycle at %s", parent)
 		}
 		seen[parent] = true
-		record, err := c.Get(ctx, parent)
+		record, err := c.getRelationObservation(ctx, parent)
 		if err != nil {
 			return nil, fmt.Errorf("read parent %s: %w", parent, err)
 		}
@@ -39,7 +39,7 @@ func (c *Client) verifyParentObservations(ctx context.Context, child string, obs
 		ctx = withReadbackCost(ctx)
 	}
 	for _, previous := range observations {
-		current, err := c.Get(ctx, previous.ID)
+		current, err := c.getRelationObservation(ctx, previous.ID)
 		if err != nil {
 			return fmt.Errorf("verify parent %s for %s (child write attempted=%v): %w", previous.ID, child, after, err)
 		}

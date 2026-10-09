@@ -109,6 +109,7 @@ func importIssueProjection(source ImportItem, current apiIssue, observed *Record
 // Apply only the task's fields/relations. History and completion publication
 // follow in the full importer; this stage must never claim a completed import.
 func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row ImportPlanRow, relations importRelations) (*Record, string, bool, error) {
+	ctx = withImportRelationObservations(ctx)
 	if row.Action == "skip" || row.Action == "resume_history" || row.TargetID == "" || row.SourceKey != source.SourceKey() {
 		return nil, "", false, fmt.Errorf("import issue apply requires a mapped non-skipped plan row")
 	}
@@ -217,7 +218,7 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 			verifyCtx = withReadbackCost(ctx)
 		}
 		for _, previous := range dependencies {
-			now, err := c.Get(verifyCtx, previous.ID)
+			now, err := c.getRelationObservation(verifyCtx, previous.ID)
 			if err != nil {
 				return err
 			}
