@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/features"
 	"github.com/marcus/td/internal/output"
 	"github.com/marcus/td/internal/syncclient"
 	"github.com/marcus/td/internal/syncconfig"
@@ -16,10 +17,14 @@ import (
 
 var syncInitCmd = &cobra.Command{
 	Use:   "init",
+	Args:  cobra.NoArgs,
 	Short: "Interactive guided setup for sync",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if handled, err := githubSyncStatusForAction(cmd, "validate-existing-config"); handled {
 			return err
+		}
+		if !features.IsEnabledForProcess(features.SyncCLI.Name) {
+			return fmt.Errorf("SQLite sync init requires the sync_cli feature; GitHub store setup uses td config set store gh-issue")
 		}
 		reader := bufio.NewReader(os.Stdin)
 
@@ -167,8 +172,4 @@ func promptLine(reader *bufio.Reader, prompt string, defaultVal string) string {
 		return defaultVal
 	}
 	return line
-}
-
-func init() {
-	syncCmd.AddCommand(syncInitCmd)
 }

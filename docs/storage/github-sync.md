@@ -71,8 +71,9 @@ that global configuration; change global SQLite settings from a SQLite project.
 with the sync feature enabled. They do not affect direct gh writes or GitHub
 monitor/tail intervals. No setting starts SQLite or td-sync for a GitHub store.
 
-The #30 implementation still requires setup-command availability across both
-feature modes, native acceptance and task review.
+The setup validator is reachable on both sync parents; the SQLite setup wizard
+still requires the sync CLI feature. The #30 implementation still requires
+native acceptance and task review.
 SQLite snapshot bootstrap, action-log replay and
 FK repair are store-specific operations; they cannot be reported as successful
 GitHub transfers. Native repository checks and task review are still pending.

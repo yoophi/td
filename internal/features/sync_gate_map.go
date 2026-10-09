@@ -33,7 +33,7 @@ var SyncGateMap = []GateMapEntry{
 	{
 		Feature: SyncCLI.Name,
 		Surface: "cmd/sync_init.go",
-		Notes:   "Gates guided sync setup wizard",
+		Notes:   "Gates the SQLite guided sync setup wizard; GitHub validation of existing store configuration remains available on the always-on parent",
 	},
 	{
 		Feature: SyncCLI.Name,

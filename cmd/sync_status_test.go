@@ -215,14 +215,17 @@ func wireSyncCommandsForTest(syncCLIEnabled bool) (chosen, full, alwaysOn *cobra
 		&cobra.Command{Use: "enable"},
 		&cobra.Command{Use: "disable"},
 		&cobra.Command{Use: "status"},
+		&cobra.Command{Use: "tail"},
+		&cobra.Command{Use: "conflicts"},
+		&cobra.Command{Use: "init"},
 	)
 	return chosen, full, alwaysOn
 }
 
 // alwaysReachableSyncSubcommands are the subcommands that must stay reachable
-// no matter how the SyncCLI gate resolves: the kill-switch pair (a user who
-// disabled sync must be able to re-enable it) and the read-only diagnostic.
-var alwaysReachableSyncSubcommands = []string{"status", "enable", "disable"}
+// no matter how the SyncCLI gate resolves. Transfer/setup/activity commands
+// enforce their SQLite gates at execution while keeping GitHub paths available.
+var alwaysReachableSyncSubcommands = []string{"status", "enable", "disable", "tail", "conflicts", "init"}
 
 // TestSyncStatusReachableWhenSyncCLIOff asserts that when SyncCLI is OFF the
 // always-on parent carries status/enable/disable and the full parent carries

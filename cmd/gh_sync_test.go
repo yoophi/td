@@ -159,3 +159,14 @@ func TestGitHubSyncInitValidatesExistingConfigAndTogglesReject(t *testing.T) {
 		t.Fatal("setup opened SQLite", err)
 	}
 }
+
+func TestSQLiteSyncInitFeatureOffRejectsBeforeWizard(t *testing.T) {
+	storeTestDir(t)
+	t.Setenv("TD_FEATURE_SYNC_CLI", "false")
+	cmd := &cobra.Command{Use: syncInitCmd.Use, Args: syncInitCmd.Args, RunE: syncInitCmd.RunE, SilenceErrors: true, SilenceUsage: true}
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "SQLite sync init requires the sync_cli feature") || out.Len() != 0 {
+		t.Fatal("SQLite wizard bypassed gate", err, out.String())
+	}
+}
