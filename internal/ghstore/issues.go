@@ -327,6 +327,12 @@ func (c *Client) list(ctx context.Context, all, includeDeleted bool) ([]Record, 
 }
 
 func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, error) {
+	return c.createWithOperationID(ctx, issue, "td-op-"+rand.Text())
+}
+
+// Import creation supplies a deterministic source operation. The normal
+// creation validation, uncertain-write diagnostics and mirrors remain shared.
+func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue, operationID string) (*Record, error) {
 	if issue == nil {
 		return nil, fmt.Errorf("issue is required")
 	}
@@ -340,7 +346,6 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 	if err != nil {
 		return nil, err
 	}
-	operationID := "td-op-" + rand.Text()
 	meta := metadata{OperationID: operationID, Type: issue.Type, Priority: issue.Priority, Points: issue.Points, Acceptance: issue.Acceptance}
 	details := detailsFromIssue(issue)
 	baseline := IssueDetails{Status: issue.Status}

@@ -735,6 +735,9 @@ var importCmd = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
+		if handled, err := githubImport(cmd, baseDir, args[0]); handled {
+			return err
+		}
 
 		database, err := db.Open(baseDir)
 		if err != nil {
@@ -786,67 +789,8 @@ var importCmd = &cobra.Command{
 	},
 }
 
-// exportedItem matches the JSON structure produced by the export command.
-type exportedItem struct {
-	GitHub       *ghstore.ExportedIssue   `json:"github,omitempty"`
-	Issue        models.Issue             `json:"issue"`
-	Logs         []models.Log             `json:"logs"`
-	Handoffs     []models.Handoff         `json:"handoffs"`
-	Dependencies []models.IssueDependency `json:"dependencies"`
-	Files        []models.IssueFile       `json:"files"`
-}
-
-// UnmarshalJSON supports backward-compatible deserialization:
-//   - old "handoff" (singular object) → new "handoffs" (array)
-//   - old "dependencies" ([]string) → new "dependencies" ([]IssueDependency)
-func (e *exportedItem) UnmarshalJSON(data []byte) error {
-	// Use raw messages for fields that changed format.
-	var aux struct {
-		GitHub   *ghstore.ExportedIssue `json:"github,omitempty"`
-		Issue    models.Issue           `json:"issue"`
-		Logs     []models.Log           `json:"logs"`
-		Handoffs []models.Handoff       `json:"handoffs"`
-		Handoff  *models.Handoff        `json:"handoff"`
-		Files    []models.IssueFile     `json:"files"`
-		RawDeps  json.RawMessage        `json:"dependencies"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	e.Issue = aux.Issue
-	e.GitHub = aux.GitHub
-	e.Logs = aux.Logs
-	e.Handoffs = aux.Handoffs
-	e.Files = aux.Files
-
-	// Backward compat: singular handoff → array
-	if len(e.Handoffs) == 0 && aux.Handoff != nil {
-		e.Handoffs = []models.Handoff{*aux.Handoff}
-	}
-
-	// Backward compat: []string → []IssueDependency
-	if len(aux.RawDeps) > 0 && string(aux.RawDeps) != "null" {
-		// Try structured format first
-		var deps []models.IssueDependency
-		if err := json.Unmarshal(aux.RawDeps, &deps); err != nil {
-			// Fall back to old []string format
-			var oldDeps []string
-			if err2 := json.Unmarshal(aux.RawDeps, &oldDeps); err2 != nil {
-				return err2
-			}
-			for _, depID := range oldDeps {
-				deps = append(deps, models.IssueDependency{
-					DependsOnID:  depID,
-					RelationType: "depends_on",
-				})
-			}
-		}
-		e.Dependencies = deps
-	}
-
-	return nil
-}
+// exportedItem keeps the shared, backward-compatible portable envelope.
+type exportedItem = ghstore.ImportItem
 
 // importJSON imports issues from JSON format
 func importJSON(database *db.DB, data []byte, dryRun, force bool) (int, error) {
