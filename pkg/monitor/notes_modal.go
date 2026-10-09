@@ -1,7 +1,10 @@
 package monitor
 
 import (
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
 	"fmt"
+	"github.com/marcus/td/pkg/notes"
 	"strings"
 	"time"
 
@@ -11,9 +14,18 @@ import (
 
 // NotesState holds the state for the notes modal system.
 type NotesState struct {
-	Notes        []models.Note
-	ListCursor   int
-	ShowArchived bool
+	Mode            string
+	ShowDeleted     bool
+	SearchInput     *textinput.Model
+	TitleInput      *textinput.Model
+	ContentInput    *textarea.Model
+	Original        *notes.Note
+	Observed        map[string]*notes.Note
+	Error           error
+	CreateAttempted bool
+	Notes           []models.Note
+	ListCursor      int
+	ShowArchived    bool
 
 	DetailNote   *models.Note
 	DetailRender string // Pre-rendered markdown content
@@ -47,6 +59,9 @@ func (m *Model) createNotesListModal() *modal.Modal {
 	}
 
 	title := fmt.Sprintf("Notes (%d)", len(ns.Notes))
+	if ns.ShowDeleted {
+		title = fmt.Sprintf("Deleted Notes (%d)", len(ns.Notes))
+	}
 	md := m.newModal(title, ModalTypeNotes,
 		modal.WithWidth(modalWidth),
 		modal.WithVariant(modal.VariantInfo),
@@ -54,6 +69,9 @@ func (m *Model) createNotesListModal() *modal.Modal {
 	)
 
 	items := make([]modal.ListItem, 0, len(ns.Notes))
+	if ns.SearchInput != nil {
+		md.AddSection(modal.InputWithLabel("note-search", "Search:", ns.SearchInput, modal.WithSubmitAction("search")))
+	}
 	contentWidth := modalWidth - 6 // border + padding + cursor
 	for i, note := range ns.Notes {
 		note := note // retain this list item's value independently of the range
@@ -79,6 +97,8 @@ func (m *Model) createNotesListModal() *modal.Modal {
 	md.AddSection(modal.Buttons(
 		modal.Btn(" New ", "create"),
 		modal.Btn(" "+archivedLabel+" ", "toggle-archived"),
+		modal.Btn(" Deleted ", "toggle-deleted"),
+		modal.Btn(" Refresh ", "refresh"),
 		modal.Btn(" Close ", "close"),
 	))
 
@@ -148,6 +168,11 @@ func (m *Model) createNoteDetailModal() *modal.Modal {
 		modal.Btn(" Delete ", "delete", modal.BtnDanger()),
 		modal.Btn(" Back ", "back"),
 	))
+	if note.DeletedAt != nil {
+		md = m.newModal(note.Title, ModalTypeNotes, modal.WithWidth(modalWidth), modal.WithHints(false))
+		md.AddSection(modal.Text("Deleted note\n" + note.Content))
+		md.AddSection(modal.Buttons(modal.Btn(" Restore ", "restore"), modal.Btn(" Back ", "back")))
+	}
 
 	return md
 }

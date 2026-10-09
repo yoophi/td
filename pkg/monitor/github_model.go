@@ -9,6 +9,7 @@ import (
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/ghcontext"
 	"github.com/marcus/td/internal/ghstore"
+	"github.com/marcus/td/pkg/notes"
 )
 
 // NewGitHubModel verifies the configured remote before entering the UI. It owns
@@ -83,6 +84,19 @@ func NewGitHubModelForWorktree(ctx context.Context, baseDir, worktreeDir string,
 	// exhaust GitHub's REST quota. Longer caller intervals remain respected.
 	interval = max(interval, 5*time.Minute)
 	m := NewModel(nil, actor, interval, ver, baseDir)
+	m.notesLifetimeCancel()
+	m.notesLifetimeCancel = cancel
+	m.NotesContext = requestCtx
+	m.NotesFactory = func(ctx context.Context) (MonitorNoteStore, error) {
+		current, err := scope.Update(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		if current.Session.ID != actor {
+			return nil, fmt.Errorf("monitor session changed; restart the monitor before notes requests")
+		}
+		return notes.OpenGitHubWithContext(ctx, worktreeDir, cfg.GitHub.Remote, cfg.GitHub.Repo)
+	}
 	m.preferences = preferences
 	m.PaneHeights = prefs.PaneHeights
 	m.DataSource = NewGitHubDataSource(requestCtx, baseDir, *cfg.GitHub, actor, scope.Branch, focus)
@@ -96,5 +110,5 @@ func NewGitHubModelForWorktree(ctx context.Context, baseDir, worktreeDir string,
 // PendingRemoteWrite reports a request whose outcome is not yet confirmed.
 // Cancelling transport cannot undo writes already accepted by GitHub.
 func (m Model) PendingRemoteWrite() bool {
-	return m.DataSource != nil && ((m.WorkflowPending && m.WorkflowWriting) || m.DeletePending || m.BoardMovePending || m.BoardEditorPending)
+	return m.DataSource != nil && ((m.NotesPending && m.NotesWriting) || (m.WorkflowPending && m.WorkflowWriting) || m.DeletePending || m.BoardMovePending || m.BoardEditorPending)
 }

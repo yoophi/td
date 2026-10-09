@@ -96,6 +96,9 @@ func (m Model) renderView() string {
 		return m.overlayModal(base, detail)
 	}
 
+	if m.NotesOpen && m.NotesModal != nil && m.NotesMouseHandler != nil {
+		return m.overlayModal(base, m.NotesModal.Render(m.Width, m.Height, m.NotesMouseHandler))
+	}
 	// Overlay stats modal if open
 	if m.StatsOpen {
 		stats := m.renderStatsModal()

@@ -42,7 +42,7 @@ func DefaultBindings() []Binding {
 		{Key: "enter", Command: CmdOpenDetails, Context: ContextMain, Description: "Open details"},
 		{Key: "s", Command: CmdOpenStats, Context: ContextMain, Description: "Open statistics"},
 		{Key: "h", Command: CmdOpenHandoffs, Context: ContextMain, Description: "Open handoffs"},
-		{Key: "N", Command: CmdOpenNotes, Context: ContextMain, Description: "Notes UI unavailable in this build"},
+		{Key: "N", Command: CmdOpenNotes, Context: ContextMain, Description: "Notes"},
 		{Key: "/", Command: CmdSearch, Context: ContextMain, Description: "Search"},
 		{Key: "c", Command: CmdToggleClosed, Context: ContextMain, Description: "Toggle closed tasks"},
 		{Key: "S", Command: CmdCycleSortMode, Context: ContextMain, Description: "Cycle sort mode"},
@@ -373,6 +373,7 @@ func DefaultBindings() []Binding {
 		// Other actions (same as ContextMain)
 		{Key: "s", Command: CmdOpenStats, Context: ContextBoard, Description: "Open statistics"},
 		{Key: "h", Command: CmdOpenHandoffs, Context: ContextBoard, Description: "Open handoffs"},
+		{Key: "N", Command: CmdOpenNotes, Context: ContextBoard, Description: "Notes"},
 		{Key: "S", Command: CmdCycleSortMode, Context: ContextBoard, Description: "Cycle sort mode"},
 		{Key: "T", Command: CmdCycleTypeFilter, Context: ContextBoard, Description: "Cycle type filter"},
 		{Key: "W", Command: CmdSendToWorktree, Context: ContextBoard, Description: "Send to worktree"},

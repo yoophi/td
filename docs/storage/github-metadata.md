@@ -643,10 +643,9 @@ the draft and disallows another creation attempt within that form: inspect GitHu
 before reopening it. Request state and errors occupy separate footer rows so
 long key hints do not hide loading/saving/cancellation feedback.
 
-The N-key notes UI is not wired for either store yet; help and the action state
-this explicitly. Follow-up #44 depends on #20 and is an implementation task,
-not an impossible-work exception. Runtime verification and the #6 acceptance
-audit are recorded on that issue. Complete dashboard refreshes read retained
+The N-key notes UI uses the configured SQLite or GitHub notes store; controls
+and request behavior are described below. Runtime verification and the #6/#44
+acceptance audits are recorded on those issues. Complete dashboard refreshes read retained
 activity for every task, including deleted tasks, and can take minutes on a
 repository with substantial history. GitHub monitor and server event polling
 have a minimum interval of five minutes; longer configured intervals are respected.
@@ -712,4 +711,28 @@ td note show nt-gh-107 --include-deleted --json
 td note restore nt-gh-107
 ```
 
-Monitor notes UI is tracked separately in #44.
+Monitor notes UI implementation and verification are tracked in #44.
+
+The monitor's `N` opens notes for either configured store. It reads and writes
+asynchronously; the list offers search, archived/deleted filters and refresh.
+Enter opens a note; `c` creates, `e` edits, `p` toggles pin, `a` toggles archive,
+and `d` opens a delete confirmation (or restores a deleted note). Tab changes
+editor fields and buttons; Enter adds a content line, Ctrl+S saves. Escape
+cancels a read or draft, returns from detail, or closes the list. Saved results
+replace the shown note only after the backend confirms the write. Errors keep
+the shown data/draft and expose the backend message. Duplicate submits are
+blocked while pending; uncertain creation cannot be retried from the same draft.
+Refresh/read results from a closed or replaced screen are ignored. Ctrl+C quits
+and cancels requests; a pending GitHub write produces an inspection warning
+because cancellation cannot undo an accepted write. Notes do not use task
+review/lifecycle actions and never fall back to SQLite in GitHub mode.
+
+A running GitHub monitor freezes its selected backend, remote, repository and
+actor. Changing store/repository configuration requires restarting the monitor;
+subsequent notes requests fail explicitly instead of opening SQLite or writing
+to a newly selected repository. `pkg/notes.OpenGitHubWithContext` accepts the
+expected remote/repository, validates the configuration and opens only GitHub,
+even if configuration changes again during preflight. `Store.Kind` lets other
+clients check their selected backend before using a returned handle. In note
+detail, Ctrl+D/U and j/k scroll; deleted detail advertises restore rather than
+live-note editing actions.

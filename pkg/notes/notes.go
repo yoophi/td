@@ -83,20 +83,7 @@ func OpenWithContext(ctx context.Context, baseDir string) (*Store, error) {
 		return nil, err
 	}
 	if kind == config.StoreGitHub {
-		if _, err := ghstore.Open(ctx, resolved, cfg.GitHub); err != nil {
-			return nil, err
-		}
-		scope, err := ghcontext.Resolve(ctx, baseDir, cfg.GitHub.Repo)
-		if err != nil {
-			return nil, err
-		}
-		state, err := scope.Update(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
-		owned, cancel := context.WithCancel(ctx)
-		selected := *cfg.GitHub
-		return &Store{ctx: owned, cancel: cancel, baseDir: resolved, selected: &selected, scope: scope, actor: state.Session.ID}, nil
+		return openGitHubNotes(ctx, baseDir, resolved, *cfg.GitHub)
 	}
 	database, err := db.Open(resolved)
 	if err != nil {
@@ -104,6 +91,57 @@ func OpenWithContext(ctx context.Context, baseDir string) (*Store, error) {
 	}
 	database.SetMaxOpenConns(1)
 	return &Store{db: database}, nil
+}
+
+// OpenGitHubWithContext freezes a long-lived client's selected remote/store.
+// A changed configuration requires reopening the client; this path never opens SQLite.
+func OpenGitHubWithContext(ctx context.Context, baseDir, remote, repo string) (*Store, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if baseDir == "" {
+		var err error
+		baseDir, err = os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+	}
+	resolved := db.ResolveBaseDir(baseDir)
+	cfg, err := config.Load(resolved)
+	if err != nil {
+		return nil, err
+	}
+	kind, err := config.Store(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if kind != config.StoreGitHub || cfg.GitHub == nil || cfg.GitHub.Remote != remote || cfg.GitHub.Repo != repo {
+		return nil, fmt.Errorf("notes store configuration changed; restart the client before making requests")
+	}
+	return openGitHubNotes(ctx, baseDir, resolved, models.GitHubStoreConfig{Remote: remote, Repo: repo})
+}
+func openGitHubNotes(ctx context.Context, worktree, resolved string, selected models.GitHubStoreConfig) (*Store, error) {
+	if _, err := ghstore.Open(ctx, resolved, &selected); err != nil {
+		return nil, err
+	}
+	scope, err := ghcontext.Resolve(ctx, worktree, selected.Repo)
+	if err != nil {
+		return nil, err
+	}
+	state, err := scope.Update(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	owned, cancel := context.WithCancel(ctx)
+	return &Store{ctx: owned, cancel: cancel, baseDir: resolved, selected: &selected, scope: scope, actor: state.Session.ID}, nil
+}
+
+// Kind returns the selected store name for clients that freeze their backend.
+func (s *Store) Kind() string {
+	if s.selected != nil {
+		return config.StoreGitHub
+	}
+	return config.StoreSQLite
 }
 
 // Init creates a new td database at baseDir and returns a notes Store.

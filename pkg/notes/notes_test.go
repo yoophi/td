@@ -1,6 +1,12 @@
 package notes
 
 import (
+	"context"
+	"github.com/marcus/td/internal/config"
+	"github.com/marcus/td/internal/models"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/marcus/td/internal/db"
@@ -95,5 +101,24 @@ func TestListUnlimited(t *testing.T) {
 	}
 	if len(capped) != 10 {
 		t.Fatalf("List limit 10 = %d", len(capped))
+	}
+}
+
+func TestExplicitGitHubNotesRejectChangedStoreWithoutSQLite(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := OpenGitHubWithContext(context.Background(), dir, "origin", "owner/repo"); err == nil || !strings.Contains(err.Error(), "configuration changed") {
+		t.Fatal("SQLite configuration selected", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("SQLite was opened", err)
+	}
+	if err := config.SetStore(dir, "gh-issue", &models.GitHubStoreConfig{Remote: "upstream", Repo: "other/repo"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenGitHubWithContext(context.Background(), dir, "origin", "owner/repo"); err == nil || !strings.Contains(err.Error(), "configuration changed") {
+		t.Fatal("changed repo selected", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("SQLite created", err)
 	}
 }

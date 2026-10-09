@@ -25,6 +25,13 @@ import (
 
 // Model is the main Bubble Tea model for the monitor TUI
 type Model struct {
+	notesLifetimeCancel        context.CancelFunc
+	NotesFactory               func(context.Context) (MonitorNoteStore, error)
+	NotesContext               context.Context
+	NotesCancel                context.CancelFunc
+	NotesRequest               uint64
+	NotesPending               bool
+	NotesWriting               bool
 	BoardEditorPending         bool
 	BoardEditorRequest         uint64
 	BoardEditorGeneration      uint64
@@ -323,33 +330,36 @@ func NewModel(database *db.DB, sessionID string, interval time.Duration, ver str
 
 	theme := DefaultTheme()
 	searchInput.SetStyles(themedTextInputStyles(theme))
+	notesContext, notesCancel := context.WithCancel(context.Background())
 	m := Model{
-		DB:                database,
-		SessionID:         sessionID,
-		RefreshInterval:   interval,
-		ScrollOffset:      make(map[Panel]int),
-		Cursor:            make(map[Panel]int),
-		SelectedID:        make(map[Panel]string),
-		ScrollIndependent: make(map[Panel]bool),
-		ActivePanel:       PanelCurrentWork,
-		StartedAt:         time.Now(),
-		SearchMode:        false,
-		SearchQuery:       "",
-		SearchInput:       searchInput,
-		IncludeClosed:     false,
-		Keymap:            km,
-		Version:           ver,
-		PanelBounds:       make(map[Panel]Rect),
-		HoverPanel:        -1,
-		LastClickPanel:    -1,
-		LastClickRow:      -1,
-		PaneHeights:       paneHeights,
-		DraggingDivider:   -1,
-		DividerHover:      -1,
-		BaseDir:           baseDir,
-		theme:             theme,
-		styles:            newMonitorStyles(theme),
-		modalRender:       &modalRenderCache{},
+		NotesContext:        notesContext,
+		notesLifetimeCancel: notesCancel,
+		DB:                  database,
+		SessionID:           sessionID,
+		RefreshInterval:     interval,
+		ScrollOffset:        make(map[Panel]int),
+		Cursor:              make(map[Panel]int),
+		SelectedID:          make(map[Panel]string),
+		ScrollIndependent:   make(map[Panel]bool),
+		ActivePanel:         PanelCurrentWork,
+		StartedAt:           time.Now(),
+		SearchMode:          false,
+		SearchQuery:         "",
+		SearchInput:         searchInput,
+		IncludeClosed:       false,
+		Keymap:              km,
+		Version:             ver,
+		PanelBounds:         make(map[Panel]Rect),
+		HoverPanel:          -1,
+		LastClickPanel:      -1,
+		LastClickRow:        -1,
+		PaneHeights:         paneHeights,
+		DraggingDivider:     -1,
+		DividerHover:        -1,
+		BaseDir:             baseDir,
+		theme:               theme,
+		styles:              newMonitorStyles(theme),
+		modalRender:         &modalRenderCache{},
 	}
 	// Remote models own a cancellation runtime and never construct td-sync.
 	if database == nil {
@@ -532,6 +542,12 @@ func markdownThemeConfig(theme Theme) *MarkdownThemeConfig {
 // For embedded monitors, this releases the reference to the shared database pool.
 // The actual connection is only closed when all references are released.
 func (m *Model) Close() error {
+	if m.notesLifetimeCancel != nil {
+		m.notesLifetimeCancel()
+	}
+	if m.NotesCancel != nil {
+		m.NotesCancel()
+	}
 	if m.syncRuntime != nil {
 		return m.syncRuntime.close()
 	}
@@ -750,6 +766,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Preserve pending write facts for the CLI's exit/inspection warning.
 	if key, ok := msg.(tea.KeyMsg); ok && m.DataSource != nil && key.String() == "ctrl+c" {
 		return m, tea.Quit
+	}
+	if result, ok := msg.(notesResultMsg); ok {
+		return m.applyNotesResult(result)
+	}
+	if m.NotesOpen {
+		switch msg.(type) {
+		case tea.KeyMsg, tea.MouseMsg, tea.PasteMsg:
+			return m.handleNotesUpdate(msg)
+		default:
+			if m.NotesModal != nil && !m.NotesPending {
+				_, cmd := m.NotesModal.HandleMsg(msg)
+				if cmd != nil {
+					return m, cmd
+				}
+			}
+		}
 	}
 
 	// Form mode: forward all messages to huh form first

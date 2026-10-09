@@ -119,6 +119,12 @@ printf 'HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"full_name":"o
 			_ = linked.Close()
 		}
 	}
+	if err := config.SetStore(dir, "sqlite", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.NotesFactory(context.Background()); err == nil {
+		t.Fatal("GitHub notes fell back to SQLite after store change")
+	}
 	if err := m.Close(); err != nil {
 		t.Fatal(err)
 	}

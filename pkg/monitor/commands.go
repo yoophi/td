@@ -1228,9 +1228,7 @@ func (m Model) executeCommand(cmd keymap.Command) (tea.Model, tea.Cmd) {
 		return m.openStatsModal()
 
 	case keymap.CmdOpenNotes:
-		m.StatusMessage = "Notes UI is unavailable in this build"
-		m.StatusIsError = true
-		return m, nil
+		return m.openNotes()
 	case keymap.CmdOpenHandoffs:
 		return m.openHandoffsModal()
 
