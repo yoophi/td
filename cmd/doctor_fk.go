@@ -5,6 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
 	"github.com/spf13/cobra"
 )
@@ -18,6 +19,17 @@ var doctorFkCmd = &cobra.Command{
 	Short:  "Report orphan-row counts for each FK relation (read-only)",
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load(getBaseDir())
+		if err != nil {
+			return err
+		}
+		kind, err := config.Store(cfg)
+		if err != nil {
+			return err
+		}
+		if kind == config.StoreGitHub {
+			return fmt.Errorf("doctor fk is not applicable to gh-issue: foreign-key checks require a SQLite database")
+		}
 		database, err := db.Open(getBaseDir())
 		if err != nil {
 			return fmt.Errorf("open db: %w", err)

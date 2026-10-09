@@ -420,6 +420,20 @@ receive 503. Cancellation of a mutation does not prove that GitHub rejected it;
 inspect the remote issue before retrying an uncertain write. The server does
 not retry writes automatically. Stopped server instances cannot be restarted.
 
+In `gh-issue` projects, `td doctor` performs read-only GitHub diagnostics instead
+of opening SQLite or checking td-sync credentials. `td doctor --json` returns
+`ok`, `store`, `repository` and named checks with `OK`, `WARN`, `FAIL` or `SKIP`
+status. Any failed check exits nonzero. It checks executable availability,
+the selected Git remote, GitHub authentication, the canonical repository against
+the pinned selection, Issues enablement, archival and actual issue-read access.
+Dependent checks are skipped when their prerequisites fail. API failures retain
+their diagnostic, including rate-limit and network errors; nothing is retried.
+Reported repository permissions are informational: reads cannot prove permission
+to create issues, delete another author's comment or perform every other write.
+No test issue is created. `doctor fk` explicitly rejects this store because
+foreign-key checks apply only to SQLite. SQLite doctor retains its text diagnostics;
+its `--json` option is explicitly unavailable.
+
 GitHub-backed `GET /v1/stats` and `GET /v1/labels` preserve the SQLite
 response fields. Issue counts, points, status/type/priority groups and timeline
 cards exclude logically deleted issues. Logs and handoffs on deleted issues

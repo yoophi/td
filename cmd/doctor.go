@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/marcus/td/internal/config"
+	"github.com/marcus/td/internal/ghstore"
 
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/syncclient"
@@ -12,9 +15,40 @@ import (
 
 var doctorCmd = &cobra.Command{
 	Use:     "doctor",
-	Short:   "Run diagnostic checks for sync setup",
+	Short:   "Run diagnostic checks for the selected store",
 	GroupID: "system",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load(getBaseDir())
+		if err != nil {
+			return err
+		}
+		kind, err := config.Store(cfg)
+		if err != nil {
+			return err
+		}
+		if kind == config.StoreGitHub {
+			cmd.SilenceUsage = true
+			report := ghstore.Diagnose(cmd.Context(), getBaseDir(), cfg.GitHub)
+			if jsonMode(cmd) {
+				if err := json.NewEncoder(cmd.OutOrStdout()).Encode(report); err != nil {
+					return err
+				}
+			} else {
+				for _, check := range report.Checks {
+					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: %s (%s)\n", check.Name, check.Status, check.Message); err != nil {
+						return err
+					}
+				}
+			}
+			if !report.OK {
+				return errSilentExit
+			}
+			return nil
+		}
+		if jsonMode(cmd) {
+			return fmt.Errorf("doctor --json is supported for gh-issue; SQLite diagnostics currently use text output")
+		}
 		runDoctor()
 		return nil
 	},
