@@ -29,6 +29,11 @@ Analytics/error records remain device-local and omit issue session IDs for
 these commands. Ordinary issue commands and executing queries retain their
 normal sync/context behavior. Tests with a real configured SQLite project and
 session verify skipped metadata hooks and retained data-command hooks/context.
+Root `td`, `td --help`, `td --version` and root dispatch failures may bypass
+command execution hooks entirely. Diagnostics also omit session discovery when
+no command executed. Subprocess tests in a real configured SQLite project with
+an existing session cover these paths, including an unknown-flag JSON error;
+they do not rely on an empty database to hide a session lookup.
 
 `query --examples`, `query --fields` and `query EXPRESSION --explain` are also
 offline across issue stores. With `--json`, examples return query/description

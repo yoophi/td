@@ -1,12 +1,87 @@
 package cmd
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/session"
 	"github.com/spf13/cobra"
 )
+
+func TestRootMetadataHelperProcess(t *testing.T) {
+	if os.Getenv("TD_ROOT_METADATA_HELPER") != "1" {
+		return
+	}
+	for i, arg := range os.Args {
+		if arg == "--" {
+			args := os.Args[i+1:]
+			os.Args = append([]string{"td"}, args...)
+			SetVersion("fixture-offline")
+			rootCmd.SetArgs(args)
+			Execute()
+			os.Exit(0)
+		}
+	}
+	t.Fatal("missing helper arguments")
+}
+
+func TestRootMetadataDiagnosticsDoNotResolveExistingSession(t *testing.T) {
+	dir := storeTestDir(t)
+	t.Setenv("TD_ROOT_METADATA_HELPER", "1")
+	t.Setenv("TD_ANALYTICS", "true")
+	t.Setenv("TD_CONTEXT_ID", "root-metadata-fixture")
+	t.Setenv("TD_FEATURE_SYNC_AUTOSYNC", "false")
+	database, err := db.Initialize(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = database.Close() }()
+	if _, err := session.GetOrCreate(database); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		args []string
+		want string
+		fail bool
+	}{
+		{nil, "Usage:", false},
+		{[]string{"--help"}, "Usage:", false},
+		{[]string{"--version"}, "fixture-offline", false},
+		{[]string{"--invalid-root-flag", "--json"}, `"error":`, true},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		args := append([]string{"-test.run=^TestRootMetadataHelperProcess$", "--", "--work-dir", dir}, tc.args...)
+		child := exec.CommandContext(ctx, executable, args...)
+		child.Dir = dir
+		output, err := child.CombinedOutput()
+		cancel()
+		if (err != nil) != tc.fail || !strings.Contains(string(output), tc.want) {
+			t.Fatalf("%v: %v %s", tc.args, err, output)
+		}
+	}
+	events, err := db.ReadCommandUsage(dir)
+	if err != nil || len(events) != 4 {
+		t.Fatal(len(events), err)
+	}
+	for _, event := range events {
+		if event.SessionID != "" {
+			t.Fatal("root metadata resolved issue session", event)
+		}
+	}
+	records, err := db.ReadAgentErrors(dir)
+	if err != nil || len(records) != 1 || records[0].SessionID != "" {
+		t.Fatal(records, err)
+	}
+}
 
 func TestMetadataCommandsSkipSyncAndDiagnosticIssueContext(t *testing.T) {
 	dir := storeTestDir(t)

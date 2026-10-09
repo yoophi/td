@@ -6,7 +6,9 @@ import "github.com/spf13/cobra"
 // version --check). Implicit issue autosync/session discovery is unrelated.
 func skipImplicitIssueAccess(cmd *cobra.Command) bool {
 	if cmd == nil {
-		return false
+		// Cobra can return without running any command for root help/version
+		// or dispatch errors. There is no executed issue operation to identify.
+		return true
 	}
 	if help, _ := cmd.Flags().GetBool("help"); help {
 		return true
