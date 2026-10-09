@@ -21,6 +21,7 @@ type importReceipt struct {
 	SourceDigest string `json:"source_digest"`
 	TargetID     string `json:"target_id"`
 	TargetBasis  string `json:"target_basis"`
+	commentID    int64
 }
 
 var importDigestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -116,6 +117,7 @@ func snapshotImportReceipts(snapshot *Snapshot) (map[string]importReceipt, map[s
 			if receipt.TargetID != id {
 				return nil, nil, fmt.Errorf("import receipt comment %d refers to another issue", comment.ID)
 			}
+			receipt.commentID = comment.ID
 			if prior, ok := receipts[receipt.SourceKey]; ok && prior.TargetID != id {
 				return nil, nil, fmt.Errorf("import source %s has completion receipts on multiple targets", receipt.SourceKey)
 			}

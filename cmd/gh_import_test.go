@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/marcus/td/internal/config"
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 	"github.com/spf13/cobra"
 	"os"
@@ -34,6 +36,30 @@ func TestGitHubImportInvalidStdinFailsBeforeGHAndSQLite(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("import opened SQLite")
+	}
+}
+
+func TestGitHubImportValidDryRunSourceNamespaceAndNoWrites(t *testing.T) {
+	githubScheduleTestDir(t)
+	c := &cobra.Command{Use: importCmd.Use, RunE: importCmd.RunE, SilenceErrors: true, SilenceUsage: true}
+	c.Flags().String("source", "", "")
+	c.Flags().String("format", "json", "")
+	c.Flags().Bool("dry-run", false, "")
+	c.Flags().Bool("force", false, "")
+	c.Flags().Bool("json", false, "")
+	c.SetIn(strings.NewReader(`[{"issue":{"id":"td-one","title":"Legacy task"}}]`))
+	var out bytes.Buffer
+	c.SetOut(&out)
+	c.SetArgs([]string{"-", "--source", "project-a", "--dry-run", "--json"})
+	if err := c.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var plan ghstore.ImportPlan
+	if err := json.Unmarshal(out.Bytes(), &plan); err != nil || !plan.DryRun || len(plan.Rows) != 1 || plan.Rows[0].SourceKey != "legacy:project-a:td-one" || plan.Rows[0].Action != "create" {
+		t.Fatal("valid CLI plan lost source namespace", out.String(), err)
+	}
+	if _, err := os.Stat(os.Getenv("TD_SCHEDULE_STATE")); !os.IsNotExist(err) {
+		t.Fatal("dry-run wrote remote state", err)
 	}
 }
 

@@ -19,6 +19,7 @@ type ImportPlanRow struct {
 	BlockedSourceKeys    []string `json:"blocked_source_keys"`
 	Observed             *Record  `json:"-"`
 	OperationID          string   `json:"operation_id"`
+	ResumeState          string   `json:"resume_state,omitempty"`
 }
 
 // The creation operation is stored atomically with the issue body. Using the
@@ -56,6 +57,10 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 		return nil, err
 	}
 	receipts, bases, err := snapshotImportReceipts(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	intents, err := snapshotImportIntents(snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +112,18 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 			row.Observed = &r
 			row.Action = "resume"
 		}
-		if receipt, ok := receipts[row.SourceKey]; ok {
+		receipt, completed := receipts[row.SourceKey]
+		intent, prepared := intents[row.SourceKey]
+		if prepared && (!completed || intent.commentID > receipt.commentID) {
+			if row.TargetID == "" || intent.TargetID != row.TargetID {
+				return nil, fmt.Errorf("prepared intent for %s disagrees with its target mapping", row.SourceKey)
+			}
+			state, err := intent.resumeState(row.Digest, bases[row.TargetID])
+			if err != nil {
+				return nil, err
+			}
+			row.Action, row.ResumeState = "resume", state
+		} else if completed {
 			if row.TargetID == "" || receipt.TargetID != row.TargetID {
 				return nil, fmt.Errorf("completion receipt for %s disagrees with its target mapping; no import writes attempted", row.SourceKey)
 			}
