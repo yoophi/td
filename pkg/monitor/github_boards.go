@@ -152,7 +152,13 @@ func (s *GitHubBoardSource) LoadBoard(id string, statuses map[models.Status]bool
 		case models.StatusClosed:
 			category = CategoryClosed
 		case models.StatusInReview:
-			facts, err := c.ObserveMonitorReview(s.ctx, &record, s.actor)
+			var facts *ghstore.MonitorReviewFacts
+			var err error
+			if _, bulk := c.(ghstore.SnapshotReader); bulk {
+				facts, err = ghstore.UnverifiedMonitorReview(&record, s.actor)
+			} else {
+				facts, err = c.ObserveMonitorReview(s.ctx, &record, s.actor)
+			}
 			if err != nil {
 				return fail(err)
 			}

@@ -39,6 +39,16 @@ func TestGitHubFooterKeepsRequestStateVisibleBesideError(t *testing.T) {
 	}
 }
 
+func TestGitHubUnverifiedReviewHintIsVisible(t *testing.T) {
+	m := NewModel(nil, "actual", time.Minute, "test", t.TempDir())
+	m.DataSource = &GitHubDataSource{}
+	m.Width = 100
+	m.TaskList.ReviewVerificationRequired = true
+	if !strings.Contains(ansi.Strip(m.renderFooter()), "Reviews unverified; open details to validate") {
+		t.Fatal("unverified queue looked actionable")
+	}
+}
+
 func TestGitHubCancelWorksInsideFormAndRetainsPendingWriteFact(t *testing.T) {
 	m := NewModel(nil, "actual", time.Minute, "test", t.TempDir())
 	m.DataSource = &GitHubDataSource{}

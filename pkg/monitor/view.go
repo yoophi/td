@@ -2492,6 +2492,9 @@ func (m Model) renderFooter() string {
 		// The layout already reserves three footer rows. Keep request state
 		// visible even when help keys and an error fill a narrow terminal.
 		width := max(0, m.Width)
+		if statusToast == "" && (m.TaskList.ReviewVerificationRequired || m.TaskListMode == TaskListModeBoard) {
+			statusToast = styles.toast.Render(" Reviews unverified; open details to validate ")
+		}
 		return strings.Join([]string{
 			ansi.Truncate(" "+keys, width, "…"),
 			ansi.Truncate(" "+statusToast+sessionsIndicator+handoffAlert+reviewAlert+updateNotif, width, "…"),

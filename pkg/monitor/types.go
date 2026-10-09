@@ -277,11 +277,14 @@ type ActivityItem struct {
 
 // TaskListData holds categorized issues for the task list panel
 type TaskListData struct {
-	Reviewable    []models.Issue
-	NeedsRework   []models.Issue
-	InProgress    []models.Issue // in_progress, not rejected
-	Ready         []models.Issue // open, not blocked
-	PendingReview []models.Issue // in_review, own implementation
+	// GitHub aggregate queues cannot validate native state history. Consumers
+	// must show this hint and never interpret those rows as an approval grant.
+	ReviewVerificationRequired bool
+	Reviewable                 []models.Issue
+	NeedsRework                []models.Issue
+	InProgress                 []models.Issue // in_progress, not rejected
+	Ready                      []models.Issue // open, not blocked
+	PendingReview              []models.Issue // in_review, own implementation
 	// ReadyToClose holds in_review issues that have an active approval. Only
 	// populated under review_policy_mode=delegated.
 	ReadyToClose []models.Issue

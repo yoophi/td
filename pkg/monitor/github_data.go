@@ -200,7 +200,14 @@ func FetchGitHubData(ctx context.Context, c GitHubMonitorReader, actor string, m
 		case models.StatusBlocked:
 			msg.TaskList.Blocked = append(msg.TaskList.Blocked, issue)
 		case models.StatusInReview:
-			facts, err := c.ObserveMonitorReview(ctx, &record, actor)
+			var facts *ghstore.MonitorReviewFacts
+			var err error
+			if observed != nil {
+				facts, err = ghstore.UnverifiedMonitorReview(&record, actor)
+				msg.TaskList.ReviewVerificationRequired = true
+			} else {
+				facts, err = c.ObserveMonitorReview(ctx, &record, actor)
+			}
 			if err != nil {
 				return nil, err
 			}

@@ -559,15 +559,16 @@ type MonitorDTO struct {
 
 // TaskListDTO is the API representation of categorized task lists.
 type TaskListDTO struct {
-	Reviewable    []IssueDTO `json:"reviewable"`
-	NeedsRework   []IssueDTO `json:"needs_rework"`
-	InProgress    []IssueDTO `json:"in_progress"`
-	Ready         []IssueDTO `json:"ready"`
-	PendingReview []IssueDTO `json:"pending_review"`
-	ReadyToClose  []IssueDTO `json:"ready_to_close"`
-	PendingOther  []IssueDTO `json:"pending_other"`
-	Blocked       []IssueDTO `json:"blocked"`
-	Closed        []IssueDTO `json:"closed"`
+	ReviewVerificationRequired bool       `json:"review_verification_required"`
+	Reviewable                 []IssueDTO `json:"reviewable"`
+	NeedsRework                []IssueDTO `json:"needs_rework"`
+	InProgress                 []IssueDTO `json:"in_progress"`
+	Ready                      []IssueDTO `json:"ready"`
+	PendingReview              []IssueDTO `json:"pending_review"`
+	ReadyToClose               []IssueDTO `json:"ready_to_close"`
+	PendingOther               []IssueDTO `json:"pending_other"`
+	Blocked                    []IssueDTO `json:"blocked"`
+	Closed                     []IssueDTO `json:"closed"`
 }
 
 // RecentHandoffDTO is the API representation of a recent handoff summary.
@@ -623,15 +624,16 @@ func MonitorDataToDTO(msg *monitor.RefreshDataMsg) MonitorDTO {
 // taskListDataToDTO converts monitor.TaskListData to TaskListDTO.
 func taskListDataToDTO(data *monitor.TaskListData) TaskListDTO {
 	return TaskListDTO{
-		Reviewable:    issuesToDTOsNonNil(data.Reviewable),
-		NeedsRework:   issuesToDTOsNonNil(data.NeedsRework),
-		InProgress:    issuesToDTOsNonNil(data.InProgress),
-		Ready:         issuesToDTOsNonNil(data.Ready),
-		PendingReview: issuesToDTOsNonNil(data.PendingReview),
-		ReadyToClose:  issuesToDTOsNonNil(data.ReadyToClose),
-		PendingOther:  issuesToDTOsNonNil(data.PendingOther),
-		Blocked:       issuesToDTOsNonNil(data.Blocked),
-		Closed:        issuesToDTOsNonNil(data.Closed),
+		ReviewVerificationRequired: data.ReviewVerificationRequired,
+		Reviewable:                 issuesToDTOsNonNil(data.Reviewable),
+		NeedsRework:                issuesToDTOsNonNil(data.NeedsRework),
+		InProgress:                 issuesToDTOsNonNil(data.InProgress),
+		Ready:                      issuesToDTOsNonNil(data.Ready),
+		PendingReview:              issuesToDTOsNonNil(data.PendingReview),
+		ReadyToClose:               issuesToDTOsNonNil(data.ReadyToClose),
+		PendingOther:               issuesToDTOsNonNil(data.PendingOther),
+		Blocked:                    issuesToDTOsNonNil(data.Blocked),
+		Closed:                     issuesToDTOsNonNil(data.Closed),
 	}
 }
 

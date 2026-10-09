@@ -74,3 +74,26 @@ because it does not need comment history. Markdown export still uses issue
 pages only. Review eligibility event checks remain tracked separately in #48;
 these measurements do not claim zero extra review requests for in-review tasks.
 Persistent reuse between independent dashboard/event requests is #52/#50.
+## Unverified review queues
+
+GitHub aggregate monitor and TUI board reads classify in-review records
+conservatively from their listing metadata. They do not call native events,
+handoff history, or individual issue GETs to grant reviewability. These rows
+remain pending until a selected detail or mutation performs fresh validation.
+The monitor task-list response exposes `review_verification_required`; the TUI
+footer explains that reviews are unverified. Recorded approvals never populate
+the aggregate ready-to-close bucket without validation. Detail and mutation
+checks remain unchanged.
+
+The actual `FetchGitHubData` consumer regression runs the real ghstore client
+against a fake gh executable with 1 and 60 in-review issues. Both require four
+gh invocations: local auth-token check, repository preflight, issue pages and
+repository comment pages. The auth-token check is not an HTTP response. Any
+unexpected individual API endpoint fails the fixture. Existing non-bulk test
+adapters retain their older explicit review-observation contract; production
+ghstore clients implement `SnapshotReader` and use the conservative path.
+
+HTTP consumer request-budget and native selected-detail validation still need
+verification before #48 is closed. This change does not fix the entire #55
+20-second review timeout: write-side parent cascades and availability still
+perform their fresh checks.

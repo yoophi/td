@@ -2,11 +2,75 @@ package ghstore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/reviewpolicy"
 	"strings"
 	"testing"
 )
+
+func TestUnverifiedReviewQueuesNeverGrantRecordedApproval(t *testing.T) {
+	f := newReviewFixture(t)
+	f.transition(t, "review", TransitionOptions{SessionID: "worker", Mode: reviewpolicy.ModeTrusted})
+	f.transition(t, "approve", TransitionOptions{SessionID: "worker", Mode: reviewpolicy.ModeTrusted, RecordOnly: true, SelfReview: true, Reason: "Fixture self-review"})
+	record, err := f.client.Get(context.Background(), "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.client.run = func(context.Context, string, []byte, ...string) ([]byte, error) {
+		panic("queue display made a remote call")
+	}
+	for _, actor := range []string{"worker", "independent"} {
+		facts, err := UnverifiedMonitorReview(record, actor)
+		if err != nil || facts.Fresh || facts.ActiveApproval || facts.AnyInvolved != (actor == "worker") {
+			t.Fatalf("%+v %v", facts, err)
+		}
+	}
+	for _, r := range []*Record{nil, {Issue: models.Issue{ID: "bad", Status: models.StatusInReview}}, {Issue: models.Issue{ID: "gh-1", Status: models.StatusClosed}}} {
+		if _, err := UnverifiedMonitorReview(r, "worker"); err == nil {
+			t.Fatal("invalid queue observation accepted")
+		}
+	}
+}
+
+func TestBulkReviewQueueCostDoesNotGrowWithReviewCount(t *testing.T) {
+	f := newReviewFixture(t)
+	f.transition(t, "review", TransitionOptions{SessionID: "worker", Mode: reviewpolicy.ModeTrusted})
+	raw, err := fixtureIssueJSON(f.issue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var template apiIssue
+	if err := json.Unmarshal(raw, &template); err != nil {
+		t.Fatal(err)
+	}
+	for _, count := range []int{1, 60} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			issues := [][]apiIssue{{}}
+			for n := 1; n <= count; n++ {
+				next := template
+				next.Number = n
+				issues[0] = append(issues[0], next)
+			}
+			client, calls := snapshotFixture(issues, [][]apiComment{{}}, nil)
+			snapshot, err := client.ReadSnapshot(context.Background(), true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, record := range snapshot.Issues(false) {
+				facts, err := UnverifiedMonitorReview(&record, "independent")
+				if err != nil || facts.Fresh || facts.ActiveApproval {
+					t.Fatalf("%+v %v", facts, err)
+				}
+			}
+			if len(*calls) != 2 {
+				t.Fatalf("queue cost grew: %v", *calls)
+			}
+		})
+	}
+}
 
 func TestMonitorReviewFactsApprovalStalenessAndRetainedParticipation(t *testing.T) {
 	f := newReviewFixture(t)
