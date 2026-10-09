@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/marcus/td/internal/config"
@@ -38,9 +37,12 @@ Mouse support:
 	GroupID: "system",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
-		interval, _ := cmd.Flags().GetDuration("interval")
-		if interval < 500*time.Millisecond {
-			interval = 2 * time.Second
+		interval, err := cmd.Flags().GetDuration("interval")
+		if err != nil {
+			return err
+		}
+		if interval < monitor.MinRefreshInterval {
+			return fmt.Errorf("monitor refresh interval must be at least %s (got %s)", monitor.MinRefreshInterval, interval)
 		}
 		cfg, err := config.Load(baseDir)
 		if err != nil {
@@ -94,5 +96,5 @@ Mouse support:
 
 func init() {
 	rootCmd.AddCommand(monitorCmd)
-	monitorCmd.Flags().Duration("interval", 2*time.Second, "Refresh interval (default 2s)")
+	monitorCmd.Flags().Duration("interval", monitor.DefaultRefreshInterval, "Refresh interval (minimum 30s; applies to sqlite and gh-issue)")
 }

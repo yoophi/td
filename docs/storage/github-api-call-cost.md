@@ -24,7 +24,7 @@ lasts only for the current sweep. Independent monitor/server instances and
 browser requests add to the same REST allowance. Server rate-limit backoff already
 respects observed reset deadlines; repeated monitor refreshes did not.
 
-The bounded mitigation raises GitHub monitor and event polling to a five-minute
+The initial bounded mitigation raised GitHub monitor and event polling to a five-minute
 minimum and suppresses monitor dashboard reads until an observed rate-limit
 reset. At 44 issues, server polling costs approximately 552 REST requests/hour
 instead of 5,520, before other traffic. This is not an account-wide quota budget;
@@ -119,3 +119,48 @@ the implementation; the additional HTTP router test also passed with race
 detection and both lint targets. This change does not fix the entire #55
 20-second review timeout: write-side parent cascades and selected availability
 still perform their fresh checks.
+
+## Monitor interval and quota budget (#56, 2026-10-10)
+
+`td monitor` now defaults to **1 minute**, for both SQLite and gh-issue.
+`td monitor --interval 30s` is supported; CLI intervals below 30 seconds fail
+explicitly before opening a store or launching the TUI. Longer intervals remain
+unchanged. Embedded GitHub callers are bounded to 30 seconds, so existing hosts
+cannot accidentally restore two-second remote polling. This replaces the earlier
+five-minute TUI bound; `td serve` event polling remains separate and unchanged.
+
+After #46/#47/#48, a basic dashboard sweep uses **1 + I + C** HTTP responses:
+one repository preflight, I issue pages and C repository comment pages. It no
+longer adds individual review checks for every in-review task. A native CLI
+context read against `yoophi/td` after creating #56 observed four HTTP responses:
+one preflight, one issue page and two comment pages. Diagnostic evidence is
+`artifacts/gh-api-n-plus-one-plan/gh-56/context-api.log` in the tracking checkout.
+The same aggregate reader powers dashboard/context data; the monitor consumer
+and HTTP router regressions independently forbid individual review endpoints.
+
+| Periodic aggregate polling | Sweeps/hour | REST responses/hour | Share of 5,000 |
+| --- | ---: | ---: | ---: |
+| 1 minute (default), 4 responses/sweep | 60 | 240 | 4.8% |
+| 30 seconds, 4 responses/sweep | 120 | 480 | 9.6% |
+
+These are steady-state estimates, excluding the initial fetch and user-triggered
+reads. GitHub's ordinary authenticated REST allowance is 5,000 requests/hour,
+shared with other clients using the account. At this measured repository size,
+one basic monitor comfortably fits that allowance. This is not a guarantee for
+every screen, repository or account: selected details, active boards, mutations,
+other running monitors/servers, and other tools add traffic. Auxiliary board/TDQ
+history queries may still perform per-issue reads; shared caching and polling
+coordination remain #52/#50. Pagination itself grows with all retained issues
+and comments, including logically deleted records. At 1 minute, a sweep costing
+84 responses already exceeds 5,000/hour even without other traffic. Secondary
+limits can also apply below the hourly allowance.
+
+Main dashboard refreshes still skip overlapping sweeps and preserve the original
+error/reset guidance. After a rate-limit response, that data source performs no
+new sweep until its observed reset/retry deadline; a shorter polling interval
+does not bypass this wait. This cooldown is not shared with every detail/board
+reader or process. Writes are never automatically retried. Regression tests cover
+overlap suppression, diagnostic preservation, reset waiting and bounded bulk
+review costs alongside the new interval boundaries.
+
+Source: [GitHub REST rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).

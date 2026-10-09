@@ -80,9 +80,9 @@ func NewGitHubModelForWorktree(ctx context.Context, baseDir, worktreeDir string,
 		value := current.Focus
 		return &value, nil
 	}
-	// Each complete refresh visits task histories; SQLite's 2s default would
-	// exhaust GitHub's REST quota. Longer caller intervals remain respected.
-	interval = max(interval, 5*time.Minute)
+	// Bulk issue/comment observation avoids per-task history reads. Protect
+	// embedded callers from rapid polling while respecting longer intervals.
+	interval = max(interval, MinRefreshInterval)
 	m := NewModel(nil, actor, interval, ver, baseDir)
 	m.notesLifetimeCancel()
 	m.notesLifetimeCancel = cancel

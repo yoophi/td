@@ -41,6 +41,19 @@ printf 'HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"full_name":"o
 		t.Fatal(err)
 	}
 	defer func() { _ = m.Close() }()
+	if m.RefreshInterval != time.Minute {
+		t.Fatalf("one-minute interval changed to %s", m.RefreshInterval)
+	}
+	for _, interval := range []time.Duration{time.Second, 30 * time.Second, 10 * time.Minute} {
+		other, err := NewGitHubModel(context.Background(), dir, interval, "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if other.RefreshInterval != max(interval, MinRefreshInterval) {
+			t.Fatalf("requested %s, got %s", interval, other.RefreshInterval)
+		}
+		_ = other.Close()
+	}
 	if m.DB != nil || m.SessionID == "" || m.DataSource == nil || m.BoardSource == nil || m.syncRuntime == nil || m.syncRuntime.service != nil {
 		t.Fatal("remote construction initialized SQLite/sync or lost actor")
 	}
