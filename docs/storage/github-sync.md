@@ -62,7 +62,17 @@ state has no conflicts. Other devices, HTTP/TUI failures and errors already
 handled inside a command are outside this recorded CLI coverage. After-write
 conflicts may have applied and require fresh state inspection before retrying.
 
-The #30 implementation remains incomplete: sync settings
-still need their own GitHub contracts and implementation. SQLite snapshot bootstrap, action-log replay and
+`config sync.*` values belong to global SQLite/td-sync configuration. In a
+GitHub project, `config set sync.*` exits explicitly before reading or changing
+that global configuration; change global SQLite settings from a SQLite project.
+`config get sync.*` retains its global read/feature-flag semantics.
+`config list` declares `sync_scope=global-sqlite` and
+`sync_applies_to_store=false` in GitHub mode, even if global values are included
+with the sync feature enabled. They do not affect direct gh writes or GitHub
+monitor/tail intervals. No setting starts SQLite or td-sync for a GitHub store.
+
+The #30 implementation still requires setup-command availability across both
+feature modes, native acceptance and task review.
+SQLite snapshot bootstrap, action-log replay and
 FK repair are store-specific operations; they cannot be reported as successful
 GitHub transfers. Native repository checks and task review are still pending.

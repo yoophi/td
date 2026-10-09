@@ -18,17 +18,17 @@ var SyncGateMap = []GateMapEntry{
 	{
 		Feature: SyncCLI.Name,
 		Surface: "cmd/sync.go",
-		Notes:   "Gates the full td sync entry point and its mutating subcommands (push/pull/init). The read-only `td sync status` diagnostic and the enable/disable kill-switch subcommands live on an always-on parent and are NOT gated (td-78b482, td-735875).",
+		Notes:   "Gates SQLite sync transfers. GitHub sync refresh/status/tail/conflict diagnostics also run on the always-on parent without SQLite replay. Status and enable/disable remain reachable; GitHub toggles report their SQLite-only meaning without changing global settings.",
 	},
 	{
 		Feature: SyncCLI.Name,
 		Surface: "cmd/sync_conflicts.go",
-		Notes:   "Gates td sync conflicts subcommand",
+		Notes:   "Gates SQLite td sync conflicts; GitHub device-local recorded CLI conflicts remain available on the always-on parent",
 	},
 	{
 		Feature: SyncCLI.Name,
 		Surface: "cmd/sync_tail.go",
-		Notes:   "Gates td sync tail subcommand",
+		Notes:   "Gates SQLite td sync tail; GitHub observed activity tail remains available on the always-on parent",
 	},
 	{
 		Feature: SyncCLI.Name,

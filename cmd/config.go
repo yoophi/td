@@ -52,7 +52,7 @@ func intPtr(n int) *int    { return &n }
 var configCmd = &cobra.Command{
 	Use:     "config",
 	Short:   "Manage td configuration",
-	Long:    "Manage td configuration. Store settings are project-local; sync.* settings are global.",
+	Long:    "Manage td configuration. Store settings are project-local; sync.* settings are global SQLite/td-sync settings. GitHub stores use gh directly and do not apply those settings; change them from a SQLite project. GitHub monitor/tail refresh intervals are command options.",
 	GroupID: "system",
 }
 
@@ -71,6 +71,9 @@ var configSetCmd = &cobra.Command{
 		}
 		if cmd.Flags().Changed("remote") {
 			return fmt.Errorf("--remote is only valid for store gh-issue")
+		}
+		if err := requireSyncConfigWrite(key); err != nil {
+			return err
 		}
 		if err := requireSyncConfig(key); err != nil {
 			return err
@@ -239,6 +242,10 @@ var configListCmd = &cobra.Command{
 			return err
 		}
 		values := map[string]any{"store": store}
+		if store == config.StoreGitHub {
+			values["sync_scope"] = "global-sqlite"
+			values["sync_applies_to_store"] = false
+		}
 		if project.GitHub != nil {
 			values["github"] = project.GitHub
 		}
@@ -268,6 +275,24 @@ func init() {
 func requireSyncConfig(key string) error {
 	if strings.HasPrefix(key, "sync.") && !features.IsEnabledForProcess(features.SyncCLI.Name) {
 		return fmt.Errorf("sync configuration requires TD_FEATURE_SYNC_CLI=true")
+	}
+	return nil
+}
+
+func requireSyncConfigWrite(key string) error {
+	if !strings.HasPrefix(key, "sync.") {
+		return nil
+	}
+	cfg, err := config.Load(getBaseDir())
+	if err != nil {
+		return err
+	}
+	kind, err := config.Store(cfg)
+	if err != nil {
+		return err
+	}
+	if kind == config.StoreGitHub {
+		return fmt.Errorf("%s is a global SQLite/td-sync setting and does not apply to gh-issue; change it from a SQLite project; use monitor/tail --interval for GitHub polling; no global or project settings changed", key)
 	}
 	return nil
 }
