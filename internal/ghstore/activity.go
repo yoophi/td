@@ -179,6 +179,12 @@ func (c *Client) listActivity(ctx context.Context, id string, includeDeleted boo
 	if err != nil {
 		return nil, err
 	}
+	return c.readIssueActivity(ctx, issue)
+}
+
+// readIssueActivity reuses an already validated issue observation for read-only
+// export. Workflow eligibility callers still obtain their own fresh observation.
+func (c *Client) readIssueActivity(ctx context.Context, issue *Record) ([]models.Activity, error) {
 	data, err := c.request(ctx, "GET", fmt.Sprintf("/issues/%d/comments?per_page=100", issue.Number), nil, true)
 	if err != nil {
 		return nil, err

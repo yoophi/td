@@ -124,6 +124,9 @@ type Record struct {
 }
 
 type apiIssue struct {
+	User struct {
+		Login string `json:"login"`
+	} `json:"user"`
 	Number    int        `json:"number"`
 	Title     string     `json:"title"`
 	Body      string     `json:"body"`
@@ -168,7 +171,9 @@ func (item apiIssue) record() (*Record, error) {
 	revisionItem.Labels = slices.Clone(item.Labels)
 	slices.SortFunc(revisionItem.Labels, func(a, b struct {
 		Name string `json:"name"`
-	}) int { return strings.Compare(a.Name, b.Name) })
+	}) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	snapshot, err := json.Marshal(revisionItem)
 	if err != nil {
 		return nil, err

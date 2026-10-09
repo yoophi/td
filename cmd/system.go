@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/marcus/td/internal/session"
@@ -630,6 +631,9 @@ var exportCmd = &cobra.Command{
 	GroupID: "system",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
+		if handled, err := githubExport(cmd, baseDir); handled {
+			return err
+		}
 
 		database, err := db.Open(baseDir)
 		if err != nil {
@@ -784,6 +788,7 @@ var importCmd = &cobra.Command{
 
 // exportedItem matches the JSON structure produced by the export command.
 type exportedItem struct {
+	GitHub       *ghstore.ExportedIssue   `json:"github,omitempty"`
 	Issue        models.Issue             `json:"issue"`
 	Logs         []models.Log             `json:"logs"`
 	Handoffs     []models.Handoff         `json:"handoffs"`
@@ -797,18 +802,20 @@ type exportedItem struct {
 func (e *exportedItem) UnmarshalJSON(data []byte) error {
 	// Use raw messages for fields that changed format.
 	var aux struct {
-		Issue    models.Issue       `json:"issue"`
-		Logs     []models.Log       `json:"logs"`
-		Handoffs []models.Handoff   `json:"handoffs"`
-		Handoff  *models.Handoff    `json:"handoff"`
-		Files    []models.IssueFile `json:"files"`
-		RawDeps  json.RawMessage    `json:"dependencies"`
+		GitHub   *ghstore.ExportedIssue `json:"github,omitempty"`
+		Issue    models.Issue           `json:"issue"`
+		Logs     []models.Log           `json:"logs"`
+		Handoffs []models.Handoff       `json:"handoffs"`
+		Handoff  *models.Handoff        `json:"handoff"`
+		Files    []models.IssueFile     `json:"files"`
+		RawDeps  json.RawMessage        `json:"dependencies"`
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
 	e.Issue = aux.Issue
+	e.GitHub = aux.GitHub
 	e.Logs = aux.Logs
 	e.Handoffs = aux.Handoffs
 	e.Files = aux.Files
