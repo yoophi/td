@@ -108,28 +108,36 @@ func snapshotImportIntents(snapshot *Snapshot) (map[string]importIntent, error) 
 }
 
 func (c *Client) importTarget(ctx context.Context, id string) (*Record, string, error) {
-	n, err := Number(id)
+	item, record, err := c.importNativeTarget(ctx, id)
 	if err != nil {
 		return nil, "", err
+	}
+	basis, err := importTargetBasis(item)
+	return record, basis, err
+}
+
+func (c *Client) importNativeTarget(ctx context.Context, id string) (apiIssue, *Record, error) {
+	n, err := Number(id)
+	if err != nil {
+		return apiIssue{}, nil, err
 	}
 	data, err := c.request(ctx, "GET", fmt.Sprintf("/issues/%d", n), nil, false)
 	if err != nil {
-		return nil, "", err
+		return apiIssue{}, nil, err
 	}
 	var item apiIssue
 	if err := json.Unmarshal(data, &item); err != nil {
-		return nil, "", err
+		return apiIssue{}, nil, err
 	}
 	record, err := item.record()
 	if err != nil {
-		return nil, "", err
+		return apiIssue{}, nil, err
 	}
 	if record.Number != n || (record.meta.EntityKind != "" && record.meta.EntityKind != "issue") {
-		return nil, "", fmt.Errorf("import target %s is not the expected task issue", id)
+		return apiIssue{}, nil, fmt.Errorf("import target %s is not the expected task issue", id)
 	}
 	record.repository = c.repo
-	basis, err := importTargetBasis(item)
-	return record, basis, err
+	return item, record, nil
 }
 
 // prepareImport publishes one checked intent, never retrying an uncertain

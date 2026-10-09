@@ -1,7 +1,7 @@
 # GitHub issue import
 
 The #24 implementation is in progress. Input validation and `--dry-run`
-are available; full remote import application, ID allocation and history replay
+are available; full batch import orchestration and history replay
 and import/export round-trip verification remain required. A regular nonempty
 GitHub import currently exits with an explicit error and makes no remote changes.
 
@@ -38,8 +38,8 @@ The shared internal creation path can use this identity and retains normal
 validation, state/priority mirrors and uncertain-write diagnostics. Tests
 simulate a POST that creates an issue but loses its response, then recover
 the allocated ID from a fresh repository listing without a second POST.
-The CLI still refuses nonempty writes: issue PATCH orchestration, relation
-application and provenance replay remain required before enabling it.
+The CLI still refuses nonempty writes: batch allocation/application ordering,
+provenance replay and completion orchestration remain required before enabling it.
 
 The planner reads a fresh complete issue/comment snapshot using two bulk
 collections (each paginated by gh), even when a reusable cache exists. It
@@ -61,7 +61,25 @@ a changed source cannot replace a pending import version. Resume with the
 original input first. A later completion supersedes its earlier intent; a newer
 intent supersedes an older completion so an interrupted subsequent import can
 be recovered. These publishers do not apply the issue PATCH or restore history;
-their orchestration remains unfinished and is not exposed as a standalone CLI.
+full batch orchestration remains unfinished and is not exposed as a standalone CLI.
+
+The internal single-issue apply stage now projects the imported fields into a
+normal observed PATCH, prepares its exact before/after bases, rechecks content
+after preparation, and performs standard revision/readback checks. Parent and
+dependency IDs are resolved after allocation; reverse `blocks` edges are stored
+on the actual dependent. Input dependency cycles fail before GitHub access.
+Dependency observations are checked around the issue write. A lost PATCH
+response can be resumed at `after_apply` without another PATCH or intent POST.
+Unprepared creations must still match the minimal original creation payload;
+external edits or a changed original payload cannot be overwritten on resume.
+Imported workflow actors/approvals are cleared from active metadata; status,
+dates, files, labels and mapped references remain portable fields. This stage
+does not publish a completion receipt or finish history restoration.
+
+Remaining batch cases include changing an existing graph without temporary
+cycles, logical-deletion ordering/references, skip-row relation consistency and
+retaining prior destination history before a forced overwrite. These remain
+implementation work, not reasons to exclude the original import scope.
 
 The target basis includes the currently modeled native issue identity, author,
 state, title, body and label set. Native timestamps and label ordering are

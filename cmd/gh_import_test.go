@@ -19,7 +19,7 @@ func TestGitHubImportInvalidStdinFailsBeforeGHAndSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", t.TempDir())
-	for _, input := range []string{`[{"future":1}]`, `[{"issue":{"id":"td-abc","title":"Task","parent_id":"td-missing"}}]`} {
+	for _, input := range []string{`[{"future":1}]`, `[{"issue":{"id":"td-abc","title":"Task","parent_id":"td-missing"}}]`, `[{"issue":{"id":"td-one","title":"One"},"dependencies":["td-two"]},{"issue":{"id":"td-two","title":"Two"},"dependencies":["td-one"]}]`} {
 		c := &cobra.Command{Use: importCmd.Use, Args: importCmd.Args, RunE: importCmd.RunE, SilenceErrors: true, SilenceUsage: true}
 		c.Flags().String("format", "json", "")
 		c.Flags().Bool("dry-run", false, "")

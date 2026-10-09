@@ -20,6 +20,8 @@ type ImportPlanRow struct {
 	Observed             *Record  `json:"-"`
 	OperationID          string   `json:"operation_id"`
 	ResumeState          string   `json:"resume_state,omitempty"`
+	intent               *importIntent
+	basis                string
 }
 
 // The creation operation is stored atomically with the issue body. Using the
@@ -123,6 +125,7 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 				return nil, err
 			}
 			row.Action, row.ResumeState = "resume", state
+			row.intent = &intent
 		} else if completed {
 			if row.TargetID == "" || receipt.TargetID != row.TargetID {
 				return nil, fmt.Errorf("completion receipt for %s disagrees with its target mapping; no import writes attempted", row.SourceKey)
@@ -139,6 +142,7 @@ func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool)
 				row.Action = "overwrite"
 			}
 		}
+		row.basis = bases[row.TargetID]
 		plan.Rows = append(plan.Rows, row)
 	}
 	return plan, nil

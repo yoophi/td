@@ -305,5 +305,43 @@ func ValidateImportItems(items []ImportItem) error {
 			parent = items[byID[e.ReferenceKey(parent)]].Issue.ParentID
 		}
 	}
+	return validateImportDependencyGraph(items)
+}
+
+func validateImportDependencyGraph(items []ImportItem) error {
+	graph := map[string][]string{}
+	for _, source := range items {
+		for _, edge := range source.Dependencies {
+			from, to := source.SourceKey(), source.ReferenceKey(edge.DependsOnID)
+			if edge.RelationType == "blocks" {
+				from, to = to, from
+			}
+			graph[from] = append(graph[from], to)
+		}
+	}
+	visiting, visited := map[string]bool{}, map[string]bool{}
+	var walk func(string) error
+	walk = func(key string) error {
+		if visiting[key] {
+			return fmt.Errorf("import dependency cycle at %s; no remote writes attempted", key)
+		}
+		if visited[key] {
+			return nil
+		}
+		visiting[key] = true
+		for _, next := range graph[key] {
+			if err := walk(next); err != nil {
+				return err
+			}
+		}
+		delete(visiting, key)
+		visited[key] = true
+		return nil
+	}
+	for _, source := range items {
+		if err := walk(source.SourceKey()); err != nil {
+			return err
+		}
+	}
 	return nil
 }
