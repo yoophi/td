@@ -100,3 +100,19 @@ overrides; use `get` to read the effective value. `unset --json` reports
 messages remain. `list` rejects extra arguments. The CLI lifecycle contract
 covers boolean and string features, environment precedence, legacy conflicts,
 invalid inputs, preserved store selection and no gh/SQLite/issue-context access.
+
+`config get KEY --json` consistently returns a JSON string, including global
+SQLite `sync.*` values and their existing textual default annotations. Human
+output is unchanged. SQLite sync-setting writes with `--json` return
+`{action:"set",key,value,scope:"global-sqlite"}` where value is the accepted
+input string. These writes remain rejected from a gh-issue project; reading
+them requires the sync_cli feature and does not apply them to GitHub storage.
+Unknown keys return a single JSON error envelope with valid keys in its message,
+without a plaintext list on stdout. `config list` rejects extra arguments.
+
+The root CLI tests cover all advertised sync keys in both feature modes,
+store get/list, interactive-setup JSON rejection and invalid key/flag/argument
+paths. SQLite sync-setting roundtrip and invalid-value persistence checks use
+an injected temporary global-settings backend. Native persistence stays at
+`~/.config/td/config.json`; the test does not change HOME or write real settings.
+No gh calls, issue database or issue-session context is created by these paths.

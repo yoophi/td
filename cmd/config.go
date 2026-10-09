@@ -13,6 +13,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Global SQLite sync settings retain their native persistence. Tests inject a
+// temporary backend instead of writing user settings or changing HOME.
+var loadSyncCLIConfig = syncconfig.LoadConfig
+var saveSyncCLIConfig = syncconfig.SaveConfig
+
 // validConfigKeys lists the supported config keys for set/get.
 var validConfigKeys = []string{
 	"store",
@@ -80,12 +85,10 @@ var configSetCmd = &cobra.Command{
 		}
 
 		if !isValidConfigKey(key) {
-			output.Error("unknown config key: %s", key)
-			fmt.Println("Valid keys:", strings.Join(validConfigKeys, ", "))
-			return fmt.Errorf("unknown config key: %s", key)
+			return fmt.Errorf("unknown config key: %s (valid keys: %s)", key, strings.Join(validConfigKeys, ", "))
 		}
 
-		cfg, err := syncconfig.LoadConfig()
+		cfg, err := loadSyncCLIConfig()
 		if err != nil {
 			output.Error("load config: %v", err)
 			return err
@@ -135,9 +138,12 @@ var configSetCmd = &cobra.Command{
 			cfg.Sync.SnapshotThreshold = intPtr(n)
 		}
 
-		if err := syncconfig.SaveConfig(cfg); err != nil {
+		if err := saveSyncCLIConfig(cfg); err != nil {
 			output.Error("save config: %v", err)
 			return err
+		}
+		if jsonMode(cmd) {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"action": "set", "key": key, "value": val, "scope": "global-sqlite"})
 		}
 
 		output.Success("set %s = %s", key, val)
@@ -171,12 +177,10 @@ var configGetCmd = &cobra.Command{
 		}
 
 		if !isValidConfigKey(key) {
-			output.Error("unknown config key: %s", key)
-			fmt.Println("Valid keys:", strings.Join(validConfigKeys, ", "))
-			return fmt.Errorf("unknown config key: %s", key)
+			return fmt.Errorf("unknown config key: %s (valid keys: %s)", key, strings.Join(validConfigKeys, ", "))
 		}
 
-		cfg, err := syncconfig.LoadConfig()
+		cfg, err := loadSyncCLIConfig()
 		if err != nil {
 			output.Error("load config: %v", err)
 			return err
@@ -224,7 +228,10 @@ var configGetCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Println(val)
+		if jsonMode(cmd) {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(val)
+		}
+		cmd.Println(val)
 		return nil
 	},
 }
@@ -232,6 +239,7 @@ var configGetCmd = &cobra.Command{
 var configListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all config values",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		project, err := config.Load(getBaseDir())
 		if err != nil {
@@ -250,7 +258,7 @@ var configListCmd = &cobra.Command{
 			values["github"] = project.GitHub
 		}
 		if features.IsEnabledForProcess(features.SyncCLI.Name) {
-			cfg, err := syncconfig.LoadConfig()
+			cfg, err := loadSyncCLIConfig()
 			if err != nil {
 				return err
 			}
