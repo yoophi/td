@@ -10,6 +10,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/features"
 	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -23,8 +24,12 @@ var (
 
 var syncTailCmd = &cobra.Command{
 	Use:   "tail",
+	Args:  cobra.NoArgs,
 	Short: "Show recent sync activity",
 	Long: `Show recent push/pull events. Use -f to follow in real-time.
+GitHub mode shows observed native issue activity and td transitions through bulk
+snapshots, with follow polling every minute (minimum --interval 30s). This is
+not a lossless event stream or a local push/pull queue.
 
 Examples:
   td sync tail          # Show last 20 sync events
@@ -32,6 +37,15 @@ Examples:
   td sync tail -n 50    # Show last 50 events
   td sync tail -f -n 0  # Follow only new events, skip history`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncTail(cmd); handled {
+			return err
+		}
+		if !features.IsEnabledForProcess(features.SyncCLI.Name) {
+			return fmt.Errorf("SQLite sync tail requires the sync_cli feature")
+		}
+		if cmd.Flags().Changed("interval") {
+			return fmt.Errorf("--interval requires store=gh-issue")
+		}
 		follow, _ := cmd.Flags().GetBool("follow")
 		lines, _ := cmd.Flags().GetInt("lines")
 
@@ -135,5 +149,5 @@ func truncateID(id string, max int) string {
 func init() {
 	syncTailCmd.Flags().BoolP("follow", "f", false, "Follow new events in real-time")
 	syncTailCmd.Flags().IntP("lines", "n", 20, "Number of initial lines to show")
-	syncCmd.AddCommand(syncTailCmd)
+	syncTailCmd.Flags().Duration("interval", time.Minute, "GitHub follow refresh interval (minimum 30s)")
 }

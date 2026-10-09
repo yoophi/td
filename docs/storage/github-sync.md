@@ -38,7 +38,20 @@ direct gh writes or the monitor's refresh interval. The shared td-sync runtime
 closes its gate for GitHub before reading SQLite or td-sync credentials, even
 if autosync is explicitly enabled or an embedding caller supplies a stale DB.
 
-The #30 implementation remains incomplete: conflicts/tail and sync settings
+`td sync tail [-n N] [-f] [--interval 1m]` displays observed native comments,
+td logs/handoffs and metadata transitions, including closed/deleted tasks.
+GitHub tail is reachable on both sync parents; SQLite tail still requires its
+sync CLI feature. Reads use the shared bulk snapshot/cache path, so follow polls
+default to 1 minute (minimum 30 seconds) and use incremental reconciliation.
+Follow remembers initial identities even with `-n 0`, emits new/changed records
+once, and stops on cancellation or API errors without automatic retry.
+`--json -f` emits one JSON object per initial/changed batch. These observations
+are not a lossless event stream: physical deletion, edits between observations,
+and metadata history limits can lose changes. Imported history remains passive
+provenance rather than a newly active log/handoff. There are no push/pull records
+or server sequence numbers to fabricate.
+
+The #30 implementation remains incomplete: conflicts and sync settings
 still need their own GitHub contracts and implementation. SQLite snapshot bootstrap, action-log replay and
 FK repair are store-specific operations; they cannot be reported as successful
 GitHub transfers. Native repository checks and task review are still pending.
