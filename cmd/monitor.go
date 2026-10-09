@@ -27,7 +27,7 @@ Key bindings:
   j/k            Scroll viewport
   Enter          Open issue details modal
   Esc            Close modal
-  r              Review selected issue; refresh when no issue is selected
+  r              Review selected issue / refresh activity panel
   ?              Toggle help
   q              Quit
 

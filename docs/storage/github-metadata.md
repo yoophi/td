@@ -615,7 +615,7 @@ before deciding whether to retry. Read-after-list propagation delays can occur.
 CLI mutations with `--json` emit the confirmed board object; list and show emit
 bare arrays. The wider monitor TUI integration is tracked separately within #6.
 
-Monitor integration is in progress (#6). `NewGitHubModel` provides a separate
+Monitor integration (#6) uses `NewGitHubModel` as a separate
 remote model constructor with verified configured origin, actual device-local
 actor/focus, and owner cancellation. It never constructs SQLite or td-sync.
 Monitor-only store adapters retain observed revisions for forms, lifecycle,
@@ -645,5 +645,10 @@ long key hints do not hide loading/saving/cancellation feedback.
 
 The N-key notes UI is not wired for either store yet; help and the action state
 this explicitly. Follow-up #44 depends on #20 and is an implementation task,
-not an impossible-work exception. Runtime verification and the remaining #6
-acceptance audit are recorded on that issue before completion is claimed.
+not an impossible-work exception. Runtime verification and the #6 acceptance
+audit are recorded on that issue. Complete dashboard refreshes read retained
+activity for every task, including deleted tasks, and can take minutes on a
+repository with substantial history. Use `td monitor --interval 1m` or a longer
+interval to reduce repeated API sweeps; overlapping dashboard sweeps are skipped,
+and rate-limit/read errors retain the prior display. No atomic repository
+snapshot or immediate refresh guarantee is provided.
