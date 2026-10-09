@@ -146,3 +146,28 @@ func TestWebScopeIndependentOfLauncher(t *testing.T) {
 		t.Fatal("repository web identities collide")
 	}
 }
+
+func TestScopeSeparatesWorktreesEvenOnSameBranch(t *testing.T) {
+	repo := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s %v", args, out, err)
+		}
+	}
+	run("init", "-b", "main", repo)
+	run("-C", repo, "-c", "user.email=test@example.com", "-c", "user.name=Fixture", "commit", "--allow-empty", "-m", "fixture")
+	worktree := filepath.Join(t.TempDir(), "other")
+	run("-C", repo, "worktree", "add", "--force", worktree, "main")
+	first, err := Resolve(context.Background(), repo, "owner/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Resolve(context.Background(), worktree, "owner/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Branch != second.Branch || first.Directory != second.Directory || first.Path == second.Path {
+		t.Fatalf("worktree collision: %+v %+v", first, second)
+	}
+}

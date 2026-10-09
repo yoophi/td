@@ -165,22 +165,56 @@ new field are written. Do not remove unknown fields or rewrite auxiliary bodies
 with an older client. Board history is shared editable metadata, not an immutable
 audit log or a claim that the named actor's identity is independently verified.
 
-## Device-local work bundles (implementation in progress, #15)
+## Device-local work bundles and context
 
-For `gh-issue`, `ws start`, `tag`, `untag`, `current`, `list`, and `end` use
-work bundles inside the device-local GitHub context file. The same repository,
-worktree, branch, and agent/context identity select the bundle. Listing does not
-combine another agent's bundles. A new session clears the active selection while
-preserving past bundles; an unfinished previous bundle is listed as abandoned.
-No SQLite issue database or GitHub carrier issue is created for these bundles.
+For `gh-issue`, all `ws`/`worksession` subcommands use bundles inside the
+device-local GitHub context file. Repository, worktree, branch and agent/context
+identity select the bundle. Listing does not combine another agent's bundles.
+A new session clears the active selection while preserving past bundles; an
+unfinished previous bundle is listed as abandoned. No SQLite issue database or
+GitHub carrier issue is created for a bundle.
 
-Tagging verifies all requested GitHub issue IDs before changing any issue. By
-default an open issue is started through the shared observed workflow transition;
-`--no-start` keeps its status unchanged. Repeated tags are idempotent. Multi-issue
-writes are not atomic: failures identify completed local IDs, preserve any remote
-success, and never retry automatically. Ending a bundle leaves issue claims and
-status unchanged and does not imply that a handoff was recorded.
+Tagging validates all requested issue IDs before changing any issue. By default
+an open issue is started through the observed shared workflow transition;
+`--no-start` keeps its status unchanged. Repeated tags are idempotent. Untagging
+accepts canonical/numeric IDs even when the remote issue is missing or deleted,
+so a stale local tag can be removed. Historical issue references remain available
+for log/handoff reads after untagging. Ending a bundle preserves claims and issue
+status and does not imply that a handoff was recorded.
 
-The remaining `ws log`, `handoff`, `show`, `session cleanup`, and usage/status
-work-bundle context integration are still tracked in #15/#21. Those existing
-SQLite paths continue to reject the GitHub store explicitly until implemented.
+`ws log` supports progress and the blocker/decision/hypothesis/tried/result flags,
+plus `--only` for a verified issue (which need not be tagged). Each target receives
+a GitHub activity comment with the bundle ID and a common operation ID. A log
+without any targets is device-local; tagging issues later does not upload that
+old local entry. Reads use authoritative GitHub comments plus explicitly local
+entries, including shared activity on previously untagged or soft-deleted issues.
+`ws show --full` displays all these entries; JSON exposes the complete activity
+array, while ordinary human `show` displays handoffs and `current` recent activity.
+
+`ws handoff` accepts repeated done/remaining/decision/uncertain flags, including
+file and stdin expansion. With no content it summarizes the bundle's logs,
+deduplicating operation IDs across issue copies. A remaining item tagged `(gh-N)`
+is sent only to that issue. Empty content is an explicit error. `--continue`
+retains the active bundle; otherwise a successful handoff ends it. `--review`
+uses the shared review policy for tagged in-progress issues. If comment creation
+or review fails, the bundle stays active and the error identifies already-written
+comments and operation IDs. Successful remote writes are retained; no automatic
+retry occurs. Multi-issue operations and local/remote updates are not atomic.
+
+`session cleanup --older-than DURATION` previews removal of stale identity
+history in the selected local context; `--force` performs it after checking the
+current local revision and re-reading held GitHub claims. A historical session
+with an unreleased open/in-progress claim is preserved. Current identity, other
+context files, local bundles/activities, and every GitHub comment and workflow
+record remain untouched. Positive durations are required. Claim checks are
+best-effort observations, not a distributed lock.
+
+`status`/`current`, `usage` (including quiet/compact/new-session), `whoami` and
+`resume` include the current bundle, preserved bundle history and its local/shared
+activity. Missing/deleted tagged IDs are reported separately; closed tags remain
+readable. Shared review queues follow the active review policy. Identity rotation
+and focus changes are committed only after successful remote reads and an
+unchanged local revision. JSON emits null for no active bundle and arrays for
+empty histories; unavailable remote history fails rather than masquerading as an
+empty result. All paths validate gh authentication, the configured repository and
+remote before proceeding, with no SQLite fallback.

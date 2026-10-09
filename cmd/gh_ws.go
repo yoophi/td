@@ -12,12 +12,13 @@ import (
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
+	"github.com/marcus/td/internal/workdir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 func init() {
-	for _, command := range []*cobra.Command{wsStartCmd, wsTagCmd, wsUntagCmd, wsCurrentCmd, wsListCmd, wsEndCmd} {
+	for _, command := range []*cobra.Command{wsStartCmd, wsTagCmd, wsUntagCmd, wsCurrentCmd, wsListCmd, wsEndCmd, wsLogCmd, wsHandoffCmd, wsShowCmd} {
 		local, original := command.RunE, command
 		command.RunE = func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(getBaseDir())
@@ -42,6 +43,15 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 	if original == wsTagCmd {
 		allowed = append(allowed, "no-start")
 	}
+	if original == wsLogCmd {
+		allowed = append(allowed, "blocker", "decision", "hypothesis", "tried", "result", "only")
+	}
+	if original == wsHandoffCmd {
+		allowed = append(allowed, "done", "remaining", "decision", "uncertain", "continue", "review")
+	}
+	if original == wsShowCmd {
+		allowed = append(allowed, "full")
+	}
 	var flagErr error
 	cmd.Flags().Visit(func(f *pflag.Flag) {
 		if !slices.Contains(allowed, f.Name) {
@@ -50,6 +60,12 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 	})
 	if flagErr != nil {
 		return flagErr
+	}
+	if (original == wsShowCmd || original == wsLogCmd) && len(args) != 1 {
+		return fmt.Errorf("ws %s requires one argument", original.Name())
+	}
+	if original == wsHandoffCmd && len(args) != 0 {
+		return fmt.Errorf("ws handoff takes no arguments")
 	}
 	if original == wsStartCmd && len(args) != 1 {
 		return fmt.Errorf("requires one work session name")
@@ -103,6 +119,16 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 		}
 		return nil
 	}
+	if original == wsLogCmd || original == wsHandoffCmd {
+		return writeGitHubWorkSessionActivity(original, cmd, args, client, scope, state)
+	}
+	if original == wsShowCmd {
+		ws, err := state.WorkSession(args[0])
+		if err != nil {
+			return err
+		}
+		return showGitHubWorkSession(cmd, client, ws, true)
+	}
 	if original == wsCurrentCmd {
 		if state.ActiveWorkSession == "" {
 			if jsonMode(cmd) {
@@ -115,22 +141,7 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 		if err != nil {
 			return err
 		}
-		issues := make([]ghstore.Record, 0, len(ws.Issues))
-		for _, id := range ws.Issues {
-			issue, err := client.Get(cmd.Context(), id)
-			if err != nil {
-				return fmt.Errorf("read tagged issue %s: %w", id, err)
-			}
-			issues = append(issues, *issue)
-		}
-		if jsonMode(cmd) {
-			return githubWSJSON(cmd, map[string]any{"work_session": ws.WorkSession, "issues": jsonList(ws.Issues), "issue_details": issues, "storage": "device-local"})
-		}
-		cmd.Printf("WORK SESSION: %s %q\nStarted: %s\n", ws.ID, ws.Name, output.FormatTimeAgo(ws.StartedAt))
-		for _, issue := range issues {
-			cmd.Printf("  %s  %s  %s  %s\n", issue.ID, issue.Title, issue.Status, issue.Priority)
-		}
-		return nil
+		return showGitHubWorkSession(cmd, client, ws, false)
 	}
 	if original == wsStartCmd || original == wsEndCmd {
 		snapshot, err := gitHubSnapshot(cmd.Context(), scope.Worktree)
@@ -143,7 +154,14 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 				return fmt.Errorf("local context changed; reread before retrying")
 			}
 			if original == wsStartCmd {
-				changed, err = current.StartWorkSession(args[0], snapshot.CommitSHA, scope.Worktree, "")
+				info, infoErr := workdir.WorktreeForPath(scope.Worktree)
+				if infoErr != nil {
+					return infoErr
+				}
+				changed, err = current.StartWorkSession(args[0], snapshot.CommitSHA, scope.Worktree, info.RepoRoot)
+				if err == nil {
+					changed.WorktreeID = info.WorktreeID
+				}
 			} else {
 				changed, err = current.EndWorkSession(snapshot.CommitSHA)
 			}
@@ -174,7 +192,17 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 	// Validate all requested IDs before starting any remote writes.
 	records := make([]*ghstore.Record, 0, len(args))
 	for _, id := range args {
-		record, err := client.Get(cmd.Context(), id)
+		var record *ghstore.Record
+		var err error
+		if original == wsUntagCmd {
+			n, numberErr := ghstore.Number(id)
+			if numberErr != nil {
+				return numberErr
+			}
+			record = &ghstore.Record{Issue: models.Issue{ID: fmt.Sprintf("gh-%d", n)}}
+		} else {
+			record, err = client.Get(cmd.Context(), id)
+		}
 		if err != nil {
 			return err
 		}
@@ -190,6 +218,9 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 		_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
 			if current.Session.ID != state.Session.ID || current.ActiveWorkSession != wsID {
 				return fmt.Errorf("active work session changed; reread before retrying")
+			}
+			if _, err := current.CurrentWorkSession(); err != nil {
+				return err
 			}
 			if original == wsUntagCmd {
 				return current.UntagWorkSession(record.ID)

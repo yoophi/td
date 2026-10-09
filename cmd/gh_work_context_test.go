@@ -23,7 +23,7 @@ func TestGitHubWorkContextTouchedDeletedHistory(t *testing.T) {
 	now := time.Now()
 	s := &serve.GitHubContextSnapshot{Data: &monitor.RefreshDataMsg{}, Records: []ghstore.Record{{Issue: models.Issue{ID: "gh-1", CreatorSession: "actor", DeletedAt: &now}}, {Issue: models.Issue{ID: "gh-2"}}, {Issue: models.Issue{ID: "gh-3", Status: models.StatusInProgress, ImplementerSession: "actor"}}}, Activities: map[string][]models.Activity{"gh-1": {{Kind: "handoff", SessionID: "actor", Done: []string{"saved"}}}, "gh-2": {{Kind: "log", SessionID: "actor"}}}}
 	p := githubWorkContextPayload(&ghcontext.State{Session: session.Session{ID: "actor"}, Focus: "gh-1"}, s)
-	if len(p["issues_touched"].([]string)) != 3 || len(p["in_progress"].([]models.Issue)) != 1 || !p["focus_missing"].(bool) || p["work_sessions_supported"].(bool) {
+	if len(p["issues_touched"].([]string)) != 3 || len(p["in_progress"].([]models.Issue)) != 1 || !p["focus_missing"].(bool) || !p["work_sessions_supported"].(bool) {
 		t.Fatal(p)
 	}
 	if len(p["history"].(map[string][]models.Activity)["gh-1"]) != 1 {
@@ -97,5 +97,24 @@ esac
 	}
 	if _, err = os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("SQLite DB created")
+	}
+}
+
+func TestGitHubWorkContextActiveBundleAndDeletedTag(t *testing.T) {
+	now := time.Now()
+	state := &ghcontext.State{Session: session.Session{ID: "actor"}, ActiveWorkSession: "ws-1", WorkSessions: []ghcontext.WorkSession{{WorkSession: models.WorkSession{ID: "ws-1", SessionID: "actor"}, Issues: []string{"gh-1", "gh-2", "gh-99"}, LocalActivities: []models.Activity{{Kind: "log", Message: "local", CreatedAt: now}}}}}
+	snapshot := &serve.GitHubContextSnapshot{Data: &monitor.RefreshDataMsg{}, Records: []ghstore.Record{{Issue: models.Issue{ID: "gh-1", Status: models.StatusClosed}}, {Issue: models.Issue{ID: "gh-2", DeletedAt: &now}}}, Activities: map[string][]models.Activity{"gh-2": {{Kind: "handoff", WorkSessionID: "ws-1", Done: []string{"shared"}, CreatedAt: now}}}}
+	p := githubWorkContextPayload(state, snapshot)
+	if p["work_session"].(*ghcontext.WorkSession).ID != "ws-1" || len(p["work_session_activities"].([]models.Activity)) != 2 || len(p["work_session_missing_issues"].([]string)) != 2 {
+		t.Fatal(p)
+	}
+	// Closed tagged issues remain visible; deleted/missing tags are reported.
+	if p["work_session_missing_issues"].([]string)[0] != "gh-2" {
+		t.Fatal(p)
+	}
+	state.ActiveWorkSession = ""
+	p = githubWorkContextPayload(state, snapshot)
+	if p["work_session"].(*ghcontext.WorkSession) != nil || len(p["work_session_activities"].([]models.Activity)) != 0 || len(p["work_session_history"].([]ghcontext.WorkSession)) != 1 {
+		t.Fatal("inactive bundle/context history", p)
 	}
 }

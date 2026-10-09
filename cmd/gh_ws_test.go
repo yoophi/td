@@ -35,6 +35,7 @@ if [ "$1" = auth ];then exit 0;fi
 printf 'HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'
 if [ "$4" = repos/owner/repo ];then printf '{"full_name":"owner/repo","has_issues":true}';exit 0;fi
 case "$6" in
+ 'repos/owner/repo/issues/1/comments?per_page=100') printf '[[]]';;
  repos/owner/repo/issues/1) printf '{"number":1,"title":"First","state":"open","body":""}';;
  *) echo 'unexpected request' >&2;exit 3;;
 esac

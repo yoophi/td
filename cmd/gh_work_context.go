@@ -53,6 +53,11 @@ func runGitHubWorkContext(original, cmd *cobra.Command, args []string, cfg *mode
 		}
 		candidate.Focus = target.ID
 	}
+	if candidate.ActiveWorkSession != "" {
+		if _, err := candidate.CurrentWorkSession(); err != nil {
+			return err
+		}
+	}
 	mode, err := resolveReviewPolicyMode(getBaseDir())
 	if err != nil {
 		return err
@@ -110,6 +115,13 @@ func runGitHubWorkContext(original, cmd *cobra.Command, args []string, cfg *mode
 	} else if candidate.Focus != "" {
 		cmd.Printf("SAVED FOCUS %s is missing or deleted; selection preserved.\n", output.SanitizeIssueText(candidate.Focus))
 	}
+	if candidate.ActiveWorkSession != "" {
+		ws, _ := candidate.CurrentWorkSession()
+		cmd.Printf("WORK SESSION: %s %q (issues %v)\n", ws.ID, output.SanitizeIssueText(ws.Name), ws.Issues)
+		for _, a := range payload["work_session_activities"].([]models.Activity) {
+			cmd.Printf("  %s [%s] %s\n", a.IssueID, a.Kind, output.SanitizeIssueText(a.Message))
+		}
+	}
 	touched := payload["issues_touched"].([]string)
 	if original == whoamiCmd {
 		cmd.Printf("STARTED: %s\n", candidate.Session.StartedAt.UTC().Format("2006-01-02T15:04:05Z07:00"))
@@ -162,7 +174,7 @@ func runGitHubWorkContext(original, cmd *cobra.Command, args []string, cfg *mode
 			cmd.Printf("HANDOFF %s (%s): done=%v remaining=%v decisions=%v uncertain=%v\n", candidate.Focus, a.CreatedAt.Format("2006-01-02T15:04:05Z07:00"), sanitizeContextItems(a.Done), sanitizeContextItems(a.Remaining), sanitizeContextItems(a.Decisions), sanitizeContextItems(a.Uncertain))
 		}
 	}
-	cmd.Println("Work-session context is not yet supported (#15); this is not an empty work-session result.")
+
 	quiet, _ := cmd.Flags().GetBool("quiet")
 	if !quiet {
 		cmd.Println("Issues/history are shared; identity/focus are device-local. Review queues are observations; trusted self-review needs acknowledgement. Use handoff, review, then approve.")
@@ -243,5 +255,62 @@ func githubWorkContextPayload(state *ghcontext.State, snapshot *serve.GitHubCont
 		}
 		return 0
 	})
-	return map[string]any{"session": state.Session.ID, "name": state.Session.Name, "branch": state.Session.Branch, "agent": state.Session.AgentType, "started": state.Session.StartedAt, "previous_session": state.Session.PreviousSessionID, "storage": "device-local", "saved_focus": state.Focus, "focused": d.FocusedIssue, "focus": d.FocusedIssue, "focus_missing": state.Focus != "" && d.FocusedIssue == nil, "issues_touched": touched, "issues": visible, "history": history, "workflow_history": workflowHistory, "review_history": reviewHistory, "handoffs": handoffs, "local_session_history": jsonList(state.History), "in_progress": myProgress, "all_in_progress": jsonList(d.InProgress), "reviewable": jsonList(d.TaskList.Reviewable), "ready_to_close": jsonList(d.TaskList.ReadyToClose), "pending_review": jsonList(d.TaskList.PendingReview), "pending_other": jsonList(d.TaskList.PendingOther), "needs_rework": jsonList(d.TaskList.NeedsRework), "blocked": jsonList(d.TaskList.Blocked), "ready": jsonList(d.TaskList.Ready), "ready_to_start": jsonList(d.TaskList.Ready), "review_workflows_supported": true, "work_sessions_supported": false, "work_session_context_error": "work-session context is not implemented; tracked by #15"}
+	return map[string]any{"session": state.Session.ID, "name": state.Session.Name, "branch": state.Session.Branch, "agent": state.Session.AgentType, "started": state.Session.StartedAt, "previous_session": state.Session.PreviousSessionID, "storage": "device-local", "saved_focus": state.Focus, "focused": d.FocusedIssue, "focus": d.FocusedIssue, "focus_missing": state.Focus != "" && d.FocusedIssue == nil, "issues_touched": touched, "issues": visible, "history": history, "workflow_history": workflowHistory, "review_history": reviewHistory, "handoffs": handoffs, "local_session_history": jsonList(state.History), "in_progress": myProgress, "all_in_progress": jsonList(d.InProgress), "reviewable": jsonList(d.TaskList.Reviewable), "ready_to_close": jsonList(d.TaskList.ReadyToClose), "pending_review": jsonList(d.TaskList.PendingReview), "pending_other": jsonList(d.TaskList.PendingOther), "needs_rework": jsonList(d.TaskList.NeedsRework), "blocked": jsonList(d.TaskList.Blocked), "ready": jsonList(d.TaskList.Ready), "ready_to_start": jsonList(d.TaskList.Ready), "review_workflows_supported": true, "work_sessions_supported": true, "work_session": currentGitHubWorkBundle(state), "work_session_history": jsonList(state.WorkSessions), "work_session_activities": githubWorkBundleSnapshotActivities(state, snapshot), "work_session_missing_issues": githubWorkBundleMissingIssues(state, snapshot)}
+}
+
+func currentGitHubWorkBundle(state *ghcontext.State) *ghcontext.WorkSession {
+	if state.ActiveWorkSession == "" {
+		return nil
+	}
+	ws, err := state.CurrentWorkSession()
+	if err != nil {
+		return nil
+	}
+	return ws
+}
+func githubWorkBundleSnapshotActivities(state *ghcontext.State, snapshot *serve.GitHubContextSnapshot) []models.Activity {
+	ws := currentGitHubWorkBundle(state)
+	if ws == nil {
+		return []models.Activity{}
+	}
+	result := slices.Clone(ws.LocalActivities)
+	for _, entries := range snapshot.Activities {
+		for _, a := range entries {
+			if a.WorkSessionID == ws.ID {
+				result = append(result, a)
+			}
+		}
+	}
+	slices.SortStableFunc(result, func(a, b models.Activity) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		if a.IssueID < b.IssueID {
+			return -1
+		}
+		if a.IssueID > b.IssueID {
+			return 1
+		}
+		return 0
+	})
+	return jsonList(result)
+}
+func githubWorkBundleMissingIssues(state *ghcontext.State, snapshot *serve.GitHubContextSnapshot) []string {
+	ws := currentGitHubWorkBundle(state)
+	if ws == nil {
+		return []string{}
+	}
+	visible := map[string]bool{}
+	for _, r := range snapshot.Records {
+		if r.DeletedAt == nil {
+			visible[r.ID] = true
+		}
+	}
+	result := []string{}
+	for _, id := range ws.Issues {
+		if !visible[id] {
+			result = append(result, id)
+		}
+	}
+	return result
 }

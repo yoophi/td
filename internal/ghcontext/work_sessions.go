@@ -14,7 +14,9 @@ import (
 // independently on GitHub; removing a local bundle must never remove comments.
 type WorkSession struct {
 	models.WorkSession
-	Issues []string `json:"issues"`
+	Issues          []string          `json:"issues"`
+	HistoryIssues   []string          `json:"history_issues,omitempty"`
+	LocalActivities []models.Activity `json:"local_activities,omitempty"`
 }
 
 func (s *State) WorkSession(id string) (*WorkSession, error) {
@@ -62,6 +64,9 @@ func (s *State) TagWorkSession(id string) error {
 	}
 	if !strings.HasPrefix(id, "gh-") || len(id) == 3 {
 		return fmt.Errorf("canonical GitHub issue ID required: %s", id)
+	}
+	if !slices.Contains(ws.HistoryIssues, id) {
+		ws.HistoryIssues = append(ws.HistoryIssues, id)
 	}
 	if !slices.Contains(ws.Issues, id) {
 		ws.Issues = append(ws.Issues, id)
