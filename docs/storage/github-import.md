@@ -114,6 +114,38 @@ Imported historical review records will not grant active approval in the target.
 The intended writes use best-effort conflict checks, not an atomic transaction
 or distributed lock. No uncertain creation will be automatically retried.
 
+## Provenance storage stage
+
+Internal provenance helpers preserve the complete portable source envelope in
+versioned native comments, including original GitHub body/author/activity/reviews
+and SQLite authors/timestamps/logs/handoffs/files. JSON bytes are split into
+32 KiB pieces and encoded as Base64 so embedded historical td markers cannot
+be interpreted as current activity or approvals. Each comment is bounded to a
+conservative 60000 bytes, and each set binds source identity/digest, destination
+ID, content digest, part index and total count. The same representation can
+archive the prior destination before a forced overwrite, but batch capture of
+that prior destination is still outstanding.
+
+Inventory is built from one complete bulk comment observation. The writer
+posts only missing pieces, checks destination content before/after the set,
+reports earlier successful parts and preserves the underlying failure cause.
+An uncertain POST is not retried: re-read comments to find a saved piece first.
+Incomplete, duplicate, misbound, edited or inconsistent pieces fail explicitly.
+Recovery verifies the assembled content digest before decoding the original
+source envelope; original author/time/review fields stay historical data.
+
+Tests cover large Unicode histories, embedded activity markers, original GitHub
+review/author data, loss of a response after a piece was saved, missing-only
+resume and a no-write repeat. Chunk replay makes two issue content checks per
+set, not one issue/comment lookup per piece. It still consumes one comment POST
+per missing piece and may encounter account/secondary API limits.
+
+These helpers are not yet connected to the normal CLI write path. Batch
+orchestration must capture prior destination data, verify complete source sets
+before final completion receipts and on later replays, and expose preserved
+history appropriately in reads/exports. Native provenance comments currently
+remain passive comments rather than active log/handoff/workflow events.
+
 The shared import envelope keeps SQLite's historical lenient deserialization;
 strict input and semantic validation apply to the GitHub importer. Local import
 behavior is covered by the existing SQLite import regression suite.
