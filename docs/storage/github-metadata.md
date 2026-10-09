@@ -164,3 +164,23 @@ Clients with strict v1 decoders must be upgraded before board carriers using the
 new field are written. Do not remove unknown fields or rewrite auxiliary bodies
 with an older client. Board history is shared editable metadata, not an immutable
 audit log or a claim that the named actor's identity is independently verified.
+
+## Device-local work bundles (implementation in progress, #15)
+
+For `gh-issue`, `ws start`, `tag`, `untag`, `current`, `list`, and `end` use
+work bundles inside the device-local GitHub context file. The same repository,
+worktree, branch, and agent/context identity select the bundle. Listing does not
+combine another agent's bundles. A new session clears the active selection while
+preserving past bundles; an unfinished previous bundle is listed as abandoned.
+No SQLite issue database or GitHub carrier issue is created for these bundles.
+
+Tagging verifies all requested GitHub issue IDs before changing any issue. By
+default an open issue is started through the shared observed workflow transition;
+`--no-start` keeps its status unchanged. Repeated tags are idempotent. Multi-issue
+writes are not atomic: failures identify completed local IDs, preserve any remote
+success, and never retry automatically. Ending a bundle leaves issue claims and
+status unchanged and does not imply that a handoff was recorded.
+
+The remaining `ws log`, `handoff`, `show`, `session cleanup`, and usage/status
+work-bundle context integration are still tracked in #15/#21. Those existing
+SQLite paths continue to reject the GitHub store explicitly until implemented.

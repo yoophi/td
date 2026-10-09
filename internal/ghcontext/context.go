@@ -20,10 +20,12 @@ import (
 )
 
 type State struct {
-	History []session.Session `json:"history,omitempty"`
-	Version int               `json:"version"`
-	Session session.Session   `json:"session"`
-	Focus   string            `json:"focus,omitempty"`
+	WorkSessions      []WorkSession     `json:"work_sessions,omitempty"`
+	ActiveWorkSession string            `json:"active_work_session,omitempty"`
+	History           []session.Session `json:"history,omitempty"`
+	Version           int               `json:"version"`
+	Session           session.Session   `json:"session"`
+	Focus             string            `json:"focus,omitempty"`
 }
 
 type Scope struct{ Directory, Path, Branch, Repo, Worktree string }
@@ -130,6 +132,7 @@ func (s Scope) NewSession(state *State) {
 	fp := session.GetAgentFingerprint()
 	state.Session = session.Session{ID: "ses_" + rand.Text(), PreviousSessionID: previous, Branch: s.Branch, AgentType: string(fp.Type), AgentPID: fp.PID, StartedAt: time.Now().UTC(), WorktreeRoot: s.Worktree, MatchContextID: os.Getenv("TD_CONTEXT_ID")}
 	state.Focus = ""
+	state.ActiveWorkSession = ""
 }
 
 // List returns device-local contexts for this repository. Shared issue activity
