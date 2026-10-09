@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/ghcontext"
@@ -53,6 +52,9 @@ func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.C
 	if unsupported != nil {
 		return unsupported
 	}
+	if original == statusCmd || original == usageCmd || original == whoamiCmd || original == resumeCmd {
+		return runGitHubWorkContext(original, cmd, args, cfg)
+	}
 	reader, err := issuestore.OpenReader(cmd.Context(), getBaseDir())
 	if err != nil {
 		return err
@@ -67,7 +69,7 @@ func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.C
 		return err
 	}
 	var focused *issuestore.Record
-	if original == focusCmd || original == resumeCmd {
+	if original == focusCmd {
 		if len(args) != 1 {
 			return fmt.Errorf("requires one issue ID")
 		}
@@ -76,20 +78,11 @@ func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.C
 			return err
 		}
 	}
-	var issues []issuestore.Record
-	if original == statusCmd || original == usageCmd {
-		issues, err = reader.List(cmd.Context(), false)
-		if err != nil {
-			return err
-		}
-		slices.SortFunc(issues, func(a, b issuestore.Record) int { return strings.Compare(string(a.Priority), string(b.Priority)) })
-	}
 	previousFocus := ""
 	state, err := scope.Update(cmd.Context(), func(state *ghcontext.State) error {
 		previousFocus = state.Focus
 		fresh, _ := cmd.Flags().GetBool("new")
-		newContext, _ := cmd.Flags().GetBool("new-session")
-		if fresh || newContext {
+		if fresh {
 			scope.NewSession(state)
 		}
 		if original == sessionNameCmd && len(args) > 0 {
@@ -119,16 +112,10 @@ func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.C
 		}
 		return nil
 	}
-	if (original == statusCmd || original == usageCmd) && state.Focus != "" {
-		focused, err = reader.Get(cmd.Context(), state.Focus)
-		if err != nil {
-			return fmt.Errorf("read focused issue %s: %w", state.Focus, err)
-		}
-	}
 	if jsonMode(cmd) {
 		payload := map[string]any{"action": original.Name(), "session": state.Session.ID, "name": state.Session.Name, "branch": state.Session.Branch, "agent": state.Session.AgentType, "started": state.Session.StartedAt, "previous_session": state.Session.PreviousSessionID, "storage": "device-local"}
 		switch original {
-		case focusCmd, resumeCmd:
+		case focusCmd:
 			payload["action"] = "focused"
 			payload["id"] = focused.ID
 			payload["status"] = focused.Status
@@ -136,10 +123,6 @@ func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.C
 		case unfocusCmd:
 			payload["action"] = "unfocused"
 			payload["previous_issue"] = previousFocus
-		case statusCmd, usageCmd:
-			payload["focus"] = focused
-			payload["issues"] = issues
-			payload["review_workflows_supported"] = false
 		}
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(payload)
 	}
@@ -147,25 +130,8 @@ func runGitHubSession(original, cmd *cobra.Command, args []string, cfg *models.C
 	if focused != nil {
 		cmd.Printf("FOCUSED %s [%s] %s\n", focused.ID, focused.Status, output.SanitizeIssueText(focused.Title))
 	}
-	if original == resumeCmd {
-		cmd.Print(output.FormatIssueLong(output.SanitizedForDisplay(&focused.Issue), nil, nil))
-	}
 	if original == unfocusCmd {
 		cmd.Println("UNFOCUSED")
-	}
-	if original == statusCmd || original == usageCmd {
-		compact, _ := cmd.Flags().GetBool("compact")
-		limit := len(issues)
-		if compact && limit > 5 {
-			limit = 5
-		}
-		for _, issue := range issues[:limit] {
-			cmd.Printf("%s [%s] %s: %s\n", issue.Priority, issue.Status, issue.ID, output.SanitizeIssueText(issue.Title))
-		}
-		quiet, _ := cmd.Flags().GetBool("quiet")
-		if !quiet {
-			cmd.Println("GitHub issues are shared; session identity/focus are device-local. Use start/unstart/block/unblock for shared claims. Reviews and work sessions are not yet supported.")
-		}
 	}
 	return nil
 }

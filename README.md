@@ -420,6 +420,21 @@ receive 503. Cancellation of a mutation does not prove that GitHub rejected it;
 inspect the remote issue before retrying an uncertain write. The server does
 not retry writes automatically. Stopped server instances cannot be restarted.
 
+GitHub `status` / `current`, `usage`, `whoami` and `resume` now share the HTTP
+monitor's observed review/dependency classification. CLI identity remains
+separate from the web session. Context JSON includes reviewable/ready-to-close,
+pending/stale, blocked and ready queues, all shared in-progress tasks, current
+session implementation tasks, touched issue IDs, full observed activity history,
+handoffs and device-local previous session history. Deleted issue history remains
+available for attribution; missing/deleted saved focus is explicitly reported and
+preserved, while closed focus remains readable. Resume and explicit session
+rotation commit their local change only after remote reads succeed, and reject
+concurrent local state changes. `-q` suppresses workflow guidance; compact output
+limits each queue to five rows. Reads can require many GitHub comment requests.
+Work-session context is still pending #15: JSON explicitly reports unsupported
+context and text explains it, rather than representing missing support as an
+empty work session. #21 remains in progress until that integration is complete.
+
 `td errors` / `td stats errors` and `td stats analytics` (`usage`) continue to
 use device-local `.todos/agent_errors.jsonl` and `.todos/command_usage.jsonl`.
 In GitHub projects their session IDs come from the branch/agent/worktree-scoped
