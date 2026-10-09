@@ -38,7 +38,7 @@ var SyncGateMap = []GateMapEntry{
 	{
 		Feature: SyncCLI.Name,
 		Surface: "cmd/project.go",
-		Notes:   "Gates sync-project management commands",
+		Notes:   "Gates SQLite td-sync project handlers; GitHub project selection and diagnostics remain registered independently, and unfinished GitHub management operations fail before SQLite/td-sync access",
 	},
 	{
 		Feature: SyncCLI.Name,

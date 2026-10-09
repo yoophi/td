@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/marcus/td/internal/db"
-	"github.com/marcus/td/internal/features"
 	"github.com/marcus/td/internal/output"
 	"github.com/marcus/td/internal/syncclient"
 	"github.com/marcus/td/internal/syncconfig"
@@ -21,6 +20,10 @@ var syncProjectCmd = &cobra.Command{
 	Use:     "sync-project",
 	Aliases: []string{"sp"},
 	Short:   "Manage sync projects",
+	Long: "Manage projects for the selected store. GitHub link/join require an explicit owner/repository\n" +
+		"matching an existing Git remote; --remote selects it without changing Git URLs.\n" +
+		"GitHub list validates only the configured repository. Repository/access management\n" +
+		"is still under implementation; those operations fail explicitly without td-sync fallback.",
 	GroupID: "system",
 }
 
@@ -29,6 +32,9 @@ var syncProjectCreateCmd = &cobra.Command{
 	Short: "Create a remote sync project",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		if !syncconfig.IsAuthenticated() {
 			output.Error("not logged in (run: td auth login)")
 			return fmt.Errorf("not authenticated")
@@ -73,6 +79,9 @@ var syncProjectLinkCmd = &cobra.Command{
 	Short: "Link local project to remote sync project",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		if !syncconfig.IsAuthenticated() {
 			output.Error("not logged in (run: td auth login)")
 			return fmt.Errorf("not authenticated")
@@ -136,8 +145,12 @@ var syncProjectLinkCmd = &cobra.Command{
 
 var syncProjectUnlinkCmd = &cobra.Command{
 	Use:   "unlink",
+	Args:  cobra.NoArgs,
 	Short: "Unlink local project from remote sync",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		baseDir := getBaseDir()
 		database, err := db.Open(baseDir)
 		if err != nil {
@@ -191,8 +204,12 @@ var syncProjectUnlinkCmd = &cobra.Command{
 
 var syncProjectListCmd = &cobra.Command{
 	Use:   "list",
+	Args:  cobra.NoArgs,
 	Short: "List remote sync projects",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		if !syncconfig.IsAuthenticated() {
 			output.Error("not logged in (run: td auth login)")
 			return fmt.Errorf("not authenticated")
@@ -223,8 +240,12 @@ var syncProjectListCmd = &cobra.Command{
 
 var syncProjectMembersCmd = &cobra.Command{
 	Use:   "members",
+	Args:  cobra.NoArgs,
 	Short: "List project members",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		if !syncconfig.IsAuthenticated() {
 			output.Error("not logged in (run: td auth login)")
 			return fmt.Errorf("not authenticated")
@@ -269,6 +290,9 @@ var syncProjectInviteCmd = &cobra.Command{
 	Short: "Add an existing account to the project by email",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		if !syncconfig.IsAuthenticated() {
 			output.Error("not logged in (run: td auth login)")
 			return fmt.Errorf("not authenticated")
@@ -315,6 +339,9 @@ var syncProjectKickCmd = &cobra.Command{
 	Short: "Remove a member from the project",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		if !syncconfig.IsAuthenticated() {
 			output.Error("not logged in (run: td auth login)")
 			return fmt.Errorf("not authenticated")
@@ -350,6 +377,9 @@ var syncProjectRoleCmd = &cobra.Command{
 	Short: "Change a member's role",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		if !syncconfig.IsAuthenticated() {
 			output.Error("not logged in (run: td auth login)")
 			return fmt.Errorf("not authenticated")
@@ -390,6 +420,9 @@ var syncProjectJoinCmd = &cobra.Command{
 	Short: "Join a remote sync project by name or ID",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if handled, err := githubSyncProject(cmd, args); handled {
+			return err
+		}
 		if !syncconfig.IsAuthenticated() {
 			output.Error("not logged in (run: td auth login)")
 			return fmt.Errorf("not authenticated")
@@ -478,6 +511,8 @@ var syncProjectJoinCmd = &cobra.Command{
 }
 
 func init() {
+	syncProjectLinkCmd.Flags().String("remote", "", "Existing Git remote for GitHub repository selection")
+	syncProjectJoinCmd.Flags().String("remote", "", "Existing Git remote for GitHub repository selection")
 	syncProjectCreateCmd.Flags().String("description", "", "Project description")
 	syncProjectLinkCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
 	syncProjectUnlinkCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
@@ -491,5 +526,5 @@ func init() {
 	syncProjectCmd.AddCommand(syncProjectInviteCmd)
 	syncProjectCmd.AddCommand(syncProjectKickCmd)
 	syncProjectCmd.AddCommand(syncProjectRoleCmd)
-	AddFeatureGatedCommand(features.SyncCLI.Name, syncProjectCmd)
+	rootCmd.AddCommand(syncProjectCmd)
 }
