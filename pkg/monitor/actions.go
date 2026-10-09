@@ -169,6 +169,9 @@ func loadMonitorApproveInputs(database *db.DB, baseDir, sessionID string, issue 
 // Works from modal view, CurrentWork panel, or TaskList panel
 // Accepts both in_progress and open (ready) issues
 func (m Model) markForReview() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.transitionRemoteIssue("review")
+	}
 	var issueID string
 	var issue *models.Issue
 
@@ -270,6 +273,9 @@ func (m Model) markForReview() (tea.Model, tea.Cmd) {
 // confirmDelete opens confirmation dialog for deleting selected issue
 // Works from both main panel selection and modal view
 func (m Model) confirmDelete() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.confirmRemoteDelete()
+	}
 	var issueID string
 	var issue *models.Issue
 
@@ -298,6 +304,9 @@ func (m Model) confirmDelete() (tea.Model, tea.Cmd) {
 
 // executeDelete performs the actual deletion after confirmation
 func (m Model) executeDelete() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.executeRemoteDelete()
+	}
 	if m.ConfirmIssueID == "" {
 		m.closeDeleteConfirmModal()
 		return m, nil
@@ -329,6 +338,9 @@ func (m Model) executeDelete() (tea.Model, tea.Cmd) {
 // confirmClose opens confirmation dialog for closing selected issue
 // Works from both main panel selection and modal view
 func (m Model) confirmClose() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.confirmRemoteClose()
+	}
 	var issueID string
 	var issue *models.Issue
 
@@ -373,6 +385,9 @@ func (m Model) confirmClose() (tea.Model, tea.Cmd) {
 
 // executeCloseWithReason performs the actual close after confirmation
 func (m Model) executeCloseWithReason() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.executeRemoteClose()
+	}
 	if m.CloseConfirmIssueID == "" {
 		m.closeCloseConfirmModal()
 		return m, nil
@@ -490,6 +505,9 @@ func (m Model) executeCloseWithReason() (tea.Model, tea.Cmd) {
 // reviewer_session / reviewed_at fields are preserved and closed_by_session is
 // stamped to the caller.
 func (m Model) approveIssue() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.prepareRemoteApprove()
+	}
 	// Must be in Task List panel
 	if m.ActivePanel != PanelTaskList {
 		return m, nil
@@ -702,6 +720,9 @@ func (m Model) logReviewSecurityEvent(issueID string, selfReview bool, attribute
 
 // reopenIssue reopens a closed issue
 func (m Model) reopenIssue() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.transitionRemoteIssue("reopen")
+	}
 	var issueID string
 	var issue *models.Issue
 
@@ -790,6 +811,14 @@ func (m Model) reopenIssue() (tea.Model, tea.Cmd) {
 // copyCurrentIssueToClipboard copies the current issue to clipboard as markdown
 // Works from modal view or list views (PanelCurrentWork, PanelTaskList)
 func (m Model) copyCurrentIssueToClipboard() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		if m.ClipboardPending {
+			return m, nil
+		}
+		if modal := m.CurrentModal(); modal == nil || modal.Issue == nil {
+			return m.copyRemoteIssue()
+		}
+	}
 	var issue *models.Issue
 	var epicTasks []models.Issue
 
@@ -910,6 +939,9 @@ func (m Model) sendToWorktree() (tea.Model, tea.Cmd) {
 // the expected conditions. See docs/plans/orchestrator-review-closure-plan.md
 // under "Monitor / TUI Changes > Actions" for the split.
 func (m Model) recordReviewAction() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.prepareRemoteRecordReview()
+	}
 	if m.ActivePanel != PanelTaskList {
 		return m, nil
 	}
@@ -971,6 +1003,9 @@ func (m Model) recordReviewAction() (tea.Model, tea.Cmd) {
 // in_review — this is the record-only path. Called from the confirm button
 // on the record-review modal.
 func (m Model) executeRecordReview() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.executeRemoteRecordReview()
+	}
 	if m.RecordReviewIssueID == "" {
 		m.closeRecordReviewModal()
 		return m, nil
@@ -1094,6 +1129,9 @@ func (m Model) executeRecordReview() (tea.Model, tea.Cmd) {
 // explicit, reason-bearing self-review acknowledgement, then closes using the
 // policy decision's audit fields.
 func (m Model) executeSelfReviewApprove() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.executeRemoteApproveConfirmation()
+	}
 	issueID := m.SelfReviewConfirmIssueID
 	// Read through the modal, not m.SelfReviewConfirmInput — see
 	// modal.Modal.InputValue for why the model's own field is always empty

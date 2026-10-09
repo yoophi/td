@@ -16,6 +16,12 @@ import (
 // openNewIssueForm opens the new issue form
 // If an epic is selected/open, auto-populates parent field
 func (m Model) openNewIssueForm() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil && (m.WorkflowPending || m.DeletePreparing || m.DeletePending || m.FormOpen) {
+		return m, nil
+	}
+	m.FormCreateAttempted = false
+	m.FormSaveError = nil
+	m.FormEditStore = nil
 	var parentID string
 
 	// Check if we're in a modal viewing an epic
@@ -37,11 +43,15 @@ func (m Model) openNewIssueForm() (tea.Model, tea.Cmd) {
 	m.FormState.Form.WithWidth(formWidth)
 
 	// Initialize the form and load autofill data
-	return m, tea.Batch(m.FormState.Form.Init(), loadAutofillData(m.DB))
+	autofill := m.loadFormAutofill()
+	return m, tea.Batch(m.FormState.Form.Init(), autofill)
 }
 
 // openEditIssueForm opens the edit form for the selected/modal issue
 func (m Model) openEditIssueForm() (tea.Model, tea.Cmd) {
+	if m.DataSource != nil {
+		return m.prepareRemoteEdit()
+	}
 	var issue *models.Issue
 
 	// If modal is open, edit that issue
@@ -79,11 +89,17 @@ func (m Model) openEditIssueForm() (tea.Model, tea.Cmd) {
 	m.FormState.Form.WithWidth(formWidth)
 
 	// Initialize the form and load autofill data
-	return m, tea.Batch(m.FormState.Form.Init(), loadAutofillData(m.DB))
+	autofill := m.loadFormAutofill()
+	return m, tea.Batch(m.FormState.Form.Init(), autofill)
 }
 
 // closeForm closes the form modal and clears state
 func (m *Model) closeForm() {
+	m.FormCreateAttempted = false
+	m.FormSaveError = nil
+	m.FormEditStore = nil
+	m.FormAutofillRequest++
+	m.FormAutofillError = nil
 	m.FormOpen = false
 	m.FormState = nil
 	m.FormScrollOffset = 0
@@ -93,6 +109,10 @@ func (m *Model) closeForm() {
 func (m Model) submitForm() (tea.Model, tea.Cmd) {
 	if m.FormState == nil {
 		return m, nil
+	}
+
+	if m.DataSource != nil {
+		return m.submitRemoteForm()
 	}
 
 	// Get issue data from form

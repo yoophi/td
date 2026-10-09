@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/syncclient"
 )
@@ -308,6 +309,7 @@ type RecentHandoff struct {
 
 // ModalEntry represents a single modal in the stack
 type ModalEntry struct {
+	Transitions map[string]MonitorTransitionStore
 	// Core
 	IssueID     string
 	SourcePanel Panel // Only meaningful for base entry (depth 1)
@@ -374,6 +376,11 @@ type TickMsg time.Time
 
 // RefreshDataMsg carries refreshed data
 type RefreshDataMsg struct {
+	Skipped        bool
+	remoteFilter   *monitorRefreshFilter
+	Transitions    map[string]MonitorTransitionStore `json:"-"`
+	observedIssues map[string]ghstore.Record
+	Error          error
 	FocusedIssue   *models.Issue
 	InProgress     []models.Issue
 	Activity       []ActivityItem
@@ -386,6 +393,7 @@ type RefreshDataMsg struct {
 
 // IssueDetailsMsg carries fetched issue details for the modal
 type IssueDetailsMsg struct {
+	Transitions       map[string]MonitorTransitionStore `json:"-"`
 	IssueID           string
 	Issue             *models.Issue
 	Handoff           *models.Handoff
@@ -439,12 +447,16 @@ type EditorFinishedMsg struct {
 
 // BoardsDataMsg carries fetched boards data
 type BoardsDataMsg struct {
-	Boards []models.Board
-	Error  error
+	Editors map[string]BoardEditorStore
+	Boards  []models.Board
+	Error   error
 }
 
 // BoardIssuesMsg carries issues for the current board
 type BoardIssuesMsg struct {
+	Board       *models.Board
+	MoveStore   BoardMoveStore
+	ViewStore   BoardViewStore
 	BoardID     string
 	Issues      []models.BoardIssueView
 	RejectedIDs map[string]bool // pre-computed to avoid sync query in Update
@@ -490,11 +502,14 @@ type boardEditorPreviewData struct {
 
 // BoardMode holds state for board mode view (when Task List is in board mode)
 type BoardMode struct {
-	Board        *models.Board           // Currently active board
-	Issues       []models.BoardIssueView // Issues in the board (for backlog view)
-	Cursor       int                     // Selected issue index (backlog view)
-	ScrollOffset int                     // Scroll offset for long lists (backlog view)
-	StatusFilter map[models.Status]bool  // Status filter (true = visible)
+	MoveStore      BoardMoveStore
+	ViewStore      BoardViewStore
+	ViewGeneration uint64
+	Board          *models.Board           // Currently active board
+	Issues         []models.BoardIssueView // Issues in the board (for backlog view)
+	Cursor         int                     // Selected issue index (backlog view)
+	ScrollOffset   int                     // Scroll offset for long lists (backlog view)
+	StatusFilter   map[models.Status]bool  // Status filter (true = visible)
 
 	// View mode toggle (swimlanes vs backlog)
 	ViewMode BoardViewMode // Current view mode

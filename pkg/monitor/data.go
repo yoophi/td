@@ -741,15 +741,13 @@ func ComputeBoardIssueCategories(database *db.DB, issues []models.BoardIssueView
 // (by sortMode). Also sets Category on each BoardIssueView.
 // If rejectedIDs is non-nil, it's passed through to avoid a synchronous DB query.
 func CategorizeBoardIssues(database *db.DB, issues []models.BoardIssueView, sessionID string, sortMode SortMode, rejectedIDs map[string]bool) TaskListData {
-	var data TaskListData
-
-	if len(issues) == 0 {
-		return data
-	}
-
-	// Compute categories (sets Category field on each issue)
 	ComputeBoardIssueCategories(database, issues, sessionID, rejectedIDs)
+	return GroupBoardIssues(issues, sortMode)
+}
 
+// GroupBoardIssues groups already classified cards without consulting SQLite.
+func GroupBoardIssues(issues []models.BoardIssueView, sortMode SortMode) TaskListData {
+	var data TaskListData
 	// Group by category (preserve BoardIssueView for position-aware sorting)
 	categories := map[TaskListCategory][]models.BoardIssueView{
 		CategoryReviewable:    {},

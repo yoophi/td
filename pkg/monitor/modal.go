@@ -700,6 +700,7 @@ func (m Model) openDeleteConfirmModal(issueID, issueTitle string) Model {
 
 // closeDeleteConfirmModal closes the delete confirmation modal and clears state
 func (m *Model) closeDeleteConfirmModal() {
+	m.DeleteStore = nil
 	m.ConfirmOpen = false
 	m.ConfirmAction = ""
 	m.ConfirmIssueID = ""
@@ -794,6 +795,7 @@ func (m Model) openCloseConfirmModal(issueID, issueTitle string) Model {
 
 // closeCloseConfirmModal closes the close confirmation modal and clears state
 func (m *Model) closeCloseConfirmModal() {
+	m.CloseStore = nil
 	m.CloseConfirmOpen = false
 	m.CloseConfirmIssueID = ""
 	m.CloseConfirmTitle = ""
@@ -899,6 +901,8 @@ func (m Model) openSelfReviewConfirmModal(issueID, issueTitle string) Model {
 // closeSelfReviewConfirmModal closes the self-review confirmation modal and
 // clears its state.
 func (m *Model) closeSelfReviewConfirmModal() {
+	m.ApproveStore = nil
+	m.ApprovalSelfReviewPrompt = false
 	m.SelfReviewConfirmOpen = false
 	m.SelfReviewConfirmIssueID = ""
 	m.SelfReviewConfirmTitle = ""
@@ -931,7 +935,11 @@ func (m *Model) createSelfReviewConfirmModal() *modal.Modal {
 
 	md.AddSection(modal.Text("\"" + displayTitle + "\""))
 	md.AddSection(modal.Spacer())
-	md.AddSection(modal.Text("You implemented this issue."))
+	if m.DataSource != nil && !m.ApprovalSelfReviewPrompt {
+		md.AddSection(modal.Text("Record the review reason or reviewer."))
+	} else {
+		md.AddSection(modal.Text("You implemented this issue."))
+	}
 	md.AddSection(modal.Spacer())
 	md.AddSection(modal.InputWithLabel("reviewed_by", "Reviewed by:", &m.SelfReviewConfirmInput,
 		modal.WithSubmitOnEnter(true),
@@ -943,7 +951,11 @@ func (m *Model) createSelfReviewConfirmModal() *modal.Modal {
 		modal.WithSubmitAction("confirm"),
 	))
 	md.AddSection(modal.Spacer())
-	md.AddSection(modal.Text("Name a reviewer, or leave blank and give a reason to record a self-review."))
+	if m.DataSource != nil && !m.ApprovalSelfReviewPrompt {
+		md.AddSection(modal.Text("Give the review reason; name a reviewer only if someone else reviewed it."))
+	} else {
+		md.AddSection(modal.Text("Name a reviewer, or leave blank and give a reason to record a self-review."))
+	}
 	md.AddSection(modal.Spacer())
 	md.AddSection(modal.Buttons(
 		modal.Btn(" Confirm ", "confirm"),
@@ -995,6 +1007,8 @@ func (m Model) openRecordReviewModal(issueID, issueTitle string) Model {
 
 // closeRecordReviewModal clears the record-review modal state.
 func (m *Model) closeRecordReviewModal() {
+	m.RecordStore = nil
+	m.RecordSelfReviewPrompt = false
 	m.RecordReviewOpen = false
 	m.RecordReviewIssueID = ""
 	m.RecordReviewTitle = ""

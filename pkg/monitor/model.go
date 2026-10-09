@@ -24,9 +24,29 @@ import (
 
 // Model is the main Bubble Tea model for the monitor TUI
 type Model struct {
+	RecordStore              MonitorRecordReviewStore
+	RecordSelfReviewPrompt   bool
+	ApproveStore             MonitorApproveStore
+	ApprovalSelfReviewPrompt bool
+	CloseStore               MonitorCloseStore
+	IssueTransitions         map[string]MonitorTransitionStore
+	WorkflowRequest          uint64
+	WorkflowPending          bool
+	DeleteStore              MonitorDeleteStore
+	DeleteRequest            uint64
+	DeletePreparing          bool
+	DeletePending            bool
+	DataSource               MonitorDataSource
+	BoardMoveRequest         uint64
+	BoardMovePending         bool
+	BoardVisitRequest        uint64
+	BoardVisitPending        bool
+	BoardViewRequest         uint64
+	BoardViewPending         bool
 	// Database and session
-	DB        *db.DB
-	SessionID string
+	DB          *db.DB
+	BoardSource BoardDataSource
+	SessionID   string
 
 	// Window dimensions
 	Width  int
@@ -155,9 +175,16 @@ type Model struct {
 	NotesMouseHandler *mouse.Handler // Mouse handler for notes modal
 
 	// Form modal state
-	FormOpen         bool
-	FormState        *FormState
-	FormScrollOffset int // Scroll offset for form modal when content overflows
+	ClipboardRequest    uint64
+	ClipboardPending    bool
+	FormCreateAttempted bool
+	FormSaveError       error
+	FormEditStore       MonitorEditStore
+	FormAutofillError   error
+	FormAutofillRequest uint64
+	FormOpen            bool
+	FormState           *FormState
+	FormScrollOffset    int // Scroll offset for form modal when content overflows
 
 	// Getting Started modal state
 	GettingStartedOpen         bool           // Whether getting started modal is open
@@ -182,12 +209,14 @@ type Model struct {
 	BoardPickerCursor       int
 	BoardPickerHover        int // -1=none, 0+=hovered board index (legacy, used by modal)
 	AllBoards               []models.Board
+	AllBoardEditors         map[string]BoardEditorStore
 	BoardPickerModal        *modal.Modal   // Declarative modal instance
 	BoardPickerMouseHandler *mouse.Handler // Mouse handler for board picker modal
 
 	// Board editor modal state (edit/create/info overlay on board picker)
 	BoardEditorOpen          bool
-	BoardEditorMode          string        // "edit", "create", "info" (builtin read-only)
+	BoardEditorMode          string // "edit", "create", "info" (builtin read-only)
+	BoardEditorWriter        BoardEditorStore
 	BoardEditorBoard         *models.Board // Board being edited (nil for create)
 	BoardEditorNameInput     *textinput.Model
 	BoardEditorQueryInput    *textarea.Model
@@ -314,6 +343,10 @@ func NewModel(database *db.DB, sessionID string, interval time.Duration, ver str
 		theme:             theme,
 		styles:            newMonitorStyles(theme),
 		modalRender:       &modalRenderCache{},
+	}
+	// Remote models own a cancellation runtime and never construct td-sync.
+	if database == nil {
+		return m
 	}
 	syncInterval := syncconfig.GetAutoSyncInterval()
 	syncOpts := SyncOptions{Interval: syncInterval}
@@ -585,7 +618,16 @@ func (m Model) Init() tea.Cmd {
 // restoreLastViewedBoard returns a command that restores the last viewed board on launch
 func (m Model) restoreLastViewedBoard() tea.Cmd {
 	return func() tea.Msg {
-		board, err := m.DB.GetLastViewedBoard()
+		var board *models.Board
+		var err error
+		if m.BoardSource != nil {
+			board, err = m.BoardSource.LastViewedBoard()
+		} else {
+			board, err = m.DB.GetLastViewedBoard()
+		}
+		if err != nil && m.BoardSource != nil {
+			return BoardsDataMsg{Error: err}
+		}
 		if err != nil || board == nil {
 			return nil // No last viewed board, stay in panel mode
 		}
@@ -628,6 +670,25 @@ type RestoreFilterMsg struct {
 
 // Update implements tea.Model
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case MonitorClipboardMsg:
+		return m.handleRemoteClipboard(msg)
+	case MonitorFormSavedMsg:
+		return m.handleRemoteFormSaved(msg)
+	case MonitorEditPreparedMsg:
+		return m.handleRemoteEditPrepared(msg)
+	case MonitorRecordReviewPreparedMsg:
+		return m.handleRemoteRecordPrepared(msg)
+	case MonitorApprovalPreparedMsg:
+		return m.handleRemoteApprovalPrepared(msg)
+	case MonitorTransitionedMsg:
+		return m.handleRemoteTransitioned(msg)
+	case MonitorDeletePreparedMsg:
+		return m.handleRemoteDeletePrepared(msg)
+	case MonitorDeletedMsg:
+		return m.handleRemoteDeleted(msg)
+	}
+
 	if _, ok := msg.(startMonitorSyncMsg); ok {
 		return m, m.syncWaitCmd()
 	}
@@ -780,6 +841,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// to prevent the poll chain from breaking. Do not add a TickMsg case here.
 
 	case RefreshDataMsg:
+		if msg.Skipped {
+			return m, nil
+		}
+		if f := msg.remoteFilter; f != nil && (f.search != m.SearchQuery || f.includeClosed != m.IncludeClosed || f.sort != m.SortMode) {
+			// Never overwrite a newer filter with an earlier request's rows.
+			return m, m.fetchData()
+		}
+		if msg.Error != nil {
+			m.StatusMessage = "Error refreshing monitor: " + msg.Error.Error()
+			m.StatusIsError = true
+			return m, nil
+		}
+		m.IssueTransitions = msg.Transitions
 		m.FocusedIssue = msg.FocusedIssue
 		m.InProgress = msg.InProgress
 		m.Activity = msg.Activity
@@ -805,6 +879,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			modal.Loading = false
 			modal.Error = msg.Error
+			if msg.Error != nil {
+				return m, nil
+			}
+			modal.Transitions = msg.Transitions
 			modal.Issue = msg.Issue
 			modal.Handoff = msg.Handoff
 			modal.Logs = msg.Logs
@@ -998,6 +1076,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case BoardsDataMsg:
 		m.AllBoards = msg.Boards
+		m.AllBoardEditors = msg.Editors
 		if msg.Error != nil {
 			m.StatusMessage = "Error loading boards: " + msg.Error.Error()
 			m.StatusIsError = true
@@ -1012,17 +1091,101 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case BoardMovedMsg:
+		if !m.BoardMovePending || msg.Request != m.BoardMoveRequest {
+			return m, nil
+		}
+		m.BoardMovePending = false
+		if msg.Error != nil {
+			m.StatusMessage = "Error moving board task: " + msg.Error.Error()
+			m.StatusIsError = true
+			return m, nil
+		}
+		m.StatusMessage = "Board task moved"
+		m.StatusIsError = false
+		if m.BoardMode.Board == nil || m.BoardMode.Board.ID != msg.BoardID {
+			return m, nil
+		}
+		m.BoardMode.PendingSelectionID = msg.IssueID
+		m.BoardMode.MoveStore = nil
+		return m, m.fetchBoardIssues(msg.BoardID)
+	case BoardVisitedMsg:
+		if !m.BoardVisitPending || msg.Request != m.BoardVisitRequest {
+			return m, nil
+		}
+		m.BoardVisitPending = false
+		if msg.Error != nil {
+			m.StatusMessage = "Error saving last viewed board: " + msg.Error.Error()
+			m.StatusIsError = true
+		} else {
+			m.StatusMessage = "Last viewed board saved"
+			m.StatusIsError = false
+		}
+		if m.BoardMode.Board == nil || m.BoardMode.Board.ID != msg.BoardID {
+			return m, nil
+		}
+		if msg.Error == nil {
+			m.BoardMode.Board = msg.Board
+		}
+		return m, m.fetchBoardIssues(msg.BoardID)
+	case BoardViewSavedMsg:
+		if !m.BoardViewPending || msg.Request != m.BoardViewRequest {
+			return m, nil
+		}
+		m.BoardViewPending = false
+		if msg.Error != nil {
+			m.StatusMessage = "Error saving board view: " + msg.Error.Error()
+			m.StatusIsError = true
+			return m, nil
+		}
+		m.StatusMessage = "Board view saved"
+		m.StatusIsError = false
+		if m.BoardMode.Board == nil || m.BoardMode.Board.ID != msg.BoardID {
+			return m, nil
+		}
+		if m.BoardMode.ViewGeneration != msg.Generation {
+			return m, m.fetchBoardIssues(msg.BoardID)
+		}
+		m.BoardMode.Board = msg.Board
+		m.BoardMode.ViewMode = BoardViewModeFromString(msg.Board.ViewMode)
+		m.BoardMode.ViewStore = msg.Store
+		m.BoardMode.ViewGeneration++
+		if msg.SelectedID != "" {
+			for i, v := range m.BoardMode.Issues {
+				if v.Issue.ID == msg.SelectedID {
+					m.BoardMode.Cursor = i
+				}
+			}
+			for i, v := range m.BoardMode.SwimlaneRows {
+				if v.Issue.ID == msg.SelectedID {
+					m.BoardMode.SwimlaneCursor = i
+				}
+			}
+		}
+		return m, nil
 	case BoardIssuesMsg:
 		if m.BoardMode.Board != nil && m.BoardMode.Board.ID == msg.BoardID {
 			if msg.Error != nil {
 				m.StatusMessage = "Error loading board issues: " + msg.Error.Error()
 				m.StatusIsError = true
+				return m, nil
 			}
+			if m.BoardSource != nil && msg.Board != nil {
+				m.BoardMode.Board = msg.Board
+				m.BoardMode.ViewMode = BoardViewModeFromString(msg.Board.ViewMode)
+			}
+			m.BoardMode.MoveStore = msg.MoveStore
+			m.BoardMode.ViewStore = msg.ViewStore
+			m.BoardMode.ViewGeneration++
 			// Apply search filter to board issues (for both backlog and swimlanes)
 			filteredIssues := filterBoardIssuesByQuery(msg.Issues, m.SearchQuery)
 			m.BoardMode.Issues = filteredIssues
 			// Build swimlane data using filtered issues
-			m.BoardMode.SwimlaneData = CategorizeBoardIssues(m.DB, filteredIssues, m.SessionID, m.SortMode, msg.RejectedIDs)
+			if m.BoardSource != nil {
+				m.BoardMode.SwimlaneData = GroupBoardIssues(filteredIssues, m.SortMode)
+			} else {
+				m.BoardMode.SwimlaneData = CategorizeBoardIssues(m.DB, filteredIssues, m.SessionID, m.SortMode, msg.RejectedIDs)
+			}
 			m.BoardMode.SwimlaneRows = BuildSwimlaneRows(m.BoardMode.SwimlaneData)
 
 			// Clamp kanban cursor if the kanban view is open (data may have changed)
@@ -1151,6 +1314,9 @@ func (m Model) scheduleTick() tea.Cmd {
 // fetchData returns a command that fetches all data and sends a RefreshDataMsg
 func (m Model) fetchData() tea.Cmd {
 	return func() tea.Msg {
+		if m.DataSource != nil {
+			return m.DataSource.Fetch(m.SearchQuery, m.IncludeClosed, m.SortMode)
+		}
 		data := FetchData(m.DB, m.SessionID, m.StartedAt, m.SearchQuery, m.IncludeClosed, m.SortMode)
 		return data
 	}
@@ -1169,6 +1335,12 @@ func (m Model) fetchModalDataIfOpen() tea.Cmd {
 // fetchIssueDetails returns a command that fetches issue details for the modal
 func (m Model) fetchIssueDetails(issueID string) tea.Cmd {
 	return func() tea.Msg {
+		if m.DataSource != nil {
+			if source, ok := m.DataSource.(MonitorDetailSource); ok {
+				return source.Details(issueID)
+			}
+			return IssueDetailsMsg{IssueID: issueID, Error: fmt.Errorf("monitor detail source unavailable")}
+		}
 		msg := IssueDetailsMsg{IssueID: issueID}
 
 		// Fetch issue
@@ -1246,6 +1418,12 @@ func (m Model) fetchIssueDetails(issueID string) tea.Cmd {
 // fetchStats returns a command that fetches stats data for the stats modal
 func (m Model) fetchStats() tea.Cmd {
 	return func() tea.Msg {
+		if m.DataSource != nil {
+			if source, ok := m.DataSource.(MonitorStatsSource); ok {
+				return source.Stats()
+			}
+			return StatsDataMsg{Error: fmt.Errorf("monitor statistics source unavailable")}
+		}
 		return FetchStats(m.DB)
 	}
 }
@@ -1253,6 +1431,12 @@ func (m Model) fetchStats() tea.Cmd {
 // fetchHandoffs returns a command that fetches all handoffs
 func (m Model) fetchHandoffs() tea.Cmd {
 	return func() tea.Msg {
+		if m.DataSource != nil {
+			if source, ok := m.DataSource.(MonitorHandoffsSource); ok {
+				return source.Handoffs()
+			}
+			return HandoffsDataMsg{Error: fmt.Errorf("monitor handoffs source unavailable")}
+		}
 		handoffs, err := m.DB.GetRecentHandoffs(50, time.Time{})
 		return HandoffsDataMsg{Data: handoffs, Error: err}
 	}

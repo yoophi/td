@@ -614,3 +614,16 @@ errors and are never automatically retried. Refresh and inspect the carrier
 before deciding whether to retry. Read-after-list propagation delays can occur.
 CLI mutations with `--json` emit the confirmed board object; list and show emit
 bare arrays. The wider monitor TUI integration is tracked separately within #6.
+
+Monitor integration is in progress (#6). `NewGitHubModel` provides a separate
+remote model constructor with verified configured origin, actual device-local
+actor/focus, and owner cancellation. It never constructs SQLite or td-sync.
+Monitor-only store adapters retain observed revisions for forms, lifecycle,
+reviews, deletion, board editing, ordering, details and summaries. Slow dashboard
+polls do not queue overlapping API sweeps; responses for superseded filters do
+not replace the current display. Failed reads retain the previous dashboard.
+
+The CLI and embedded entry points are not yet switched to this constructor.
+Before activating them, board visits/view choices and monitor screen settings
+must be moved to device-local preferences, all keybindings audited, and actual
+TUI behavior verified. These adapters and their tests do not prove #6 complete.

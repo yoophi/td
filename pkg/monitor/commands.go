@@ -223,6 +223,16 @@ func (m Model) handleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Handle autofill data loaded
 	if afMsg, ok := msg.(AutofillResultMsg); ok {
+		if !m.FormOpen || afMsg.Request != m.FormAutofillRequest {
+			return m, nil
+		}
+		if afMsg.Error != nil {
+			m.FormAutofillError = afMsg.Error
+			m.StatusMessage = "Error loading form autocomplete: " + afMsg.Error.Error()
+			m.StatusIsError = true
+			return m, nil
+		}
+		m.FormAutofillError = nil
 		if m.FormState != nil {
 			m.FormState.AutofillAll = afMsg.Items
 			var epics []AutofillItem
@@ -1518,7 +1528,8 @@ func (m Model) executeCommand(cmd keymap.Command) (tea.Model, tea.Cmd) {
 			m.FormState.ToggleExtended()
 			// Load autofill data when extended fields become visible (if not already loaded)
 			if m.FormState.ShowExtended && len(m.FormState.AutofillAll) == 0 {
-				return m, loadAutofillData(m.DB)
+				autofill := m.loadFormAutofill()
+				return m, autofill
 			}
 		}
 		return m, nil
@@ -1604,6 +1615,10 @@ func (m Model) openBoardPicker() (Model, tea.Cmd) {
 
 // selectBoard selects the currently highlighted board and activates board mode
 func (m Model) selectBoard() (Model, tea.Cmd) {
+	if m.BoardSource != nil && m.BoardVisitPending {
+		m.StatusMessage = "Last-viewed board save is still running"
+		return m, nil
+	}
 	if !m.BoardPickerOpen || len(m.AllBoards) == 0 {
 		return m, nil
 	}
@@ -1615,6 +1630,9 @@ func (m Model) selectBoard() (Model, tea.Cmd) {
 	m.TaskListMode = TaskListModeBoard
 	m.ActivePanel = PanelTaskList // Focus the Task List panel
 	m.BoardMode.Board = &board
+	m.BoardMode.ViewStore = nil
+	m.BoardMode.MoveStore = nil
+	m.BoardMode.ViewGeneration++
 	m.BoardMode.Cursor = 0
 	m.BoardMode.ScrollOffset = 0
 	m.BoardMode.SwimlaneCursor = 0
@@ -1625,8 +1643,15 @@ func (m Model) selectBoard() (Model, tea.Cmd) {
 	}
 	m.closeBoardPickerModal()
 
+	if m.BoardSource != nil {
+		m.BoardMode.Issues = nil
+		m.BoardMode.SwimlaneData = TaskListData{}
+		m.BoardMode.SwimlaneRows = nil
+		return m.recordRemoteBoardVisit(board.ID)
+	}
+
 	// Update last viewed (skip if DB not initialized, e.g., in tests)
-	if m.DB != nil {
+	if m.BoardSource == nil && m.DB != nil {
 		if err := m.DB.UpdateBoardLastViewed(board.ID); err != nil {
 			m.StatusMessage = "Error: " + err.Error()
 			m.StatusIsError = true
@@ -1748,6 +1773,10 @@ func (m Model) cycleBoardStatusFilter() (Model, tea.Cmd) {
 
 // toggleBoardView toggles between swimlanes and backlog view modes
 func (m Model) toggleBoardView() (Model, tea.Cmd) {
+	if m.BoardSource != nil {
+		return m.toggleRemoteBoardView()
+	}
+
 	if m.TaskListMode != TaskListModeBoard || m.BoardMode.Board == nil {
 		return m, nil
 	}
@@ -1810,6 +1839,9 @@ func (m Model) toggleBoardView() (Model, tea.Cmd) {
 
 // moveIssueInBoard moves the current issue up or down in the board
 func (m Model) moveIssueInBoard(direction int) (Model, tea.Cmd) {
+	if m.BoardSource != nil {
+		return m.moveRemoteBoard(direction, "")
+	}
 	if m.TaskListMode != TaskListModeBoard || m.BoardMode.Board == nil {
 		return m, nil
 	}
@@ -1822,6 +1854,9 @@ func (m Model) moveIssueInBoard(direction int) (Model, tea.Cmd) {
 
 // moveIssueInBacklog moves the current issue up or down in the backlog view
 func (m Model) moveIssueInBacklog(direction int) (Model, tea.Cmd) {
+	if m.BoardSource != nil {
+		return m.moveRemoteBoard(direction, "")
+	}
 	if len(m.BoardMode.Issues) == 0 {
 		return m, nil
 	}
@@ -1906,6 +1941,9 @@ func (m Model) moveIssueInBacklog(direction int) (Model, tea.Cmd) {
 
 // moveIssueInSwimlane moves the current issue up or down within its swimlane (category)
 func (m Model) moveIssueInSwimlane(direction int) (Model, tea.Cmd) {
+	if m.BoardSource != nil {
+		return m.moveRemoteBoard(direction, "")
+	}
 	if len(m.BoardMode.SwimlaneRows) == 0 {
 		return m, nil
 	}
@@ -2011,6 +2049,9 @@ func (m Model) moveIssueInSwimlane(direction int) (Model, tea.Cmd) {
 // moveIssueToTop moves the selected issue to position 1 (top of positioned issues).
 // Works in both swimlanes and backlog views. For swimlanes, only moves within same category.
 func (m Model) moveIssueToTop() (Model, tea.Cmd) {
+	if m.BoardSource != nil {
+		return m.moveRemoteBoard(0, "top")
+	}
 	if m.TaskListMode != TaskListModeBoard || m.BoardMode.Board == nil {
 		return m, nil
 	}
@@ -2080,6 +2121,9 @@ func (m Model) moveIssueToTop() (Model, tea.Cmd) {
 // moveIssueToBottom moves the selected issue to the end of positioned issues.
 // Works in both swimlanes and backlog views. For swimlanes, only moves within same category.
 func (m Model) moveIssueToBottom() (Model, tea.Cmd) {
+	if m.BoardSource != nil {
+		return m.moveRemoteBoard(0, "bottom")
+	}
 	if m.TaskListMode != TaskListModeBoard || m.BoardMode.Board == nil {
 		return m, nil
 	}
@@ -2174,6 +2218,14 @@ func (m Model) findCategoryEnd(cursor int) int {
 // fetchBoards returns a command that fetches all boards
 func (m Model) fetchBoards() tea.Cmd {
 	return func() tea.Msg {
+		if source, ok := m.BoardSource.(BoardEditorSource); ok {
+			boards, editors, err := source.ListBoardsForEditing()
+			return BoardsDataMsg{Boards: boards, Editors: editors, Error: err}
+		}
+		if m.BoardSource != nil {
+			boards, err := m.BoardSource.ListBoards()
+			return BoardsDataMsg{Boards: boards, Error: err}
+		}
 		boards, err := m.DB.ListBoards()
 		return BoardsDataMsg{Boards: boards, Error: err}
 	}
@@ -2193,6 +2245,9 @@ func (m Model) fetchBoardIssues(boardID string) tea.Cmd {
 	}
 
 	return func() tea.Msg {
+		if m.BoardSource != nil {
+			return m.BoardSource.LoadBoard(boardID, statusFilter)
+		}
 		// Get the board to check if it has a query
 		board, err := m.DB.GetBoard(boardID)
 		if err != nil {

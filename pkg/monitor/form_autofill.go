@@ -31,7 +31,9 @@ type AutofillItem struct {
 
 // AutofillResultMsg carries loaded issues for the autocomplete dropdown.
 type AutofillResultMsg struct {
-	Items []AutofillItem
+	Items   []AutofillItem
+	Error   error
+	Request uint64
 }
 
 // loadAutofillData fetches all non-closed issues from the database for autocomplete.
@@ -47,7 +49,7 @@ func loadAutofillData(database *db.DB) tea.Cmd {
 			Limit: 500,
 		})
 		if err != nil {
-			return AutofillResultMsg{Items: nil}
+			return AutofillResultMsg{Error: err}
 		}
 
 		items := make([]AutofillItem, len(issues))
@@ -340,4 +342,24 @@ func (m Model) renderFormAutofillDropdown() string {
 	lines = append(lines, styles.subtle.Render("  ↑/↓ navigate  Enter select"))
 
 	return strings.Join(lines, "\n")
+}
+
+// loadFormAutofill pins the reply to this form instance, including SQLite reads.
+func (m *Model) loadFormAutofill() tea.Cmd {
+	m.FormAutofillRequest++
+	m.FormAutofillError = nil
+	request := m.FormAutofillRequest
+	if m.DataSource != nil {
+		source, ok := m.DataSource.(MonitorAutofillSource)
+		return func() tea.Msg {
+			result := AutofillResultMsg{Error: fmt.Errorf("GitHub monitor autocomplete reader unavailable")}
+			if ok {
+				result = source.Autofill()
+			}
+			result.Request = request
+			return result
+		}
+	}
+	load := loadAutofillData(m.DB)
+	return func() tea.Msg { result := load().(AutofillResultMsg); result.Request = request; return result }
 }

@@ -1793,6 +1793,15 @@ func (m Model) renderFormModal() string {
 		}
 	}
 
+	// Keep autocomplete errors visible inside the form, including embedded mode.
+	if m.FormAutofillError != nil {
+		formView = styles.modalError.Render("Error loading autocomplete: "+m.FormAutofillError.Error()) + "\n\n" + formView
+	}
+
+	if m.FormSaveError != nil {
+		formView = styles.modalError.Render("Error saving form: "+m.FormSaveError.Error()) + "\n\n" + formView
+	}
+
 	// Combine form (with inline dropdown if any) and footer
 	inner := lipgloss.JoinVertical(lipgloss.Left, formView, "", buttons, "", footer)
 

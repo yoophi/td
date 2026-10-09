@@ -24,6 +24,7 @@ func (m Model) openBoardEditor() (Model, tea.Cmd) {
 	}
 	board := m.AllBoards[m.BoardPickerCursor]
 	m = m.openBoardEditorModal(&board)
+	m.BoardEditorWriter = m.AllBoardEditors[board.ID]
 	// Trigger initial query preview if board has a query
 	if board.Query != "" {
 		return m, m.boardEditorQueryPreview(board.Query)
@@ -41,6 +42,7 @@ func (m Model) openBoardEditorCreate() (Model, tea.Cmd) {
 // board == nil means create mode; non-nil means edit (or info for builtin).
 func (m Model) openBoardEditorModal(board *models.Board) Model {
 	m.BoardEditorOpen = true
+	m.BoardEditorWriter = nil
 	m.BoardEditorBoard = board
 	m.BoardEditorDeleteConfirm = false
 	m.BoardEditorPreview = &boardEditorPreviewData{}
@@ -91,9 +93,13 @@ func (m Model) openBoardEditorModal(board *models.Board) Model {
 
 // closeBoardEditorModal closes the board editor modal
 func (m *Model) closeBoardEditorModal() {
+	if source, ok := m.BoardSource.(interface{ CancelPreview() }); ok {
+		source.CancelPreview()
+	}
 	m.BoardEditorOpen = false
 	m.BoardEditorMode = ""
 	m.BoardEditorBoard = nil
+	m.BoardEditorWriter = nil
 	m.BoardEditorNameInput = nil
 	m.BoardEditorQueryInput = nil
 	m.BoardEditorModal = nil
@@ -339,6 +345,7 @@ func (m *Model) createBoardEditorDeleteConfirmModal() *modal.Modal {
 
 // executeBoardEditorSave saves or creates the board
 func (m Model) executeBoardEditorSave() (Model, tea.Cmd) {
+
 	if m.BoardEditorNameInput == nil || m.BoardEditorQueryInput == nil {
 		return m, nil
 	}
@@ -351,7 +358,39 @@ func (m Model) executeBoardEditorSave() (Model, tea.Cmd) {
 		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg { return ClearStatusMsg{} })
 	}
 
+	if m.BoardSource != nil && queryStr != "" {
+		parsed, err := query.Parse(queryStr)
+		if err != nil || len(parsed.Validate()) > 0 {
+			m.StatusMessage = "Invalid board TDQ query"
+			m.StatusIsError = true
+			return m, nil
+		}
+	}
 	isNew := m.BoardEditorMode == "create"
+	if m.BoardSource != nil {
+		if isNew {
+			source, ok := m.BoardSource.(BoardEditorSource)
+			if !ok {
+				m.StatusMessage = "Board creation store unavailable"
+				m.StatusIsError = true
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				b, err := source.CreateBoard(name, queryStr)
+				return BoardEditorSaveResultMsg{Board: b, IsNew: true, Error: err}
+			}
+		}
+		editor := m.BoardEditorWriter
+		if editor == nil {
+			m.StatusMessage = "Board observation unavailable; refresh the picker and reopen the editor"
+			m.StatusIsError = true
+			return m, nil
+		}
+		return m, func() tea.Msg {
+			b, err := editor.Save(name, queryStr)
+			return BoardEditorSaveResultMsg{Board: b, Error: err}
+		}
+	}
 
 	return m, func() tea.Msg {
 		if isNew {
@@ -376,10 +415,20 @@ func (m Model) executeBoardEditorSave() (Model, tea.Cmd) {
 
 // executeBoardEditorDelete deletes the board
 func (m Model) executeBoardEditorDelete() (Model, tea.Cmd) {
+
 	if m.BoardEditorBoard == nil {
 		return m, nil
 	}
 	boardID := m.BoardEditorBoard.ID
+	if m.BoardSource != nil {
+		editor := m.BoardEditorWriter
+		if editor == nil {
+			m.StatusMessage = "Board observation unavailable; refresh the picker and reopen the editor"
+			m.StatusIsError = true
+			return m, nil
+		}
+		return m, func() tea.Msg { return BoardEditorDeleteResultMsg{BoardID: boardID, Error: editor.Delete()} }
+	}
 
 	return m, func() tea.Msg {
 		err := m.DB.DeleteBoardLogged(boardID, m.SessionID)
@@ -399,6 +448,16 @@ func (m Model) boardEditorDebouncedPreview(queryStr string) tea.Cmd {
 
 // boardEditorQueryPreview returns a command that executes the query for live preview
 func (m Model) boardEditorQueryPreview(queryStr string) tea.Cmd {
+	if m.BoardSource != nil {
+		source, ok := m.BoardSource.(BoardQueryPreviewSource)
+		return func() tea.Msg {
+			if !ok {
+				return BoardEditorQueryPreviewMsg{Query: queryStr, Error: fmt.Errorf("GitHub board preview source unavailable")}
+			}
+			return source.PreviewQuery(queryStr)
+		}
+	}
+
 	return func() tea.Msg {
 		if queryStr == "" {
 			return BoardEditorQueryPreviewMsg{Query: queryStr}
