@@ -56,8 +56,9 @@ if path.startswith('repos/owner/repo/issues/comments/'):
  n=int(path.rsplit('/',1)[1]);data=next((c for c in journal['comments'] if c['id']==n),None)
  if data is not None:
   if method=='PATCH':
-   if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-denied':sys.stderr.write('HTTP 403 journal receipt denied');sys.exit(1)
-   data.update(json.load(sys.stdin));data['updated_at']=fixture_tick(data['updated_at']);journal_file.write_text(json.dumps(journal))
+   payload=json.load(sys.stdin)
+   if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-denied' or (os.environ.get('TD_GH_JOURNAL_FAIL')=='undo-completion-denied' and '"phase":"undone"' in payload.get('body','')):sys.stderr.write('HTTP 403 journal receipt denied');sys.exit(1)
+   data.update(payload);data['updated_at']=fixture_tick(data['updated_at']);journal_file.write_text(json.dumps(journal))
    if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-lost':sys.stderr.write('connection lost after receipt');sys.exit(1)
   journal_result(data)
 `

@@ -609,3 +609,39 @@ conflict. Already-undone observations also recheck the original proof and final
 source revision without replaying a write. Closing approvals, close/reopen
 native-state compensation, logical deletion, coordinated cascades, explicit
 partial/undo-prepared recovery and portable journal history remain under #9.
+
+## Observe an uncertain inverse without replaying it
+
+`td undo --reconcile ghc-ID` now also previews `undo_prepared` and completed
+`undone` receipts. `--apply` may update only the existing receipt. It never
+replays the target PATCH or native comment DELETE. The authenticated GitHub
+account must be the original journal author; the actual recovery session is
+recorded separately and never replaces the original attempt's session.
+
+Recovery uses complete fresh issue/comment collections and a matching point
+read. The original carrier and receipt must be unique and unchanged. The target
+must exactly match the original inverse contents with a non-regressing native
+clock. For comment-creation inverses the original comment and operation result
+must be absent. Restored reviews, relations and board catalogs retain their
+normal proof checks; stale/missing/foreign data, incomplete pagination and
+transport failures cannot produce a successful empty observation.
+
+An already completed receipt is confirmed without any write, including with
+`--apply`. A pending receipt whose inverse contents are observed can be saved
+as `undone` with a v6 `undo_observation`: original before/after, attribution and
+undo operation ID remain immutable, while the actual recovery actor/session,
+observation time and exact native state are recorded separately. The outcome
+explicitly declares `target_write_verified=false` and
+`causal_undo_chain_eligible=false`. Content equality does not prove who performed
+the original PATCH/DELETE. Consequently this observation cannot authorize a
+causal bridge for undoing an earlier action over a newer native revision.
+Inspect the current state and make an explicit new field edit when that earlier
+inverse cannot be proven. A genuine verified completion receipt retains its
+existing causal proof; confirmation does not turn an observation into one.
+
+Receipt failure remains uncertain and keeps the original diagnostic. Repeating
+explicit observation rechecks the saved state/proofs and writes nothing if the
+receipt already exists. Later target/proof changes remain conflicts. The v6
+reader retains v1–v5 compatibility; older readers fail closed on a new version.
+Native close/reopen compensation and coordinated multi-target/partial recovery
+still need their own proof policies rather than generic matching contents.

@@ -14,20 +14,21 @@ import (
 
 type githubActionHistoryRow struct {
 	models.ActionLog
-	OperationID       string                        `json:"operation_id"`
-	Phase             string                        `json:"phase"`
-	CarrierID         string                        `json:"carrier_id,omitempty"`
-	Author            string                        `json:"author"`
-	URL               string                        `json:"url"`
-	DataFormat        string                        `json:"data_format"`
-	HistoryScope      string                        `json:"history_scope"`
-	CreateInput       *ghstore.ActionCreateInput    `json:"create_input,omitempty"`
-	TargetIssueID     string                        `json:"target_issue_id,omitempty"`
-	CommentInput      *ghstore.ActionCommentInput   `json:"comment_input,omitempty"`
-	CommentAfter      *ghstore.ActionCommentState   `json:"comment_after,omitempty"`
-	CommentBefore     *ghstore.ActionCommentState   `json:"comment_before,omitempty"`
-	Reconciliation    *ghstore.ActionReconciliation `json:"reconciliation,omitempty"`
-	CommentDataFormat string                        `json:"comment_data_format,omitempty"`
+	OperationID       string                         `json:"operation_id"`
+	Phase             string                         `json:"phase"`
+	CarrierID         string                         `json:"carrier_id,omitempty"`
+	Author            string                         `json:"author"`
+	URL               string                         `json:"url"`
+	DataFormat        string                         `json:"data_format"`
+	HistoryScope      string                         `json:"history_scope"`
+	CreateInput       *ghstore.ActionCreateInput     `json:"create_input,omitempty"`
+	TargetIssueID     string                         `json:"target_issue_id,omitempty"`
+	CommentInput      *ghstore.ActionCommentInput    `json:"comment_input,omitempty"`
+	CommentAfter      *ghstore.ActionCommentState    `json:"comment_after,omitempty"`
+	CommentBefore     *ghstore.ActionCommentState    `json:"comment_before,omitempty"`
+	UndoObservation   *ghstore.ActionUndoObservation `json:"undo_observation,omitempty"`
+	Reconciliation    *ghstore.ActionReconciliation  `json:"reconciliation,omitempty"`
+	CommentDataFormat string                         `json:"comment_data_format,omitempty"`
 }
 
 func init() {
@@ -241,7 +242,7 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 			PreviousData: before, NewData: after, Timestamp: action.CreatedAt, Undone: action.Phase == "undone"},
 			OperationID: action.OperationID, Phase: action.Phase, CarrierID: action.CarrierID, Author: action.Author, URL: action.URL,
 			DataFormat: "github-native-issue-state-v1", HistoryScope: "td-action-journal", CreateInput: action.CreateInput,
-			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, Reconciliation: action.Reconciliation, CommentDataFormat: commentFormat})
+			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, Reconciliation: action.Reconciliation, UndoObservation: action.UndoObservation, CommentDataFormat: commentFormat})
 	}
 	return rows, nil
 }

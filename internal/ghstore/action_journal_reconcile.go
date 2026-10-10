@@ -44,6 +44,7 @@ type ActionReconcileResult struct {
 	Journal             *ActionJournalRecord `json:"journal"`
 	Applied             bool                 `json:"applied"`
 	AlreadyReconciled   bool                 `json:"already_reconciled"`
+	UndoOutcome         *ActionUndoOutcome   `json:"undo_outcome,omitempty"`
 	TargetWriteReplayed bool                 `json:"target_write_replayed"`
 }
 
@@ -92,6 +93,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	}
 	if actor.Login == "" || !strings.EqualFold(actor.Login, action.Author) {
 		return nil, fmt.Errorf("recovery receipt is not attributed to the authenticated GitHub author; no write attempted")
+	}
+	if action.Phase == "undo_prepared" || action.Phase == "undone" {
+		return c.reconcileUndo(ctx, action, sessionID, actor.Login, apply)
 	}
 	if action.Phase != "prepared" && action.Phase != "applied" {
 		return nil, &UndoScopeError{Reason: "undo recovery needs its own inverse proof; no write attempted"}

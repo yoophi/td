@@ -920,3 +920,84 @@ func TestGitHubJournalCLIUndoesReviewTransitions(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubJournalCLIReconcilesUncertainUndoWithoutReplay(t *testing.T) {
+	for _, enabled := range []string{"false", "true"} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) string {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil || !json.Valid([]byte(out)) {
+					t.Fatal(args, out, stderr, err)
+				}
+				return out
+			}
+			execute("create", "Undo observation CLI fixture")
+			execute("update", "gh-6", "--description", "Updated fixture")
+			t.Setenv("TD_GH_JOURNAL_FAIL", "undo-completion-denied")
+			out, stderr, err := run("undo", "--json")
+			if err == nil || !strings.Contains(out+stderr, "unverified") {
+				t.Fatal(out, stderr, err)
+			}
+			t.Setenv("TD_GH_JOURNAL_FAIL", "")
+
+			latest := execute("last", "--n", "1")
+			var rows []struct {
+				ID    string `json:"id"`
+				Phase string `json:"phase"`
+			}
+			if err := json.Unmarshal([]byte(latest), &rows); err != nil || len(rows) != 1 || rows[0].Phase != "undo_prepared" {
+				t.Fatal("not the uncertain inverse", latest, err)
+			}
+			beforeRecovery, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			preview := execute("undo", "--reconcile", rows[0].ID)
+			if !strings.Contains(preview, `"applied":false`) {
+				t.Fatal(preview)
+			}
+			observedInverse := execute("undo", "--reconcile", rows[0].ID, "--apply")
+			if !strings.Contains(observedInverse, `"applied":true`) || !strings.Contains(observedInverse, `"target_write_verified":false`) || !strings.Contains(observedInverse, `"causal_undo_chain_eligible":false`) {
+				t.Fatal(observedInverse)
+			}
+			execute("undo", "--reconcile", rows[0].ID, "--apply")
+			afterRecovery, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(beforeRecovery, afterRecovery) {
+				t.Fatal("recovery replayed target")
+			}
+			// A new reversible change verifies the read-only completed-receipt path.
+			execute("update", "gh-6", "--title", "Completed inverse fixture")
+			undone := execute("undo")
+			var result struct {
+				ReceiptID string `json:"receipt_id"`
+			}
+			if err := json.Unmarshal([]byte(undone), &result); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			observed := execute("undo", "--reconcile", result.ReceiptID, "--apply")
+			if !strings.Contains(observed, `"already_reconciled":true`) || !strings.Contains(observed, `"target_write_replayed":false`) {
+				t.Fatal(observed)
+			}
+			after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatal("completion observation replayed target")
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite fallback", err)
+			}
+		})
+	}
+}
