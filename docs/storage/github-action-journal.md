@@ -582,3 +582,30 @@ policies. In particular, a new GitHub close/reopen event cannot be removed or
 represented as an old review event. Partial/undo-prepared recovery and portable
 journal history also remain work under #9. Failures preserve the existing
 uncertain-result diagnostics and do not automatically repeat the target PATCH.
+
+## Review checkpoint inverse
+
+While native GitHub state remains open, a single-source review request,
+record-only approval or changes-requested decision, and rejection can be
+undone. The inverse restores the exact original body/labels, participation and
+review metadata. It removes only the selected writer's new transition/session/
+review delta from the current issue; the immutable journal before/after and
+undo receipt preserve its audit history. An existing approval superseded by a
+changes-requested decision or rejection is restored with its original row ID,
+reviewer, attribution, decision and time, never replaced by a new approval.
+
+Scope validation checks the complete normal writer effect, including the
+unchanged transition/session/review prefixes, original actor, matching reason
+and time, unique new identities, review basis and expected field changes.
+Ordinary handoff-based and minor review requests are recognized. Trusted
+self-review and attributed reviews retain their existing provenance; undo does
+not claim another reviewer examined the work. Arbitrary title, file, relation,
+claim or old review-row changes cannot accompany a review inverse.
+
+Every original checkpoint being restored must still pass its content basis,
+native close/reopen event digest and original handoff verification at all four
+write fences. Native/transport errors retain their cause; stale evidence is a
+conflict. Already-undone observations also recheck the original proof and final
+source revision without replaying a write. Closing approvals, close/reopen
+native-state compensation, logical deletion, coordinated cascades, explicit
+partial/undo-prepared recovery and portable journal history remain under #9.

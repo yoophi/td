@@ -52,8 +52,14 @@ func (c *Client) checkUndoOriginalReview(ctx context.Context, action *ActionJour
 		}
 		if !relationChange {
 			workflowChange, err := workflowUndoScope(action)
-			if err != nil || !workflowChange {
+			if err != nil {
 				return err
+			}
+			if !workflowChange {
+				reviewChange, err := reviewTransitionUndoScope(action)
+				if err != nil || !reviewChange {
+					return err
+				}
 			}
 		}
 	}

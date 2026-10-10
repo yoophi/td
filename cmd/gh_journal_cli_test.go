@@ -284,20 +284,24 @@ func TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSess
 	if len(fixtureJournals(t)) != count+3 {
 		t.Fatal("work session transitions were not journaled", fixtureJournals(t))
 	}
-	before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	last := fixtureJournals(t)
+	originalBody := last[len(last)-1].Before.Body
 	out, stderr, err := run("undo", "--json")
-	if err == nil || !strings.Contains(out+stderr, "unsupported_operation") {
-		t.Fatal("workflow undo bypassed policy boundary", out, stderr, err)
+	if err != nil || !json.Valid([]byte(out)) {
+		t.Fatal("work-session review inverse failed", out, stderr, err)
 	}
 	after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(before, after) {
-		t.Fatal("unsupported undo changed native state")
+	var restored struct {
+		Issues map[string]struct{ Body string }
+	}
+	if err := json.Unmarshal(after, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.Issues["6"].Body != originalBody {
+		t.Fatal("review inverse lost original state")
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 		t.Fatal("SQLite fallback")
@@ -848,6 +852,67 @@ func TestGitHubJournalCLIUndoesBasicWorkflow(t *testing.T) {
 				if body() != original {
 					t.Fatal(action, "inverse lost original workflow body")
 				}
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite fallback", err)
+			}
+		})
+	}
+}
+
+func TestGitHubJournalCLIUndoesReviewTransitions(t *testing.T) {
+	for _, enabled := range []string{"false", "true"} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil || !json.Valid([]byte(out)) {
+					t.Fatal(args, out, stderr, err)
+				}
+			}
+			body := func() string {
+				t.Helper()
+				data, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var state struct {
+					Issues map[string]struct{ Body string }
+				}
+				if err := json.Unmarshal(data, &state); err != nil {
+					t.Fatal(err)
+				}
+				return state.Issues["6"].Body
+			}
+			execute("create", "Review inverse CLI fixture")
+			execute("start", "gh-6")
+			execute("handoff", "gh-6", "--done", "Synthetic fixture reviewed")
+			original := body()
+			execute("review", "gh-6")
+			execute("undo")
+			if body() != original {
+				t.Fatal("review inverse lost original body")
+			}
+			execute("review", "gh-6")
+			original = body()
+			execute("approve", "gh-6", "--record-only", "--self-review", "--reason", "Synthetic fixture self-review")
+			execute("undo")
+			if body() != original {
+				t.Fatal("record-only approval inverse lost original body")
+			}
+			execute("reject", "gh-6", "--reason", "Synthetic fixture correction")
+			execute("undo")
+			if body() != original {
+				t.Fatal("rejection inverse lost original checkpoint")
+			}
+			execute("approve", "gh-6", "--record-only", "--self-review", "--reason", "Synthetic fixture self-review")
+			original = body()
+			execute("approve", "gh-6", "--record-only", "--decision", "changes_requested", "--self-review", "--reason", "Synthetic fixture changes requested")
+			execute("undo")
+			if body() != original {
+				t.Fatal("changes_requested inverse lost original approval")
 			}
 			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
 				t.Fatal("SQLite fallback", err)

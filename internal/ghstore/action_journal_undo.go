@@ -21,8 +21,9 @@ type ActionUndoResult struct {
 }
 
 // UndoAction rehydrates the remote receipt rather than trusting a caller's
-// snapshots. Scalar, file, single-source relation, basic workflow and auxiliary restoration are supported; review/native-state and
-// multi-target operations require their own coordinated executor.
+// snapshots. Supported inverses restore scalar fields, files, relations,
+// open-native workflow/review checkpoints and auxiliary configuration.
+// Native close/reopen and multi-target operations need coordinated policies.
 func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionUndoResult, error) {
 	number, err := CommentNumber(id)
 	if err != nil {
@@ -86,6 +87,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 			return nil, err
 		}
 		workflowChange, err := workflowUndoScope(action)
+		if err == nil && !workflowChange {
+			workflowChange, err = reviewTransitionUndoScope(action)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -266,6 +270,9 @@ func scalarUndoScope(action *ActionJournalRecord) error {
 		return err
 	}
 	if supported, err := workflowUndoScope(action); err != nil || supported {
+		return err
+	}
+	if supported, err := reviewTransitionUndoScope(action); err != nil || supported {
 		return err
 	}
 	unsupported := func() error {
