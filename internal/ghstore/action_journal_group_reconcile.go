@@ -251,6 +251,9 @@ func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, 
 }
 
 func (c *Client) reconcileActionGroup(ctx context.Context, a *ActionJournalRecord, session, actor string, apply, normal bool) (*ActionReconcileResult, error) {
+	if a.Group != nil && a.Group.Ordered != nil {
+		return nil, &UndoScopeError{Reason: "ordered group recovery integration is incomplete; no target or receipt write attempted"}
+	}
 	if a.Group == nil || !strings.EqualFold(a.Author, actor) {
 		return nil, fmt.Errorf("group recovery requires its native author")
 	}

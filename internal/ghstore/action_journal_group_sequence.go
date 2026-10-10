@@ -50,6 +50,18 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 		if i > 0 && a.CreatedAt.Before(ordered[i-1].CreatedAt) {
 			return nil, fmt.Errorf("ordered effect creation clocks regress")
 		}
+		if group.Group.Ordered != nil {
+			previous := ""
+			chain := chains[a.IssueID]
+			if len(chain) > 0 {
+				previous = chain[len(chain)-1].ID
+			}
+			if a.GroupSequence != i+1 || a.GroupPreviousReceiptID != previous {
+				return nil, fmt.Errorf("ordered effect replaced its declared sequence or actual predecessor")
+			}
+		} else if a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" {
+			return nil, fmt.Errorf("legacy group cannot admit ordered member fields")
+		}
 		before, found := expected[a.IssueID]
 		if !found {
 			return nil, fmt.Errorf("ordered effect target is outside immutable membership")

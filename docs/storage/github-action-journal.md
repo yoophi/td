@@ -850,3 +850,33 @@ transaction or CAS over this hierarchy.
 Multiple effects on the same issue in one compound command, remaining writers,
 claim sweeps/work-session fanout, portable history and multipart transport still
 need integration; this group support does not declare the whole undo task done.
+
+### Ordered effect format under development (#64)
+
+The v14 group and v15 member formats provide the storage and planning contract
+for repeated effects on one issue. They are not yet emitted by command writers;
+ordered execution and recovery currently fail explicitly before any write.
+The installed, verified command behavior remains the v10/v12/v13 integration.
+
+An ordered member declares its sequence and actual preceding receipt on the
+same target. The group freezes original receipt snapshots, native comment body
+digests, forward outcomes and event observations. A terminal unapplied input
+does not hide earlier actual effects. The group inverse records each observed
+source and complete requested compensation separately from its result. One
+pending step cannot admit a successor. Completed plans, results and observer
+provenance are immutable; observing an inverse never promotes it to verified
+proof. Empty actual observations remain distinguishable from absent evidence.
+
+The pure compensation planner retains both forward and preceding inverse audit
+rows, restores former task fields, supersedes approvals and clears their review
+basis and handoff checkpoint. Every native change needs one opposite event;
+scalar compensation retains the exact existing event prefix. Original review
+event evidence is checked against its historical forward prefix, not rebased
+onto later compensation events. These steps only connect the frozen group;
+they do not authorize an ordinary causal undo chain.
+
+The remaining executor must freeze and point-read actual receipts and hashes,
+reserve completion capacity before writes, fence all watched revisions,
+relationships, native events and historical handoffs before each PATCH, and
+implement receipt-only partial recovery and no-replay continuation. Planning
+and format tests alone do not establish that this command integration works.

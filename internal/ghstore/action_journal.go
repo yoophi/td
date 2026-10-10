@@ -87,27 +87,29 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
-	Group             *ActionGroup             `json:"group,omitempty"`
-	GroupOperationID  string                   `json:"group_operation_id,omitempty"`
-	UpdateObservation *ActionUpdateObservation `json:"update_observation,omitempty"`
-	UpdateIntent      *ActionUpdateIntent      `json:"update_intent,omitempty"`
-	NativeUndo        *ActionNativeUndo        `json:"native_undo,omitempty"`
-	OperationID       string                   `json:"operation_id"`
-	SessionID         string                   `json:"session_id"`
-	IssueID           string                   `json:"issue_id"`
-	CarrierID         string                   `json:"carrier_id,omitempty"`
-	Action            string                   `json:"action"`
-	Phase             string                   `json:"phase"`
-	Before            *ActionIssueState        `json:"before,omitempty"`
-	After             *ActionIssueState        `json:"after,omitempty"`
-	Restored          *ActionIssueState        `json:"restored,omitempty"`
-	UndoOperationID   string                   `json:"undo_operation_id,omitempty"`
-	CreateInput       *ActionCreateInput       `json:"create_input,omitempty"`
-	CommentInput      *ActionCommentInput      `json:"comment_input,omitempty"`
-	CommentAfter      *ActionCommentState      `json:"comment_after,omitempty"`
-	CommentBefore     *ActionCommentState      `json:"comment_before,omitempty"`
-	UndoObservation   *ActionUndoObservation   `json:"undo_observation,omitempty"`
-	Reconciliation    *ActionReconciliation    `json:"reconciliation,omitempty"`
+	GroupSequence          int                      `json:"group_sequence,omitempty"`
+	GroupPreviousReceiptID string                   `json:"group_previous_receipt_id,omitempty"`
+	Group                  *ActionGroup             `json:"group,omitempty"`
+	GroupOperationID       string                   `json:"group_operation_id,omitempty"`
+	UpdateObservation      *ActionUpdateObservation `json:"update_observation,omitempty"`
+	UpdateIntent           *ActionUpdateIntent      `json:"update_intent,omitempty"`
+	NativeUndo             *ActionNativeUndo        `json:"native_undo,omitempty"`
+	OperationID            string                   `json:"operation_id"`
+	SessionID              string                   `json:"session_id"`
+	IssueID                string                   `json:"issue_id"`
+	CarrierID              string                   `json:"carrier_id,omitempty"`
+	Action                 string                   `json:"action"`
+	Phase                  string                   `json:"phase"`
+	Before                 *ActionIssueState        `json:"before,omitempty"`
+	After                  *ActionIssueState        `json:"after,omitempty"`
+	Restored               *ActionIssueState        `json:"restored,omitempty"`
+	UndoOperationID        string                   `json:"undo_operation_id,omitempty"`
+	CreateInput            *ActionCreateInput       `json:"create_input,omitempty"`
+	CommentInput           *ActionCommentInput      `json:"comment_input,omitempty"`
+	CommentAfter           *ActionCommentState      `json:"comment_after,omitempty"`
+	CommentBefore          *ActionCommentState      `json:"comment_before,omitempty"`
+	UndoObservation        *ActionUndoObservation   `json:"undo_observation,omitempty"`
+	Reconciliation         *ActionReconciliation    `json:"reconciliation,omitempty"`
 }
 
 // Creation intent has no allocated issue number or observed server clock yet.
@@ -149,6 +151,14 @@ func (a ActionJournal) validate() error {
 	}
 	if a.GroupOperationID != "" && (!identity(a.GroupOperationID) || a.GroupOperationID == a.OperationID || a.UpdateIntent == nil || a.Action != "update") {
 		return fmt.Errorf("group member requires its distinct immutable group and full update input")
+	}
+	if a.GroupSequence < 0 || a.GroupSequence == 0 && a.GroupPreviousReceiptID != "" || a.GroupSequence > 0 && a.GroupOperationID == "" {
+		return fmt.Errorf("ordered member needs a group and positive declared sequence")
+	}
+	if a.GroupPreviousReceiptID != "" {
+		if _, err := CommentNumber(a.GroupPreviousReceiptID); err != nil {
+			return err
+		}
 	}
 	pendingCreate := a.Action == "create" && a.Phase == "prepared" && a.IssueID == "" && a.CarrierID != "" && a.CreateInput != nil && a.After == nil
 	if !pendingCreate {
@@ -252,8 +262,14 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		} else if nativeGroupCommand(a.Group.Command) {
 			start = actionNativeGroupJournalStart
 		}
+		if a.Group.Ordered != nil {
+			start = actionOrderedGroupJournalStart
+		}
 	} else if a.GroupOperationID != "" {
 		start = actionGroupMemberJournalStart
+		if a.GroupSequence > 0 {
+			start = actionOrderedGroupMemberJournalStart
+		}
 	} else if a.UpdateIntent != nil {
 		start = actionUpdateIntentJournalStart
 	} else if a.NativeUndo != nil {
@@ -290,7 +306,11 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionNativeGroupJournalStart) {
+	if strings.HasPrefix(block, actionOrderedGroupJournalStart) {
+		start = actionOrderedGroupJournalStart
+	} else if strings.HasPrefix(block, actionOrderedGroupMemberJournalStart) {
+		start = actionOrderedGroupMemberJournalStart
+	} else if strings.HasPrefix(block, actionNativeGroupJournalStart) {
 		start = actionNativeGroupJournalStart
 	} else if strings.HasPrefix(block, actionReviewGroupJournalStart) {
 		start = actionReviewGroupJournalStart
@@ -329,16 +349,19 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	if (a.Group != nil) != (start == actionGroupJournalStart || start == actionReviewGroupJournalStart || start == actionNativeGroupJournalStart) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart) || !groupNativeAuthor(a, comment.User.Login) {
+	if (a.Group != nil) != (start == actionGroupJournalStart || start == actionReviewGroupJournalStart || start == actionNativeGroupJournalStart || start == actionOrderedGroupJournalStart) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart) || !groupNativeAuthor(a, comment.User.Login) {
 		return nil, fmt.Errorf("group version or native attribution differs from payload")
 	}
-	if (a.Group != nil && a.Group.Command == "review") != (start == actionReviewGroupJournalStart) {
+	if (a.Group != nil && a.Group.Ordered == nil && a.Group.Command == "review") != (start == actionReviewGroupJournalStart) {
 		return nil, fmt.Errorf("review group version differs")
 	}
-	if (a.Group != nil && nativeGroupCommand(a.Group.Command)) != (start == actionNativeGroupJournalStart) {
+	if (a.Group != nil && a.Group.Ordered == nil && nativeGroupCommand(a.Group.Command)) != (start == actionNativeGroupJournalStart) {
 		return nil, fmt.Errorf("native group version differs")
 	}
-	planned := start == actionUpdateIntentJournalStart || start == actionGroupMemberJournalStart
+	if (a.Group != nil && a.Group.Ordered != nil) != (start == actionOrderedGroupJournalStart) || (a.GroupSequence > 0) != (start == actionOrderedGroupMemberJournalStart) {
+		return nil, fmt.Errorf("ordered group version differs from payload")
+	}
+	planned := start == actionUpdateIntentJournalStart || start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart
 	if a.UpdateObservation != nil && !strings.EqualFold(a.UpdateObservation.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("update observer differs from native journal author")
 	}

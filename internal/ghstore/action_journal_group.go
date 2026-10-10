@@ -11,6 +11,8 @@ import (
 const actionGroupJournalStart = actionJournalPrefix + "v10\n"
 const actionReviewGroupJournalStart = actionJournalPrefix + "v12\n"
 const actionNativeGroupJournalStart = actionJournalPrefix + "v13\n"
+const actionOrderedGroupJournalStart = actionJournalPrefix + "v14\n"
+const actionOrderedGroupMemberJournalStart = actionJournalPrefix + "v15\n"
 const actionGroupMemberJournalStart = actionJournalPrefix + "v11\n"
 
 type ActionGroupMember struct {
@@ -38,6 +40,7 @@ type ActionGroupObservation struct {
 // any target write. Every attempted member independently records its complete
 // update input before its write; future unattempted inputs are never invented.
 type ActionGroup struct {
+	Ordered *ActionOrderedGroup     `json:"ordered,omitempty"`
 	Command string                  `json:"command"`
 	Roots   []string                `json:"roots,omitempty"`
 	Cascade bool                    `json:"cascade,omitempty"`
@@ -57,7 +60,7 @@ func canonicalGroupID(id string) bool {
 
 func (a ActionJournal) validateGroupAction() error {
 	g := a.Group
-	if g == nil || a.Action != "group" || a.GroupOperationID != "" || (!groupBasicCommand(g.Command) && g.Command != "review" && !nativeGroupCommand(g.Command)) || len(g.Members) < 2 || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
+	if g == nil || a.Action != "group" || a.GroupOperationID != "" || a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" || (!groupBasicCommand(g.Command) && g.Command != "review" && !nativeGroupCommand(g.Command)) || len(g.Members) < 2 || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
 		return fmt.Errorf("group requires its immutable explicit command membership and separate carrier")
 	}
 	if a.Before != nil || a.After != nil || a.Restored != nil || a.CreateInput != nil || a.UpdateIntent != nil || a.UpdateObservation != nil || a.NativeUndo != nil || a.CommentInput != nil || a.CommentAfter != nil || a.CommentBefore != nil || a.UndoObservation != nil || a.Reconciliation != nil {
@@ -180,7 +183,7 @@ func (a ActionJournal) validateGroupAction() error {
 			}
 		}
 	}
-	return nil
+	return a.validateOrderedGroup()
 }
 
 func validateGroupRewrite(old, next ActionJournal) error {
@@ -192,6 +195,9 @@ func validateGroupRewrite(old, next ActionJournal) error {
 			return fmt.Errorf("group identity is immutable")
 		}
 		return nil
+	}
+	if err := validateOrderedGroupRewrite(old.Group.Ordered, next.Group.Ordered); err != nil {
+		return err
 	}
 	if old.Group.Command != next.Group.Command || old.Group.Cascade != next.Group.Cascade || !slices.Equal(old.Group.Roots, next.Group.Roots) || !reflect.DeepEqual(old.Group.Members, next.Group.Members) {
 		return fmt.Errorf("group command membership is immutable")

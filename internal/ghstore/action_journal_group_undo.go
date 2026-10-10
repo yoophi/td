@@ -41,6 +41,9 @@ func checkGroupUndoGate(ctx context.Context) error {
 }
 
 func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, session string) (*ActionUndoResult, error) {
+	if a.Group.Ordered != nil {
+		return nil, &UndoScopeError{Reason: "ordered group executor integration is incomplete; no target write attempted"}
+	}
 	if a.SessionID != session {
 		return nil, fmt.Errorf("group undo requires its original session")
 	}
