@@ -1,0 +1,2384 @@
+{
+  "schema_version": 1,
+  "scope": "GitHub issue store; incomplete audit, not an acceptance report",
+  "commands": [
+    {
+      "command": "td",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "version": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td approve",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "all": "pending",
+        "comment": "pending",
+        "decision": "pending",
+        "help": "pending",
+        "json": "pending",
+        "message": "pending",
+        "note": "pending",
+        "notes": "pending",
+        "reason": "pending",
+        "record-only": "pending",
+        "refresh": "pending",
+        "reviewed-by": "pending",
+        "self-review": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td auth",
+      "owner": "#28",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td auth login",
+      "owner": "#28",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubAuthenticationRoutesAndScope"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td auth logout",
+      "owner": "#28",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubAuthenticationRoutesAndScope"
+      ],
+      "flags": {
+        "account": "pending",
+        "confirm-global": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td auth status",
+      "owner": "#28",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubAuthenticationRoutesAndScope"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td block",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td blocked",
+      "owner": "#5",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td blocked-by",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "direct": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td board",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td board create",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "query": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td board delete",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td board edit",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "name": "pending",
+        "query": "pending",
+        "refresh": "pending",
+        "view-mode": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td board list",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td board move",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td board show",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "status": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td board unposition",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td cache",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td cache clear",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "all": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td cache status",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td check-handoff",
+      "owner": "#2",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "quiet": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td close",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "admin": "pending",
+        "comment": "pending",
+        "help": "pending",
+        "json": "pending",
+        "message": "pending",
+        "note": "pending",
+        "notes": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "self-close-exception": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td comment",
+      "owner": "#2",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td comments",
+      "owner": "#2",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td comments add",
+      "owner": "#2",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td completion",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td completion bash",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "no-descriptions": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td completion fish",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "no-descriptions": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td completion powershell",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "no-descriptions": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td completion zsh",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "no-descriptions": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config associate",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineAssociationJSONLifecycle"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config associations",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineAssociationJSONLifecycle"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config dissociate",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineAssociationJSONLifecycle"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config get",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config list",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config set",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "remote": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config setup",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubBootstrapCLIPreflightFailureAndSetupCancellation"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config sync-priority-labels",
+      "owner": "#49",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "apply": "pending",
+        "help": "pending",
+        "id": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td config sync-state-labels",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td create",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "acceptance": "pending",
+        "acceptance-file": "pending",
+        "blocks": "pending",
+        "body": "pending",
+        "defer": "pending",
+        "depends-on": "pending",
+        "desc": "pending",
+        "description": "pending",
+        "description-file": "pending",
+        "due": "pending",
+        "epic": "pending",
+        "help": "pending",
+        "json": "pending",
+        "label": "pending",
+        "labels": "pending",
+        "minor": "pending",
+        "notes": "pending",
+        "parent": "pending",
+        "points": "pending",
+        "priority": "pending",
+        "refresh": "pending",
+        "tag": "pending",
+        "tags": "pending",
+        "title": "pending",
+        "type": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td critical-path",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "limit": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td debug-stats",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td defer",
+      "owner": "#19",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "clear": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td delete",
+      "owner": "#18",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "force": "pending",
+        "help": "pending",
+        "json": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "work-dir": "pending",
+        "yes": "pending"
+      }
+    },
+    {
+      "command": "td deleted",
+      "owner": "#18",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td dep",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "blocking": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td dep add",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "depends-on": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td dep rm",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td depends-on",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td doctor",
+      "owner": "#25",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td doctor fk",
+      "owner": "#31",
+      "state": "sqlite-only",
+      "reason": "SQLite schema migration or foreign-key/orphan integrity check; explicitly excluded from GitHub issue storage.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td due",
+      "owner": "#19",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "clear": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td epic",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td epic create",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "acceptance": "pending",
+        "acceptance-file": "pending",
+        "blocks": "pending",
+        "body": "pending",
+        "defer": "pending",
+        "depends-on": "pending",
+        "desc": "pending",
+        "description": "pending",
+        "description-file": "pending",
+        "due": "pending",
+        "epic": "pending",
+        "help": "pending",
+        "json": "pending",
+        "label": "pending",
+        "labels": "pending",
+        "minor": "pending",
+        "notes": "pending",
+        "parent": "pending",
+        "points": "pending",
+        "priority": "pending",
+        "refresh": "pending",
+        "tag": "pending",
+        "tags": "pending",
+        "title": "pending",
+        "type": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td epic list",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "all": "pending",
+        "closed": "pending",
+        "created": "pending",
+        "deferred": "pending",
+        "due-soon": "pending",
+        "epic": "pending",
+        "filter": "pending",
+        "format": "pending",
+        "help": "pending",
+        "id": "pending",
+        "implementer": "pending",
+        "include-approved": "pending",
+        "json": "pending",
+        "labels": "pending",
+        "limit": "pending",
+        "long": "pending",
+        "mine": "pending",
+        "no-pager": "pending",
+        "open": "pending",
+        "overdue": "pending",
+        "parent": "pending",
+        "points": "pending",
+        "priority": "pending",
+        "refresh": "pending",
+        "reverse": "pending",
+        "reviewable": "pending",
+        "reviewer": "pending",
+        "search": "pending",
+        "short": "pending",
+        "sort": "pending",
+        "status": "pending",
+        "surfacing": "pending",
+        "type": "pending",
+        "updated": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td errors",
+      "owner": "#26",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "clear": "pending",
+        "count": "pending",
+        "help": "pending",
+        "json": "pending",
+        "limit": "pending",
+        "refresh": "pending",
+        "session": "pending",
+        "since": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td export",
+      "owner": "#23",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "all": "pending",
+        "format": "pending",
+        "help": "pending",
+        "json": "pending",
+        "output": "pending",
+        "refresh": "pending",
+        "render-markdown": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td feature",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td feature get",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td feature list",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td feature set",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td feature unset",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td files",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "changed": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "untracked": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td focus",
+      "owner": "#21",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td handoff",
+      "owner": "#2",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "decision": "pending",
+        "done": "pending",
+        "help": "pending",
+        "json": "pending",
+        "message": "pending",
+        "note": "pending",
+        "refresh": "pending",
+        "remaining": "pending",
+        "uncertain": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td help",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubJSONHelpCLIContainsRealTreeAndFlagsOffline"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td import",
+      "owner": "#24",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "dry-run": "pending",
+        "force": "pending",
+        "format": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "source": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td in-review",
+      "owner": "#5",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td info",
+      "owner": "#22",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td init",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubBootstrapCLIPreflightFailureAndSetupCancellation"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "remote": "pending",
+        "store": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td last",
+      "owner": "#9",
+      "state": "unsupported",
+      "reason": "cmd/undo.go directly opens SQLite; no GitHub before/after action journal or undo dispatch exists.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "n": "unsupported",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td link",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "depends-on": "pending",
+        "help": "pending",
+        "json": "pending",
+        "recursive": "pending",
+        "refresh": "pending",
+        "role": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td list",
+      "owner": "#5",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "all": "pending",
+        "closed": "pending",
+        "created": "pending",
+        "deferred": "pending",
+        "due-soon": "pending",
+        "epic": "pending",
+        "filter": "pending",
+        "format": "pending",
+        "help": "pending",
+        "id": "pending",
+        "implementer": "pending",
+        "include-approved": "pending",
+        "json": "pending",
+        "labels": "pending",
+        "limit": "pending",
+        "long": "pending",
+        "mine": "pending",
+        "no-pager": "pending",
+        "open": "pending",
+        "overdue": "pending",
+        "parent": "pending",
+        "points": "pending",
+        "priority": "pending",
+        "refresh": "pending",
+        "reverse": "pending",
+        "reviewable": "pending",
+        "reviewer": "pending",
+        "search": "pending",
+        "short": "pending",
+        "sort": "pending",
+        "status": "pending",
+        "surfacing": "pending",
+        "type": "pending",
+        "updated": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td log",
+      "owner": "#2",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "blocker": "pending",
+        "decision": "pending",
+        "help": "pending",
+        "hypothesis": "pending",
+        "issue": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "result": "pending",
+        "task": "pending",
+        "tried": "pending",
+        "type": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td monitor",
+      "owner": "#6",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "interval": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td next",
+      "owner": "#5",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note add",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "content": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note archive",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note delete",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note edit",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "content": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "title": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note list",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "all": "pending",
+        "archived": "pending",
+        "deleted": "pending",
+        "help": "pending",
+        "json": "pending",
+        "limit": "pending",
+        "output": "pending",
+        "pinned": "pending",
+        "refresh": "pending",
+        "search": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note pin",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note restore",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note show",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "include-deleted": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note unarchive",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td note unpin",
+      "owner": "#20",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td query",
+      "owner": "#5",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubQueryCLIFormatsLimitsDatesAndFailures"
+      ],
+      "flags": {
+        "examples": "pending",
+        "explain": "pending",
+        "fields": "pending",
+        "help": "pending",
+        "json": "pending",
+        "limit": "pending",
+        "max-scan": "pending",
+        "output": "pending",
+        "refresh": "pending",
+        "sort": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ready",
+      "owner": "#5",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td reject",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "comment": "pending",
+        "help": "pending",
+        "json": "pending",
+        "message": "pending",
+        "note": "pending",
+        "notes": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td reopen",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td restore",
+      "owner": "#18",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td resume",
+      "owner": "#21",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td review",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "comment": "pending",
+        "help": "pending",
+        "json": "pending",
+        "message": "pending",
+        "minor": "pending",
+        "note": "pending",
+        "notes": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td reviewable",
+      "owner": "#5",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "include-approved": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td search",
+      "owner": "#5",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "labels": "pending",
+        "limit": "pending",
+        "priority": "pending",
+        "refresh": "pending",
+        "show-score": "pending",
+        "status": "pending",
+        "type": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td security",
+      "owner": "#27",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "clear": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td serve",
+      "owner": "#13",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "addr": "pending",
+        "cors": "pending",
+        "help": "pending",
+        "interval": "pending",
+        "json": "pending",
+        "port": "pending",
+        "refresh": "pending",
+        "token": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td session",
+      "owner": "#21",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "new": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td session cleanup",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "force": "pending",
+        "help": "pending",
+        "json": "pending",
+        "older-than": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td session list",
+      "owner": "#21",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td show",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "children": "pending",
+        "format": "pending",
+        "help": "pending",
+        "json": "pending",
+        "long": "pending",
+        "refresh": "pending",
+        "render-markdown": "pending",
+        "short": "pending",
+        "tree": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td start",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "force": "pending",
+        "help": "pending",
+        "json": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td stats",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td stats analytics",
+      "owner": "#26",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "clear": "pending",
+        "help": "pending",
+        "json": "pending",
+        "limit": "pending",
+        "refresh": "pending",
+        "since": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td stats errors",
+      "owner": "#26",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "clear": "pending",
+        "count": "pending",
+        "help": "pending",
+        "json": "pending",
+        "limit": "pending",
+        "refresh": "pending",
+        "session": "pending",
+        "since": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td stats security",
+      "owner": "#27",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "clear": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td status",
+      "owner": "#21",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync",
+      "owner": "#30",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "pull": "pending",
+        "push": "pending",
+        "refresh": "pending",
+        "status": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync conflicts",
+      "owner": "#30",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "limit": "pending",
+        "refresh": "pending",
+        "since": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync disable",
+      "owner": "#30",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync enable",
+      "owner": "#30",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync init",
+      "owner": "#30",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync status",
+      "owner": "#30",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync tail",
+      "owner": "#30",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "follow": "pending",
+        "help": "pending",
+        "interval": "pending",
+        "json": "pending",
+        "lines": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project",
+      "owner": "#29",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project create",
+      "owner": "#29",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubProjectCreationPreservesSelectionAndNeverRetries"
+      ],
+      "flags": {
+        "description": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "visibility": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project invite",
+      "owner": "#29",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubProjectInviteAndRoleReceiptsAndRace"
+      ],
+      "flags": {
+        "custom-role": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project join",
+      "owner": "#29",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "remote": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project kick",
+      "owner": "#29",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubProjectKickTargetsLoginAndDoesNotRetry"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project link",
+      "owner": "#29",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "force": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "remote": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project list",
+      "owner": "#29",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubProjectAccessibleListNoPerRepositoryQueries"
+      ],
+      "flags": {
+        "all": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project members",
+      "owner": "#29",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubProjectMembersPagesEmptyAndPermissionFailure"
+      ],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project role",
+      "owner": "#29",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubProjectInviteAndRoleReceiptsAndRace"
+      ],
+      "flags": {
+        "custom-role": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td sync-project unlink",
+      "owner": "#29",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "force": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td task",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td task create",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "acceptance": "pending",
+        "acceptance-file": "pending",
+        "blocks": "pending",
+        "body": "pending",
+        "defer": "pending",
+        "depends-on": "pending",
+        "desc": "pending",
+        "description": "pending",
+        "description-file": "pending",
+        "due": "pending",
+        "epic": "pending",
+        "help": "pending",
+        "json": "pending",
+        "label": "pending",
+        "labels": "pending",
+        "minor": "pending",
+        "notes": "pending",
+        "parent": "pending",
+        "points": "pending",
+        "priority": "pending",
+        "refresh": "pending",
+        "tag": "pending",
+        "tags": "pending",
+        "title": "pending",
+        "type": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td task list",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "all": "pending",
+        "closed": "pending",
+        "created": "pending",
+        "deferred": "pending",
+        "due-soon": "pending",
+        "epic": "pending",
+        "filter": "pending",
+        "format": "pending",
+        "help": "pending",
+        "id": "pending",
+        "implementer": "pending",
+        "include-approved": "pending",
+        "json": "pending",
+        "labels": "pending",
+        "limit": "pending",
+        "long": "pending",
+        "mine": "pending",
+        "no-pager": "pending",
+        "open": "pending",
+        "overdue": "pending",
+        "parent": "pending",
+        "points": "pending",
+        "priority": "pending",
+        "refresh": "pending",
+        "reverse": "pending",
+        "reviewable": "pending",
+        "reviewer": "pending",
+        "search": "pending",
+        "short": "pending",
+        "sort": "pending",
+        "status": "pending",
+        "surfacing": "pending",
+        "type": "pending",
+        "updated": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td tree",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "depth": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td unblock",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td undo",
+      "owner": "#9",
+      "state": "unsupported",
+      "reason": "cmd/undo.go directly opens SQLite; no GitHub before/after action journal or undo dispatch exists.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "list": "unsupported",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td unfocus",
+      "owner": "#21",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td unlink",
+      "owner": "#4",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td unstart",
+      "owner": "#3",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "force": "pending",
+        "help": "pending",
+        "json": "pending",
+        "reason": "pending",
+        "refresh": "pending",
+        "session": "pending",
+        "stale": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td update",
+      "owner": "#17",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "acceptance": "pending",
+        "acceptance-file": "pending",
+        "append": "pending",
+        "blocks": "pending",
+        "body": "pending",
+        "comment": "pending",
+        "defer": "pending",
+        "depends-on": "pending",
+        "desc": "pending",
+        "description": "pending",
+        "description-file": "pending",
+        "due": "pending",
+        "help": "pending",
+        "json": "pending",
+        "labels": "pending",
+        "note": "pending",
+        "parent": "pending",
+        "points": "pending",
+        "priority": "pending",
+        "refresh": "pending",
+        "sprint": "pending",
+        "status": "pending",
+        "title": "pending",
+        "type": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td upgrade",
+      "owner": "#31",
+      "state": "sqlite-only",
+      "reason": "SQLite schema migration or foreign-key/orphan integrity check; explicitly excluded from GitHub issue storage.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td usage",
+      "owner": "#21",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "compact": "pending",
+        "help": "pending",
+        "json": "pending",
+        "new-session": "pending",
+        "quiet": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td version",
+      "owner": "#31",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "check": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "short": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td whoami",
+      "owner": "#21",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td workflow",
+      "owner": "#31",
+      "state": "partial",
+      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "evidence": [
+        "TestGitHubOfflineWorkflowCLIContracts"
+      ],
+      "flags": {
+        "dot": "pending",
+        "help": "pending",
+        "json": "pending",
+        "mermaid": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws current",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws end",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws handoff",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "continue": "pending",
+        "decision": "pending",
+        "done": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "remaining": "pending",
+        "review": "pending",
+        "uncertain": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws list",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws log",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "blocker": "pending",
+        "decision": "pending",
+        "help": "pending",
+        "hypothesis": "pending",
+        "json": "pending",
+        "only": "pending",
+        "refresh": "pending",
+        "result": "pending",
+        "tried": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws show",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "full": "pending",
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws start",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws tag",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "no-start": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td ws untag",
+      "owner": "#15",
+      "state": "pending",
+      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    }
+  ]
+}
