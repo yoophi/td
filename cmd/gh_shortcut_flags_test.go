@@ -67,6 +67,11 @@ func TestGitHubShortcutConflictingTypesCLIJSONBeforeGH(t *testing.T) {
 	for _, enabled := range []string{"false", "true"} {
 		t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
 		for _, args := range [][]string{
+			{"create", "Positional title", "--title", "Flag title"},
+			{"add", "Fixture", "title"},
+			{"new", "task", "Fixture title", "--type", "bug"},
+			{"task", "create", "bug", "Fixture title"},
+			{"epic", "create", "Fixture title", "--title", "Flag title"},
 			{"task", "create", "Shortcut fixture title", "--type", "bug"},
 			{"epic", "create", "Shortcut fixture title", "--type", "task"},
 			{"task", "list", "--type", "bug"},
@@ -82,7 +87,7 @@ func TestGitHubShortcutConflictingTypesCLIJSONBeforeGH(t *testing.T) {
 			child.Stdout, child.Stderr = &stdout, &stderr
 			err := child.Run()
 			cancel()
-			if err == nil || !json.Valid(stdout.Bytes()) || !strings.Contains(stdout.String(), "fixes --type") {
+			if err == nil || !json.Valid(stdout.Bytes()) || !strings.Contains(stdout.String(), `"error":`) {
 				t.Fatalf("%v: %v stdout=%s stderr=%s", args, err, stdout.String(), stderr.String())
 			}
 		}

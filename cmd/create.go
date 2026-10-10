@@ -19,24 +19,21 @@ var createCmd = &cobra.Command{
 	Use:     "create [title]",
 	Aliases: []string{"add", "new"},
 	Short:   "Create a new issue",
-	Long:    `Create a new issue with optional flags for type, priority, labels, and more.`,
+	Long: `Create a new issue with optional flags for type, priority, labels, and more.
+Provide one quoted positional title or --title, not both. An optional positional
+type (for example, td new task "Title") must agree with an explicit --type.`,
 	Example: "  td create \"Add user auth\" --type feature --priority P1\n" +
 		"  td create \"Rich markdown issue\" --description-file description.md --acceptance-file acceptance.md\n" +
 		"  cat acceptance.md | td create \"Import from stdin\" --acceptance-file -",
 	GroupID: "core",
+	Args: func(cmd *cobra.Command, args []string) error {
+		_, _, err := resolveCreateInput(cmd, args, "")
+		return err
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Route "td new task Title" → td create --type task "Title"
-		// When first arg is a known type and there are more args, treat it as --type
-		if len(args) >= 2 {
-			candidate := strings.ToLower(args[0])
-			normalized := models.NormalizeType(candidate)
-			if models.IsValidType(normalized) {
-				typeFlag, _ := cmd.Flags().GetString("type")
-				if typeFlag == "" {
-					_ = cmd.Flags().Set("type", string(normalized))
-				}
-				args = args[1:]
-			}
+		title, typeFlag, err := resolveCreateInput(cmd, args, "")
+		if err != nil {
+			return err
 		}
 
 		baseDir := getBaseDir()
@@ -65,12 +62,6 @@ var createCmd = &cobra.Command{
 		}
 		defer func() { _ = database.Close() }()
 
-		// Get title from args or flag
-		title, _ := cmd.Flags().GetString("title")
-		if len(args) > 0 {
-			title = args[0]
-		}
-
 		if title == "" {
 			emitErr("title is required")
 			return fmt.Errorf("title is required")
@@ -78,7 +69,6 @@ var createCmd = &cobra.Command{
 
 		// Parse type prefix from title if --type not explicitly provided
 		var extractedType models.Type
-		typeFlag, _ := cmd.Flags().GetString("type")
 		if typeFlag == "" {
 			extractedType, title = parseTypeFromTitle(title)
 		}
@@ -266,6 +256,47 @@ var createCmd = &cobra.Command{
 		fmt.Printf("CREATED %s\n", issue.ID)
 		return nil
 	},
+}
+
+// Resolve the title source and optional positional type before store access.
+// Never discard a supplied flag or extra title argument silently.
+func resolveCreateInput(cmd *cobra.Command, args []string, fixedType string) (string, string, error) {
+	title, err := cmd.Flags().GetString("title")
+	if err != nil {
+		return "", "", err
+	}
+	typ, err := cmd.Flags().GetString("type")
+	if err != nil {
+		return "", "", err
+	}
+	if fixedType != "" {
+		typ = fixedType
+	}
+	if len(args) > 0 && cmd.Flags().Changed("title") {
+		return "", "", fmt.Errorf("choose either a positional title or --title; do not combine them")
+	}
+	if len(args) >= 2 {
+		prefix := models.NormalizeType(strings.ToLower(args[0]))
+		if models.IsValidType(prefix) {
+			if typ != "" && models.NormalizeType(strings.ToLower(typ)) != prefix {
+				return "", "", fmt.Errorf("positional type %s conflicts with issue type %s; choose one type", prefix, typ)
+			}
+			if typ == "" {
+				typ = string(prefix)
+			}
+			args = args[1:]
+		}
+	}
+	if len(args) > 1 {
+		return "", "", fmt.Errorf("title must be one argument; quote a title containing spaces or use --title")
+	}
+	if len(args) == 1 {
+		title = args[0]
+	}
+	if title == "" {
+		return "", "", fmt.Errorf("title is required")
+	}
+	return title, typ, nil
 }
 
 func init() {

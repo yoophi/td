@@ -147,3 +147,12 @@ use `td create`. This replaces the previous silent overwrite of explicit flags.
 Tests cover pre-execution rejection, actual CLI JSON errors in both feature
 modes with gh unavailable for any call, retained GitHub create/list behavior
 and rich SQLite create behavior.
+
+Create input resolution is shared by `create` (`add`/`new`) and fixed-type
+shortcuts before command execution and again before store access. Choose a
+single quoted positional title or `--title`, not both. Extra positional words
+are rejected with a quoting hint instead of being discarded. The existing
+`td new task "Title"` positional-type form remains supported; a conflicting
+explicit/fixed type fails rather than silently dropping the positional type.
+Shortcuts retain `--title` directly instead of synthesizing a positional title
+that would obscure which input was provided.

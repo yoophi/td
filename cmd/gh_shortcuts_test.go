@@ -130,7 +130,7 @@ func TestTypeCreateShortcutRichTextSQLite(t *testing.T) {
 		cmd := shortcutTestCommand(tc.cmd, true)
 		var runErr error
 		out := captureStdout(t, func() {
-			_, runErr = executeGitHubTest(cmd, "Shortcut rich text issue", "--body", "Body text", "--acceptance", "Acceptance text", "--points", "3", "--json")
+			_, runErr = executeGitHubTest(cmd, "--title", "Shortcut rich text issue", "--body", "Body text", "--acceptance", "Acceptance text", "--points", "3", "--json")
 		})
 		if runErr != nil {
 			t.Fatal(runErr)
@@ -144,7 +144,7 @@ func TestTypeCreateShortcutRichTextSQLite(t *testing.T) {
 			t.Fatal(err)
 		}
 		issue = *stored
-		if issue.Type != tc.typ || issue.Description != "Body text" || issue.Acceptance != "Acceptance text" || issue.Points != 3 {
+		if issue.Title != "Shortcut rich text issue" || issue.Type != tc.typ || issue.Description != "Body text" || issue.Acceptance != "Acceptance text" || issue.Points != 3 {
 			t.Fatalf("lost fields: %+v", issue)
 		}
 	}

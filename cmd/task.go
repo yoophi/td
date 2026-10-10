@@ -28,20 +28,13 @@ Examples:
 		if err := validateShortcutType(cmd, "task", false); err != nil {
 			return err
 		}
-		title, _ := cmd.Flags().GetString("title")
-		if len(args) == 0 && title == "" {
-			return fmt.Errorf("requires a title argument or --title flag")
-		}
-		return nil
+		_, _, err := resolveCreateInput(cmd, args, "task")
+		return err
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Set type=task on this command's flags so createCmd.RunE reads it correctly
 		if err := cmd.Flags().Set("type", "task"); err != nil {
 			return err
-		}
-		if len(args) == 0 {
-			title, _ := cmd.Flags().GetString("title")
-			args = []string{title}
 		}
 		return createCmd.RunE(cmd, args)
 	},
