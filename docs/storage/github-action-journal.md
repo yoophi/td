@@ -730,7 +730,11 @@ verified direct inverse can report its own write as verified while remaining
 ineligible as a causal witness.
 
 Large new receipts use a v9 envelope containing the original v1–v8 schema,
-gzip/base64 data, decoded size and SHA-256. The implementation chooses a
+gzip/base64 data, decoded size and SHA-256. Repeated large quoted JSON strings
+are stored once in a versioned string archive before compression, preserving
+exact token order and opaque body bytes. Earlier plain gzip envelopes remain
+readable. Both decompression and dictionary expansion enforce the decoded
+budget. The implementation chooses a
 conservative 60,000-byte single-comment budget and a 4 MiB decoded budget;
 these are internal transport bounds, not claims about GitHub API maxima.
 Completion and recovery observation capacity are checked before an update

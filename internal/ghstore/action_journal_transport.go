@@ -51,6 +51,14 @@ func renderWriteActionJournal(a ActionJournal) (string, error) {
 	if len(raw) > actionDecodedBudget {
 		return "", fmt.Errorf("action journal exceeds the decoded transport budget")
 	}
+	packed, err := packJournalStrings(raw)
+	if err != nil {
+		return "", err
+	}
+	if len(packed) > actionDecodedBudget {
+		return "", fmt.Errorf("journal string archive exceeds decoded transport budget")
+	}
+	raw = packed
 	var compressed bytes.Buffer
 	writer := gzip.NewWriter(&compressed)
 	if _, err := writer.Write(raw); err != nil {
@@ -59,7 +67,7 @@ func renderWriteActionJournal(a ActionJournal) (string, error) {
 	if err := writer.Close(); err != nil {
 		return "", err
 	}
-	envelope := actionJournalEnvelope{Schema: schema, Encoding: "gzip+base64", Size: len(raw), SHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), Data: base64.StdEncoding.EncodeToString(compressed.Bytes())}
+	envelope := actionJournalEnvelope{Schema: schema, Encoding: actionStringEncoding, Size: len(raw), SHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), Data: base64.StdEncoding.EncodeToString(compressed.Bytes())}
 	data, err := json.Marshal(envelope)
 	if err != nil {
 		return "", err
@@ -90,7 +98,7 @@ func decodeJournalEnvelope(block string) (string, error) {
 		return "", fmt.Errorf("compressed journal envelope is noncanonical")
 	}
 	start, known := actionSchemaStart(envelope.Schema)
-	if !known || envelope.Encoding != "gzip+base64" || envelope.Size <= 0 || envelope.Size > actionDecodedBudget {
+	if !known || (envelope.Encoding != "gzip+base64" && envelope.Encoding != actionStringEncoding) || envelope.Size <= 0 || envelope.Size > actionDecodedBudget {
 		return "", fmt.Errorf("compressed journal schema, encoding or decoded size is invalid")
 	}
 	compressed, err := base64.StdEncoding.DecodeString(envelope.Data)
@@ -105,6 +113,12 @@ func decodeJournalEnvelope(block string) (string, error) {
 	raw, err := io.ReadAll(io.LimitReader(reader, int64(actionDecodedBudget+1)))
 	if err != nil || len(raw) != envelope.Size || len(raw) > actionDecodedBudget || fmt.Sprintf("%x", sha256.Sum256(raw)) != envelope.SHA256 {
 		return "", fmt.Errorf("compressed journal data has invalid size, checksum or gzip contents")
+	}
+	if envelope.Encoding == actionStringEncoding {
+		raw, err = unpackJournalStrings(raw)
+		if err != nil {
+			return "", err
+		}
 	}
 	return start + string(raw) + markerEnd, nil
 }
@@ -163,6 +177,18 @@ func checkJournalSizingProbe(a ActionJournal) error {
 	}
 	if len(body) > actionCommentBudget-512 {
 		return fmt.Errorf("action journal lacks completion headroom within the single-comment transport budget; multipart transport is required")
+	}
+	return nil
+}
+
+func strictJournalJSON(raw []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("invalid journal string archive: %w", err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("journal string archive has trailing data")
 	}
 	return nil
 }

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -45,6 +47,9 @@ func TestCompressedJournalLegacyRoundTripAndOriginalReceipt(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
+	env.Encoding = "gzip+base64"
+	env.Size = len(raw)
+	env.SHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(raw)))
 	env.Data = base64.StdEncoding.EncodeToString(buf.Bytes())
 	data, _ := json.Marshal(env)
 	c.Body = body[:index] + actionCompressedJournalStart + string(data) + markerEnd
@@ -163,5 +168,63 @@ func TestIncompressibleUpdateRejectedBeforeAnyWrite(t *testing.T) {
 	_, err := f.client.Update(context.Background(), "gh-1", Changes{Title: &title})
 	if err == nil || !strings.Contains(err.Error(), "capacity preflight") || f.targetWrites != 0 || f.intentWrites != 0 || f.carrierWrites != 0 {
 		t.Fatal("capacity failure after writes", err, f.targetWrites, f.intentWrites, f.carrierWrites)
+	}
+}
+
+func TestLargeDistinctTextRecoveryFitsStringArchive(t *testing.T) {
+	f := newJournalWriteFixture(t, "receipt-denied")
+	random := rand.New(rand.NewSource(10))
+	data := make([]byte, 18000)
+	random.Read(data)
+	issue := f.issues[1]
+	issue.Body = base64.StdEncoding.EncodeToString(data) + strings.Repeat("큰 문서 문단입니다.\n", 700)
+	f.issues[1] = issue
+	if err := f.client.TrackActions("ses_actor"); err != nil {
+		t.Fatal(err)
+	}
+	title := "Requested title"
+	if _, err := f.client.Update(context.Background(), "gh-1", Changes{Title: &title}); err == nil {
+		t.Fatal("completion failure absent")
+	}
+	if !strings.Contains(f.comment.Body, actionStringEncoding) {
+		t.Fatal("dictionary transport absent")
+	}
+	before := f.issues[1]
+	f.mode = ""
+	result, err := f.client.ReconcileAction(context.Background(), "ghc-101", "ses_recovery", true)
+	if err != nil || !result.Applied || f.targetWrites != 1 || !reflect.DeepEqual(before, f.issues[1]) {
+		t.Fatal(result, err)
+	}
+}
+
+func TestJournalStringArchivePreservesTokensAndBoundsReferences(t *testing.T) {
+	// Opaque body text may itself resemble a dictionary reference.
+	token, _ := json.Marshal(strings.Repeat(`body {"$td_string":9} \\" 한국어 `, 100))
+	raw := []byte(`{"body":` + string(token) + `,"next":{"body":` + string(token) + `},"labels":["x"]}`)
+	packed, err := packJournalStrings(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unpacked, err := unpackJournalStrings(packed)
+	if err != nil || !bytes.Equal(raw, unpacked) {
+		t.Fatal("token order or escaped contents changed", err)
+	}
+	huge, _ := json.Marshal(strings.Repeat("x", actionDecodedBudget/2+1))
+	invalid := []actionStringArchive{
+		{Strings: []json.RawMessage{token}, Data: json.RawMessage(`{"body":{"$td_string":1}}`)},
+		{Strings: []json.RawMessage{token}, Data: json.RawMessage(`{"body":{"$td_string":-1}}`)},
+		{Strings: []json.RawMessage{json.RawMessage(`1`)}, Data: json.RawMessage(`{}`)},
+		{Strings: []json.RawMessage{huge}, Data: json.RawMessage(`[{"$td_string":0},{"$td_string":0}]`)},
+	}
+	for _, archive := range invalid {
+		data, _ := json.Marshal(archive)
+		if _, err := unpackJournalStrings(data); err == nil {
+			t.Fatal("malformed or amplified archive accepted")
+		}
+	}
+	for _, data := range []string{`{"strings":[],"data":{},"unknown":true}`, `{"strings":[],"data":{}} {}`} {
+		if _, err := unpackJournalStrings([]byte(data)); err == nil {
+			t.Fatal("unknown or trailing archive accepted")
+		}
 	}
 }
