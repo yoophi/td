@@ -9,6 +9,7 @@ import (
 	"github.com/marcus/td/internal/dateparse"
 	"github.com/marcus/td/internal/ghcontext"
 	"github.com/marcus/td/internal/ghstore"
+	"github.com/marcus/td/internal/issuestore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
@@ -114,6 +115,7 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	if err != nil {
 		return err
 	}
+	var writer issuestore.IssueWriter[ghstore.Record, ghstore.Changes] = client
 	var scope ghcontext.Scope
 	var local *ghcontext.State
 	options := ghstore.TransitionOptions{Reason: comment}
@@ -159,7 +161,7 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 				return err
 			}
 		}
-		record, err := client.Create(cmd.Context(), created)
+		record, err := writer.Create(cmd.Context(), created)
 		if err != nil {
 			return err
 		}
@@ -212,7 +214,7 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 			fields := change
 			fields.Status = nil
 			if fields.HasFields() {
-				record, err = client.UpdateObserved(cmd.Context(), observed, fields)
+				record, err = writer.UpdateObserved(cmd.Context(), observed, fields)
 			} else {
 				record = observed
 			}

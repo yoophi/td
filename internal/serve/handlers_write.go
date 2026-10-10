@@ -11,6 +11,7 @@ import (
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/dependency"
 	"github.com/marcus/td/internal/git"
+	"github.com/marcus/td/internal/issuestore"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/query"
 )
@@ -128,11 +129,13 @@ func HandleCreateIssue(ctx HandlerContext, w http.ResponseWriter, r *http.Reques
 	}
 
 	// Create atomically with action log
-	if err := ctx.DB.CreateIssueLogged(issue, ctx.SessionID); err != nil {
+	created, err := issuestore.NewSQLiteWriter(ctx.DB, ctx.SessionID).Create(r.Context(), issue)
+	if err != nil {
 		slog.Error("create issue", "err", err)
 		WriteError(w, ErrInternal, "failed to create issue", http.StatusInternalServerError)
 		return
 	}
+	issue = created
 
 	// Record session action for bypass prevention
 	if err := ctx.DB.RecordSessionAction(issue.ID, ctx.SessionID, models.ActionSessionCreated); err != nil {
@@ -178,7 +181,8 @@ func HandleUpdateIssue(ctx HandlerContext, w http.ResponseWriter, r *http.Reques
 	}
 
 	// Fetch existing issue
-	issue, err := ctx.DB.GetIssue(issueID)
+	writer := issuestore.NewSQLiteWriter(ctx.DB, ctx.SessionID)
+	issue, err := writer.Get(r.Context(), issueID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			WriteError(w, ErrNotFound, fmt.Sprintf("issue not found: %s", issueID), http.StatusNotFound)
@@ -272,7 +276,8 @@ func HandleUpdateIssue(ctx HandlerContext, w http.ResponseWriter, r *http.Reques
 	}
 
 	// Update atomically with action log
-	if err := ctx.DB.UpdateIssueLoggedIfUnchanged(issue, &previous, ctx.SessionID, models.ActionUpdate); err != nil {
+	updated, err := writer.UpdateObserved(r.Context(), &previous, *issue)
+	if err != nil {
 		if errors.Is(err, db.ErrIssueChanged) {
 			WriteError(w, ErrConflict, "Task changed while saving. Compare the saved version with your draft.", http.StatusConflict)
 			return
@@ -281,6 +286,7 @@ func HandleUpdateIssue(ctx HandlerContext, w http.ResponseWriter, r *http.Reques
 		WriteIssueWriteError(w, err, issueID, "failed to update issue")
 		return
 	}
+	issue = updated
 
 	notifyChange(ctx)
 

@@ -12,14 +12,11 @@ import (
 
 	"github.com/marcus/td/internal/ghcontext"
 	"github.com/marcus/td/internal/ghstore"
+	"github.com/marcus/td/internal/issuestore"
 	"github.com/marcus/td/internal/models"
 )
 
-type githubIssueWriter interface {
-	Get(context.Context, string) (*ghstore.Record, error)
-	Create(context.Context, *models.Issue) (*ghstore.Record, error)
-	UpdateObserved(context.Context, *ghstore.Record, ghstore.Changes) (*ghstore.Record, error)
-}
+type githubIssueWriter = issuestore.IssueWriter[ghstore.Record, ghstore.Changes]
 type GitHubWriteStore struct {
 	availabilityEnabled        func() bool
 	open                       func(context.Context) (githubIssueWriter, error)

@@ -6,9 +6,10 @@ remaining fields. Native issues without the block use task/P2 defaults.
 
 The v1 envelope supports `operation_id`, `type`, `priority`, `points`,
 `acceptance`, `last_state_reason`, optional `entity_kind`, and separate `details`, `board`, or `note` payloads.
-Omitted `entity_kind` means `issue`. Reserved `board` and `note` entities are
+Omitted `entity_kind` means `issue`. Reserved `board`, `note`, and `journal` entities are
 excluded from issue lists and rejected by issue Get/update/activity operations.
-Their feature-specific payloads and commands are described below.
+Their feature-specific payloads and commands are described below and in
+[the action journal guide](github-action-journal.md).
 
 `details` holds minor/sprint, parent, creator/implementer/reviewer/requester/closer
 session attribution, creation branch, reviewed/deleted timestamps, due/defer dates
@@ -24,7 +25,26 @@ builds reject metadata fields they do not understand; upgrade collaborating
 clients before using extended fields. Field updates preserve unrelated metadata.
 The schema does not imply that every corresponding CLI workflow is implemented.
 Lifecycle and review commands use these records and the shared review policy.
-The remaining shared writer contracts are tracked in #16.
+The shared observed CRUD contract is `issuestore.IssueWriter[R, C]`, used by
+GitHub CLI create/update and both stores' HTTP create/update consumers. Its record and change
+types remain backend-specific so the original observation is not lost when a
+consumer crosses the interface. This is separate from `Reader`, whose projected
+records are for queries and cannot be reconstructed into write observations.
+
+The interface does not promise a transaction, a distributed lock, automatic
+retry, or an atomic compare-and-swap. Feature-specific workflow, review,
+relationship, board, note and activity contracts retain their own validation
+and mutation paths. SQLite workflow commands keep their existing transaction
+implementations; they are not replaced with generic field writes or required to
+emulate GitHub observations. SQL handles do not cross the shared writer boundary.
+
+`NewSQLiteWriter` borrows the database already selected by the SQLite handler;
+it never opens a fallback database. It delegates create to `CreateIssueLogged`
+and field edits to `UpdateIssueLoggedIfUnchanged`, retaining the DB's atomic
+comparison, mutation and action log. A field-edit draft cannot change identity,
+lifecycle, review attribution or read-only metadata. Cancellation is checked
+before entering the transaction; an entered SQLite transaction retains its
+existing completion semantics rather than pretending to support remote abort.
 
 Native closed/open state overrides conflicting detailed state. A native state
 change does not grant approval: effective reviewer, implementer, review-requester,
