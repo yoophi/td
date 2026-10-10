@@ -1,12 +1,34 @@
 # td-gui와 GitHub 저장소 호환 조사
 
-2026-10-10. 설치된 td-gui의 Go module 빌드 정보는 v0.18.8/VCS 32d3050이며 코드를 변경하지 않았다. 버전 배너는 ldflags 없이 빌드되어 `dev`로 출력된다. 조사한 upstream main은 a9aefa5, 설치 버전 source tag v0.18.8도 비교했다.
+최신 확인: 2026-10-11 KST. 기존 설치된 td-gui의 Go module 빌드 정보는 v0.18.8/VCS 32d3050이며 이 설치본은 변경하지 않았다. 아래의 초기 조사 기록과 별도로, 호환 수정은 로컬 GUI 작업 브랜치 `fix/gh-request-timeout`에서 검증 중이다.
 
 ## 현재 결론
 
-기동과 확인한 조회 기능에 td-gui fork는 필요하지 않다. td 개발 빌드의 version 형식을 실제 기반 SemVer + development metadata로 바꾸면 기존 td-gui가 실행된다. 모든 mutation/board 계약 검증이 끝났다는 뜻은 아니다.
+기동과 확인한 조회 기능에는 기존 td-gui를 사용할 수 있다. td 개발 빌드의 version 형식을 실제 기반 SemVer + development metadata로 바꾸는 #54는 완료됐다. 그러나 GitHub 저장소의 전체 GUI 사용에는 GUI 쪽 수정이 필요하다는 실제 실패를 확인했다. #59–#62 및 #71 수정본의 검증을 기존 설치본의 지원 범위로 간주하면 안 된다.
+
+로컬 GUI 수정본은 `f5b2aba`다. upstream 반영 또는 별도 fork의 배포 경로 확정은 #53에 남아 있다. 기존 설치본을 교체하거나 수정본을 공개 배포했다는 뜻은 아니다. #55의 실제 마우스 드래그와 최종 계약 감사도 아직 완료되지 않았다.
 
 `td serve`는 API 서버이고 `td-gui`가 별도 포트에서 웹 화면을 제공한다. 따라서 td serve의 `/`에서 unsupported_operation이 나와도 GUI 연동을 판단할 수 없다. GUI가 출력하는 URL을 사용한다. `website/`는 문서 사이트다.
+
+### 현재 확인한 범위
+
+| 범위 | 최신 근거/제약 |
+|---|---|
+| 생성·제목/설명 편집·댓글·의존성·부모·focus | sample의 실제 브라우저 변경과 GitHub 원격 결과 확인 |
+| Start/review/자체 리뷰 승인/reopen | 실제 브라우저 및 실제 web session 귀속 확인; 독립 리뷰로 표시하지 않음 |
+| 보드 생성·편집·위치 변경 | 생성/편집과 Move up/down/Unpin 버튼을 실제 브라우저에서 확인; 위치 순서는 native GitHub metadata와 일치 |
+| 실제 카드 드래그 | 미검증. 자동화에서 trusted dragstart는 발생하지만 drop이 전달되지 않음. 이것만으로 GUI 결함이나 지원 불가를 판정하지 않음 |
+| 드롭 이후의 상태 전환 창 | 실제 SPA에 합성 drop을 전달하면 창이 열리고 native Start 클릭으로 카드 이동; 물리 드래그의 대체 완료 증거는 아님 |
+| CLI 상태 복귀 | 편집 화면의 open 복귀와 실제 unstart 기록 확인; REST web session과 CLI subprocess session은 별개 |
+| SSE 외부 변경 | 실제 CLI 변경 후 refresh와 브라우저 갱신 확인. 기본 GitHub 관측 간격은 5분이며 즉시 반영을 보장하지 않음 |
+| 오류 표시 | 조회 실패/부분 목록, 잘못된 TDQ, rate-limit 원문 확인. #71은 상태 CLI 오류의 모든 줄과 제공된 구조화 코드를 보존; 오류 주입 브라우저 검증은 실제 GitHub 제한 발생과 구분 |
+| SQLite 회귀 | 실제 td를 사용하는 GUI 계약 테스트 통과. SQLite 상태 거부가 --json에서 무출력일 수 있어 상태 CLI의 일반 호출을 유지 |
+
+GUI 수정은 고정 20초 쓰기 취소와 불확실한 결과 안내(#59), 4xx 조회 반복 및 삭제 후 화면 이동(#60), 조회 실패를 빈 목록으로 표시하는 문제(#61), TDQ 오류를 얻기 위한 중복 CLI 실행(#62), 상태 CLI 오류 원문 누락(#71)을 다룬다. 실패한 쓰기를 자동 재실행하지 않는다. 현재 GUI의 선택적 If-Match 한계는 아래 설명대로 유지된다.
+
+최근 sample 검증은 td `d1b5bbf`와 별도 GUI/server에서 진행했다. 오래된 monitor·serve 프로세스는 설치 바이너리를 갱신해도 바뀌지 않으므로 새 journal schema를 쓰기 전에 재시작해야 한다. 기록은 추적 checkout의 `artifacts/td-gui-compatibility/kanban-final/` 및 #55/#71에 남긴다.
+
+이하 절은 당시 버전별 조사 기록이다. 각 절의 미검증 항목은 위 최신 확인 범위와 함께 해석한다.
 
 ## 재현과 검증
 
