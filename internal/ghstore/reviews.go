@@ -331,6 +331,17 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 	if o.expectedRevision != nil && observed.revision != *o.expectedRevision {
 		return nil, false, &ConflictError{ID: observed.ID}
 	}
+	if action == "reject" {
+		plan, err := c.prepareRejection(ctx, observed, o)
+		if err != nil {
+			return nil, false, err
+		}
+		if plan.noop {
+			return observed, true, nil
+		}
+		result, err := c.writeIssueUpdate(ctx, plan)
+		return result, false, err
+	}
 	d, err := observed.CopyDetails()
 	if err != nil {
 		return nil, false, err
@@ -456,21 +467,6 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 				history(o.SessionID, models.ActionSessionClosed)
 			}
 		}
-	case "reject":
-		if from == models.StatusOpen {
-			return observed, true, nil
-		}
-		if from != models.StatusInReview {
-			return nil, false, workflowStateError("cannot reject %s: status is %s", id, from)
-		}
-		target = models.StatusOpen
-		supersedeReviews(&d, now)
-		d.ImplementerSession = ""
-		d.ReviewRequestedBySession = ""
-		d.ClosedBySession = ""
-		d.ReviewBasis = ""
-		d.Reviews = append(d.Reviews, models.IssueReview{ID: "rv-" + rand.Text(), IssueID: observed.ID, ReviewerSession: o.SessionID, Decision: reviewpolicy.DecisionChangesRequested, Summary: o.Reason, CreatedAt: now})
-		history(o.SessionID, models.ActionSessionReviewChangesRequested)
 	case "close":
 		if o.AdminReason != "" {
 			auditReason = "admin_close: " + o.AdminReason

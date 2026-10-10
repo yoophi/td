@@ -143,8 +143,14 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 		if !reflect.DeepEqual(receipt, a) {
 			return fmt.Errorf("group inverse intent changed")
 		}
-		if err := c.checkGroupNativeEventReceipts(ctx, observed.Receipts); err != nil {
-			return err
+		if a.Group.hasPlannedInputs() {
+			if err := c.verifyPlannedUpdateEvents(ctx, a.Group); err != nil {
+				return err
+			}
+		} else {
+			if err := c.checkGroupNativeEventReceipts(ctx, observed.Receipts); err != nil {
+				return err
+			}
 		}
 		if len(a.Group.Roots) > 0 {
 			return c.verifyGraphGroupExpected(ctx, a.Group, expected)

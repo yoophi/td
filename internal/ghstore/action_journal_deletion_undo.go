@@ -21,15 +21,22 @@ func deletionUndoScope(action *ActionJournalRecord) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if bm.Details == nil || am.Details == nil {
+	if am.Details == nil {
 		return false, nil
 	}
-	bd, ad := *bm.Details, *am.Details
+	bd, ad := IssueDetails{Status: models.Status(action.Before.State)}, *am.Details
+	if bm.Details != nil {
+		bd = *bm.Details
+	}
 	if (bd.DeletedAt == nil) == (ad.DeletedAt == nil) || len(ad.Transitions) != len(bd.Transitions)+1 || !slices.EqualFunc(bd.Transitions, ad.Transitions[:len(bd.Transitions)], func(a, b TransitionRecord) bool { return reflect.DeepEqual(a, b) }) {
 		return false, nil
 	}
 	tr := ad.Transitions[len(bd.Transitions)]
-	if tr.OperationID == "" || tr.SessionID != action.SessionID || tr.At.IsZero() || tr.From != bd.Status || tr.To != bd.Status || tr.RelatedIssueID != "" || tr.AdminReason != "" || tr.SelfCloseException != "" || tr.Snapshot != nil {
+	statusBefore := models.Status(action.Before.State)
+	if bd.Status != "" && nativeStatus(bd.Status) == statusBefore {
+		statusBefore = bd.Status
+	}
+	if tr.OperationID == "" || tr.SessionID != action.SessionID || tr.At.IsZero() || tr.From != statusBefore || tr.To != statusBefore || tr.RelatedIssueID != "" || tr.AdminReason != "" || tr.SelfCloseException != "" || tr.Snapshot != nil {
 		return false, nil
 	}
 	for _, old := range bd.Transitions {
@@ -51,11 +58,7 @@ func deletionUndoScope(action *ActionJournalRecord) (bool, error) {
 		return false, nil
 	}
 	bm.Details, am.Details = nil, nil
-	status := ad.Status
-	if status == "" {
-		status = models.Status(action.After.State)
-	}
-	labels := mirroredPriorityLabels(mirroredLabels(action.Before.Labels, status), am.Priority)
+	labels := mirroredPriorityLabels(mirroredLabels(action.Before.Labels, statusBefore), am.Priority)
 	afterLabels := slices.Clone(action.After.Labels)
 	slices.Sort(labels)
 	slices.Sort(afterLabels)

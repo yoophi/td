@@ -472,6 +472,7 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 // Preparing an update performs validation and reads only. A batch can freeze
 // every payload before journal bootstrap, label creation or the first PATCH.
 type issueUpdatePlan struct {
+	noop          bool
 	observed      *Record
 	payload       map[string]any
 	parents       []Record

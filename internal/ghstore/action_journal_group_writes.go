@@ -10,6 +10,7 @@ import (
 )
 
 type activeActionGroup struct {
+	Plans        map[string]*issueUpdatePlan
 	Journal      *ActionJournalRecord
 	Expected     map[string]ActionIssueState
 	Attempted    map[string]bool
@@ -127,7 +128,11 @@ func checkGroupArchiveCapacity(a ActionJournal, expected map[string]ActionIssueS
 	group := *a.Group
 	observation := &ActionGroupObservation{SessionID: a.SessionID, Actor: strings.Repeat("x", 39), ObservedAt: time.Now().UTC(), Proof: "group-contents-observed", Members: []ActionGroupResultMember{}}
 	for _, m := range group.Members {
-		observation.Members = append(observation.Members, ActionGroupResultMember{IssueID: m.IssueID, ReceiptID: "ghc-9223372036854775807", Status: "applied", State: expected[m.IssueID]})
+		result := ActionGroupResultMember{IssueID: m.IssueID, ReceiptID: "ghc-9223372036854775807", Status: "applied", State: expected[m.IssueID]}
+		if m.Noop {
+			result.ReceiptID, result.Status, result.State = "", "noop", m.Before
+		}
+		observation.Members = append(observation.Members, result)
 	}
 	group.Forward = observation
 	probe := a
@@ -141,6 +146,9 @@ func checkGroupArchiveCapacity(a ActionJournal, expected map[string]ActionIssueS
 	inverse := *observation
 	inverse.Members = append([]ActionGroupResultMember{}, observation.Members...)
 	for i := range inverse.Members {
+		if group.Members[i].Noop {
+			continue
+		}
 		inverse.Members[i].Status = "undone"
 		state, err := projectGroupInverseState(a, group.Members[i], expected[group.Members[i].IssueID])
 		if err != nil {
@@ -220,13 +228,13 @@ func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJourna
 	}
 	probe := *member
 	probe.After = &after
-	if group.Group.Command == "update" {
+	if group.Group.hasPlannedInputs() {
 		for _, m := range group.Group.Members {
 			if m.IssueID == member.IssueID {
-				if m.Input == nil || !reflect.DeepEqual(m.Input, member.UpdateIntent) {
+				if m.Noop || m.Input == nil || !reflect.DeepEqual(m.Input, member.UpdateIntent) {
 					return fmt.Errorf("member input differs from immutable planned group input")
 				}
-				return scalarFieldUndoScope(&probe)
+				return plannedTaskEffectScope(group.Group.Command, &probe)
 			}
 		}
 		return fmt.Errorf("planned update is not a declared group member")

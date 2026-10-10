@@ -115,14 +115,25 @@ func init() {
 			if err := client.TrackActions(actor); err != nil {
 				return err
 			}
+			grouped := len(args) > 1
+			if grouped {
+				if err := client.BeginPlannedCommand(cmd.Context(), command.Name(), args, ghstore.TransitionOptions{SessionID: actor, Reason: reason}); err != nil {
+					return err
+				}
+			}
 			completed := []string{}
 			results := []map[string]any{}
 			for _, id := range args {
-				observed, err := client.GetIncludingDeleted(cmd.Context(), id)
 				var result *ghstore.Record
 				var noop bool
-				if err == nil {
-					result, noop, err = client.SetDeletedObserved(cmd.Context(), observed, command == deleteCmd, actor, reason)
+				if grouped {
+					result, noop, err = client.ApplyPlannedCommandMember(cmd.Context(), id)
+				} else {
+					var observed *ghstore.Record
+					observed, err = client.GetIncludingDeleted(cmd.Context(), id)
+					if err == nil {
+						result, noop, err = client.SetDeletedObserved(cmd.Context(), observed, command == deleteCmd, actor, reason)
+					}
 				}
 				if err != nil {
 					if len(completed) > 0 {
@@ -136,6 +147,11 @@ func init() {
 					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", map[bool]string{true: "DELETED", false: "RESTORED"}[command == deleteCmd], result.ID); err != nil {
 						return fmt.Errorf("%s saved for %s, but output failed; inspect current state before retrying: %w", command.Name(), strings.Join(completed, ", "), err)
 					}
+				}
+			}
+			if grouped {
+				if _, err := client.CompleteActionGroup(cmd.Context()); err != nil {
+					return err
 				}
 			}
 			if jsonMode(cmd) {

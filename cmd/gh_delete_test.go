@@ -100,8 +100,12 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 		t.Fatal("blank reason wrote")
 	}
 	_, err = executeGitHubTest(deletionTestCommand(deleteCmd), "gh-1", "gh-2", "--json")
-	if err == nil || !strings.Contains(err.Error(), "earlier changes remain") {
-		t.Fatalf("partial multi-ID error: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "no write attempted") {
+		t.Fatalf("multi-ID preflight error: %v", err)
+	}
+	data, err = os.ReadFile(fixture)
+	if err != nil || string(data) != before {
+		t.Fatal("missing later target allowed an earlier deletion")
 	}
 	_, err = executeGitHubTest(deletionTestCommand(restoreCmd), "invalid")
 	if err == nil || !strings.Contains(err.Error(), "invalid GitHub issue ID") {

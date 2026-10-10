@@ -938,3 +938,19 @@ member comments and native event prefixes remained intact. No SQLite database
 was created. The managed install and shell resolutions were verified separately.
 Remaining batch and mixed-effect writers are tracked in #65; portable history
 and multipart transport remain #66/#67, followed by the full #9 audit in #68.
+
+## Planned independent task commands (#65)
+
+Scalar-only multi-ID `update` uses v16 groups. Multi-ID `reject`, `delete` and
+`restore` use v17 groups, with explicit membership for tasks already in the
+requested state. Both freeze every complete input before the first task write.
+Invalid later targets fail before any write; a failure during execution retains
+earlier effects for explicit reconciliation and checked group undo.
+
+Declared no-ops are never written, but their original revisions and required
+native event histories remain conflict guards during execution, reconciliation
+and undo. A later no-op cannot hide an earlier partial result. These commands
+preserve native GitHub open/closed state; logical deletion changes visibility.
+See [compound writer coverage](github-batch-writers.md) for connected and
+remaining paths. Running monitors and servers need a v17-capable executable
+and must be restarted before reading a repository containing v17 groups.

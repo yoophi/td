@@ -16,6 +16,8 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | Forced `unstart --session` / `--stale` with multiple selected claims | Basic unstart group, bound to original selected revisions | Local liveness rechecked; focus cleared on actual release |
 | `ws tag` auto-starting multiple open tasks | Basic start group, bound to original selected revisions; one captured Git snapshot | Tags remain device-local, including after remote undo |
 | Multi-ID `update` with scalar fields only | v16 group with every member's complete input fixed before the first write; existing v11 effect receipts | No focus change |
+| Multi-ID `reject` | v17 planned independent task group; existing review and inverse checkpoint checks | Focus cleared after actual rejection/no-op, as before |
+| Multi-ID `delete` / `restore` | v17 planned independent task group; native open/closed state retained; deleted tasks included in selection | Existing device-local context |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -36,15 +38,24 @@ Existing monitors/servers must run a v16-capable build before reading a
 repository with these new records. Activating a new executable does not replace
 the decoder already loaded by a running process.
 
+The v17 groups also declare which members already satisfy the command. These
+no-ops retain their exact native revisions and never acquire effect receipts.
+An invalid later target prevents the entire command from starting. Unknown or
+changed inputs, changed selected tasks and replaced review evidence stop the
+operation. Partial recovery observes a changed target without replay; undo
+retains the original review/native-event checks and watches unchanged members.
+Reject/delete/restore use the same preparation for standalone and batch paths.
+Deletion permits native tasks with missing or older detail metadata and uses
+effective native state for the visibility transition and labels. Inverse review
+validation still rejects restoration of invalid historical review evidence.
+
 ## Remaining writer integration
 
 | Writer | Current effects requiring an aggregate |
 |---|---|
-| Multi-ID reject | Individually journaled review rejection |
 | Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 | Multi-edge dependency add/remove | Repeated updates to the same source task |
-| Multi-ID delete/restore | Individual logical deletion/restoration updates |
 | `ws log` / `ws handoff` | Activity comments on multiple tagged tasks |
 | `ws handoff --review` | Activity fanout followed by task review requests |
 | File link/unlink | One whole file-set update followed by an automatic activity comment |

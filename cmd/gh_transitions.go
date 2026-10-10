@@ -152,15 +152,27 @@ func init() {
 					return fmt.Errorf("capture start snapshot: %w", err)
 				}
 			}
+			planned := len(args) > 1 && command == rejectCmd
 			grouped := len(args) > 1 && (command == reviewCmd || slices.Contains([]string{"close", "approve", "reopen"}, command.Name()) || slices.Contains([]string{"start", "unstart", "block", "unblock"}, command.Name()))
-			if grouped {
+			if planned {
+				if err := client.BeginPlannedCommand(cmd.Context(), command.Name(), args, options); err != nil {
+					return err
+				}
+				grouped = true
+			} else if grouped {
 				if err := client.BeginTransitionActionGroup(cmd.Context(), command.Name(), args, options); err != nil {
 					return err
 				}
 			}
 			completed := []string{}
 			for _, id := range args {
-				record, noop, err := client.TransitionWithCascades(cmd.Context(), id, command.Name(), options)
+				var record *ghstore.Record
+				var noop bool
+				if planned {
+					record, noop, err = client.ApplyPlannedCommandMember(cmd.Context(), id)
+				} else {
+					record, noop, err = client.TransitionWithCascades(cmd.Context(), id, command.Name(), options)
+				}
 				if err != nil {
 					if len(completed) > 0 {
 						return fmt.Errorf("%s completed for %s; stopped at %s (earlier changes remain): %w", command.Name(), strings.Join(completed, ", "), id, err)

@@ -27,6 +27,13 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 	if err := verifyGraphGroupMembership(a.Group, snapshot.Issues(true)); err != nil {
 		return nil, err
 	}
+	if a.Group.hasPlannedInputs() {
+		// Planned task effects never change native state. Include no-ops and
+		// unattempted members: neither has a member receipt to fence its events.
+		if err := c.verifyPlannedUpdateEvents(ctx, a.Group); err != nil {
+			return nil, err
+		}
+	}
 	history, err := snapshot.ActionHistory("")
 	if err != nil {
 		return nil, err
@@ -133,10 +140,12 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 				return nil, &ConflictError{ID: m.IssueID}
 			}
 			result.Status = "unattempted"
-			out.Partial = true
-			if normal {
+			if m.Noop || normal && !a.Group.Planned {
 				result.Status = "noop"
-				out.Partial = false
+			} else if normal {
+				return nil, fmt.Errorf("planned group callback omitted required effect for %s", m.IssueID)
+			} else {
+				out.Partial = true
 			}
 			if a.Group.Forward != nil {
 				result.Status = a.Group.Forward.Members[i].Status
@@ -166,7 +175,7 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 				if receipt.After == nil || state.Revision != receipt.After.Revision {
 					return nil, &ConflictError{ID: m.IssueID}
 				}
-				if receipt.UpdateIntent.NativeEvents != nil {
+				if receipt.UpdateIntent.NativeEvents != nil && !a.Group.hasPlannedInputs() {
 					events, err := c.readStateEvents(withReviewCost(ctx), m.IssueID)
 					if err != nil {
 						return nil, err

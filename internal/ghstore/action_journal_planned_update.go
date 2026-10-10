@@ -12,6 +12,14 @@ import (
 // printed group receipt can reconcile uncertain effects without replaying them.
 // Relationships, transitions and activity comments need their own mixed plan.
 func (c *Client) UpdateMany(ctx context.Context, ids []string, change Changes) ([]Record, error) {
+	records, err := c.selectPlannedTasks(ctx, ids, false)
+	if err != nil {
+		return nil, err
+	}
+	return c.updateManyObserved(ctx, records, change)
+}
+
+func (c *Client) selectPlannedTasks(ctx context.Context, ids []string, includeDeleted bool) ([]Record, error) {
 	canonical := make([]string, 0, len(ids))
 	seen := map[string]bool{}
 	for _, id := range ids {
@@ -37,12 +45,12 @@ func (c *Client) UpdateMany(ctx context.Context, ids []string, change Changes) (
 	selected := make([]Record, 0, len(ids))
 	for _, id := range canonical {
 		r, found := byID[id]
-		if !found || r.DeletedAt != nil {
+		if !found || r.DeletedAt != nil && !includeDeleted {
 			return nil, fmt.Errorf("batch update member %s missing or deleted; no write attempted", id)
 		}
 		selected = append(selected, r)
 	}
-	return c.updateManyObserved(ctx, selected, change)
+	return selected, nil
 }
 
 func (c *Client) updateManyObserved(ctx context.Context, records []Record, change Changes) ([]Record, error) {
@@ -79,7 +87,11 @@ func (c *Client) updateManyObserved(ctx context.Context, records []Record, chang
 }
 
 func (c *Client) beginPlannedUpdateGroup(ctx context.Context, plans []*issueUpdatePlan) error {
-	g := &ActionGroup{Command: "update", Members: []ActionGroupMember{}}
+	return c.beginPlannedTaskGroup(ctx, "update", plans, false)
+}
+
+func (c *Client) beginPlannedTaskGroup(ctx context.Context, command string, plans []*issueUpdatePlan, declared bool) error {
+	g := &ActionGroup{Command: command, Planned: declared, Members: []ActionGroupMember{}}
 	expected, sizing := map[string]ActionIssueState{}, map[string]ActionIssueState{}
 	for _, plan := range plans {
 		id := plan.observed.ID
@@ -94,7 +106,7 @@ func (c *Client) beginPlannedUpdateGroup(ctx context.Context, plans []*issueUpda
 		if err != nil {
 			return err
 		}
-		g.Members = append(g.Members, ActionGroupMember{IssueID: id, Before: before, Input: input})
+		g.Members = append(g.Members, ActionGroupMember{IssueID: id, Before: before, Input: input, Noop: plan.noop})
 		expected[id] = before
 		// Only a private capacity probe uses the planned contents with an old
 		// observed clock. No future result or receipt is persisted here.
@@ -124,6 +136,9 @@ func (c *Client) beginPlannedUpdateGroup(ctx context.Context, plans []*issueUpda
 		return fmt.Errorf("planned group capacity preflight (no write attempted): %w", err)
 	}
 	for _, m := range g.Members {
+		if m.Noop {
+			continue
+		}
 		probe := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: a.SessionID, IssueID: m.IssueID,
 			CarrierID: carrier, Action: "update", Phase: "prepared", Before: &m.Before, UpdateIntent: m.Input, GroupOperationID: a.OperationID}
 		if err := checkUpdateArchiveCapacity(probe); err != nil {
@@ -147,7 +162,10 @@ func (c *Client) beginPlannedUpdateGroup(ctx context.Context, plans []*issueUpda
 	if err != nil {
 		return err
 	}
-	c.journal.Group = &activeActionGroup{Journal: journal, Expected: expected, Attempted: map[string]bool{}}
+	c.journal.Group = &activeActionGroup{Journal: journal, Expected: expected, Attempted: map[string]bool{}, Plans: map[string]*issueUpdatePlan{}}
+	for _, plan := range plans {
+		c.journal.Group.Plans[plan.observed.ID] = plan
+	}
 	return nil
 }
 
@@ -170,7 +188,7 @@ func (c *Client) verifyPlannedUpdateEvents(ctx context.Context, g *ActionGroup) 
 // Recheck the immutable plan and every watched task after writing a member
 // intent and before PATCH, and again against the actual result before receipt.
 func (c *Client) verifyPlannedUpdateGroup(ctx context.Context, after *Record) error {
-	if c.journal == nil || c.journal.Group == nil || c.journal.Group.Journal.Group.Command != "update" {
+	if c.journal == nil || c.journal.Group == nil || !c.journal.Group.Journal.Group.hasPlannedInputs() {
 		return nil
 	}
 	active := c.journal.Group
