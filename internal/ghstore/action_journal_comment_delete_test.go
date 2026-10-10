@@ -24,8 +24,22 @@ func deletedCommentFixture(t *testing.T, mode string) *commentWriteFixture {
 	}
 	base := f.client.run
 	reads := 0
+	postDeletePointReads := 0
 	f.client.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
 		method, path := args[4], strings.TrimPrefix(args[5], "repos/owner/repo")
+		if path == "/issues/1" && method == "GET" && f.deletes > 0 {
+			postDeletePointReads++
+		}
+		if path == "/issues/1" && method == "GET" && mode == "late-delete-clock" && postDeletePointReads == 3 {
+			issue := f.issues[1]
+			issue.UpdatedAt = issue.UpdatedAt.Add(time.Second)
+			f.issues[1] = issue
+		}
+		if path == "/issues/1" && method == "GET" && ((mode == "delayed-delete-clock" && postDeletePointReads == 2) || (mode == "persistent-delete-clock" && postDeletePointReads >= 2)) {
+			issue := f.issues[1]
+			issue.UpdatedAt = issue.UpdatedAt.Add(-time.Second)
+			return json.Marshal(issue)
+		}
 		if path == "/issues/1/comments?per_page=100" {
 			if f.deletes > 0 && mode == "verification-error" {
 				return nil, errors.New("HTTP 403 deletion verification denied")
@@ -149,5 +163,58 @@ func TestDeletedCommentJournalRejectsVersionMismatchAndForgedState(t *testing.T)
 				t.Fatal("forged deleted comment state accepted")
 			}
 		})
+	}
+}
+
+func TestCommentDeletionObservesConvergingClockWithoutRepeatingDelete(t *testing.T) {
+	f := deletedCommentFixture(t, "delayed-delete-clock")
+	if err := f.client.DeleteComment(context.Background(), "gh-1", "ghc-201"); err != nil {
+		t.Fatalf("own deletion clock propagation prevented verified success: %v", err)
+	}
+	journal, err := decodeActionJournal(*f.comment, "gh-9")
+	if err != nil || journal.Phase != "applied" || f.deletes != 1 || f.intentWrites != 1 || f.receiptWrites != 1 {
+		t.Fatal("clock observation replayed mutation or lost verified receipt", journal, err, f.deletes)
+	}
+}
+
+func TestCommentDeletionClockObservationIsBoundedAndKeepsPreparedOutcome(t *testing.T) {
+	f := deletedCommentFixture(t, "persistent-delete-clock")
+	err := f.client.DeleteComment(context.Background(), "gh-1", "ghc-201")
+	var lag *commentDeletionClockLagError
+	if !errors.As(err, &lag) || f.deletes != 1 || f.intentWrites != 1 || f.receiptWrites != 0 {
+		t.Fatal("persistent clock mismatch succeeded or replayed writes", err, f.deletes)
+	}
+	journal, decodeErr := decodeActionJournal(*f.comment, "gh-9")
+	if decodeErr != nil || journal.Phase != "prepared" {
+		t.Fatal("unverified outcome became applied", journal, decodeErr)
+	}
+}
+
+func TestCommentDeletionClockWaitHonorsCancellationWithoutReplay(t *testing.T) {
+	f := deletedCommentFixture(t, "delayed-delete-clock")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	base := f.client.run
+	f.client.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+		data, err := base(ctx, dir, payload, args...)
+		if f.deletes > 0 && strings.Contains(args[5], "/issues?state=all&per_page=100") {
+			cancel()
+		}
+		return data, err
+	}
+	err := f.client.DeleteComment(ctx, "gh-1", "ghc-201")
+	if !errors.Is(err, context.Canceled) || f.deletes != 1 || f.intentWrites != 1 || f.receiptWrites != 0 {
+		t.Fatal("cancellation ignored or unverified outcome saved", err, f.deletes)
+	}
+}
+
+func TestCommentDeletionSettlesClockBeforePublishingAppliedReceipt(t *testing.T) {
+	f := deletedCommentFixture(t, "late-delete-clock")
+	if err := f.client.DeleteComment(context.Background(), "gh-1", "ghc-201"); err != nil {
+		t.Fatalf("late own DELETE clock prevented verified receipt: %v", err)
+	}
+	journal, err := decodeActionJournal(*f.comment, "gh-9")
+	if err != nil || journal.Phase != "applied" || !journal.After.UpdatedAt.Equal(f.issues[1].UpdatedAt) || f.deletes != 1 || f.intentWrites != 1 || f.receiptWrites != 1 {
+		t.Fatal("receipt published before clock stabilized or mutation replayed", journal, err)
 	}
 }

@@ -418,7 +418,13 @@ remain protected. The intent is validated and read back before another target
 and comment revision check. A denied or uncertain DELETE is not retried and
 leaves a prepared record for inspection. Success requires comment absence,
 unchanged issue fields, a verified applied receipt and a final fresh bulk
-observation. An external target edit or malformed/incomplete collection fails
+observation. Before publishing that receipt, an exact clock-only difference
+between point and collection reads permits at most three read observations
+with cancellable 1s/2s waits. Normalizing only the observed clock must reproduce
+the full point revision; any other field difference stops immediately. An
+additional point read fences the collection match before receipt publication. DELETE
+is never replayed, and final receipt verification retains its exact revision
+check. Persistent lag remains an explicit unverified result. An external target edit or malformed/incomplete collection fails
 explicitly. A later receipt failure includes the operation and journal ID,
 never treating an unverified deletion as ordinary success.
 
