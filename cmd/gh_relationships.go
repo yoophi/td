@@ -17,6 +17,21 @@ import (
 )
 
 func init() {
+	localRemoveArgs := depRmCmd.Args
+	depRmCmd.Args = func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load(getBaseDir())
+		if err != nil {
+			return err
+		}
+		kind, err := config.Store(cfg)
+		if err != nil {
+			return err
+		}
+		if kind == config.StoreGitHub {
+			return cobra.MinimumNArgs(2)(cmd, args)
+		}
+		return localRemoveArgs(cmd, args)
+	}
 	for _, original := range []*cobra.Command{depCmd, depAddCmd, depRmCmd, dependsOnCmd, blockedByCmd, criticalPathCmd, treeCmd} {
 		local := original.RunE
 		original.RunE = func(cmd *cobra.Command, args []string) error {
@@ -96,46 +111,28 @@ func changeGitHubDependencies(original, cmd *cobra.Command, args []string, cfg *
 		return err
 	}
 	added := original != depRmCmd
-	completed := []string{}
-	for _, target := range targets {
-		observed, err := client.Get(cmd.Context(), id)
-		if err != nil {
-			return dependencyBatchError(id, target, completed, err)
-		}
-		exists := observed.Details != nil && slices.Contains(observed.Details.Dependencies, target)
-		var result *ghstore.Record
-		if added && exists {
-			// A duplicate is a no-op, but still validate that the target is an issue.
-			if _, err = client.Get(cmd.Context(), target); err == nil {
-				result = observed
-			}
-		} else {
-			result, err = client.ChangeDependencyObserved(cmd.Context(), observed, target, added, state.Session.ID)
-		}
-		if err != nil {
-			return dependencyBatchError(id, target, completed, err)
-		}
-		completed = append(completed, target)
+	observed, err := client.Get(cmd.Context(), id)
+	if err != nil {
+		return err
+	}
+	result, changes, err := client.ChangeDependenciesObserved(cmd.Context(), observed, targets, added, state.Session.ID)
+	if err != nil {
+		return fmt.Errorf("dependency batch for %s: %w", id, err)
+	}
+	for _, change := range changes {
 		action := "dependency_added"
 		if !added {
 			action = "dependency_removed"
 		}
 		if jsonMode(cmd) {
-			if err = json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"action": action, "from": id, "to": target, "type": "depends_on", "already_exists": added && exists, "issue": result}); err != nil {
+			if err = json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"action": action, "from": id, "to": change.TargetID, "type": "depends_on", "already_exists": change.AlreadyExists, "issue": result}); err != nil {
 				return err
 			}
 		} else {
-			cmd.Printf("%s: %s -> %s\n", strings.ToUpper(action), id, target)
+			cmd.Printf("%s: %s -> %s\n", strings.ToUpper(action), id, change.TargetID)
 		}
 	}
 	return nil
-}
-
-func dependencyBatchError(id, target string, completed []string, err error) error {
-	if len(completed) == 0 {
-		return fmt.Errorf("dependency %s -> %s: %w", id, target, err)
-	}
-	return fmt.Errorf("dependency %s -> %s failed; completed targets %s; earlier changes remain, inspect current state before retrying: %w", id, target, strings.Join(completed, ", "), err)
 }
 
 type githubRelationshipGraph struct {

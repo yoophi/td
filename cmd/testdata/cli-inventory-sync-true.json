@@ -1676,7 +1676,7 @@
   },
   {
     "path": "td dep rm",
-    "use": "rm \u003cissue\u003e \u003cdepends-on\u003e",
+    "use": "rm \u003cissue\u003e \u003cdepends-on\u003e...",
     "aliases": [
       "remove"
     ],

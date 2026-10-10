@@ -23,7 +23,24 @@ func githubRelationshipCommand(original *cobra.Command) *cobra.Command {
 	return c
 }
 
-func TestGitHubRelationshipCommandsGraphAndPartialWrites(t *testing.T) {
+func TestDependencyRemoveArityByStore(t *testing.T) {
+	storeTestDir(t)
+	if err := depRmCmd.Args(depRmCmd, []string{"td-one", "td-two"}); err != nil {
+		t.Fatal("SQLite single removal rejected", err)
+	}
+	if err := depRmCmd.Args(depRmCmd, []string{"td-one", "td-two", "td-three"}); err == nil {
+		t.Fatal("SQLite silently accepted an unimplemented batch")
+	}
+	githubScheduleTestDir(t)
+	if err := depRmCmd.Args(depRmCmd, []string{"gh-1", "gh-2", "gh-3"}); err != nil {
+		t.Fatal("GitHub batch removal rejected", err)
+	}
+	if err := depRmCmd.Args(depRmCmd, []string{"gh-1"}); err == nil {
+		t.Fatal("missing removal target accepted")
+	}
+}
+
+func TestGitHubRelationshipCommandsGraphAndBatchPreflight(t *testing.T) {
 	dir := storeTestDir(t)
 	runGit(t, dir, "init")
 	runGit(t, dir, "remote", "add", "origin", "https://github.com/owner/repo.git")
@@ -116,13 +133,18 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 		}
 	}
 	out, err = executeGitHubTest(githubRelationshipCommand(depAddCmd), "gh-2", "gh-1", "gh-99", "--json")
-	if err == nil || !strings.Contains(err.Error(), "completed targets gh-1") || !strings.Contains(err.Error(), "earlier changes remain") || !json.Valid([]byte(strings.TrimSpace(out))) {
+	if err == nil || !strings.Contains(err.Error(), "gh-99") || strings.TrimSpace(out) != "" {
 		t.Fatal(out, err)
 	}
+	after, _ := os.ReadFile(os.Getenv("TD_REL_STATE"))
+	if string(before) != string(after) {
+		t.Fatal("invalid later target caused a partial dependency write")
+	}
 	out = execute(dependsOnCmd, "gh-2")
-	if !strings.Contains(out, `"dependencies":["gh-3","gh-1"]`) {
+	if !strings.Contains(out, `"dependencies":["gh-3"]`) {
 		t.Fatal(out)
 	}
+	execute(depAddCmd, "gh-2", "gh-1")
 	execute(depRmCmd, "gh-2", "gh-1")
 	t.Setenv("TD_REL_FAIL", "2")
 	if _, err := executeGitHubTest(githubRelationshipCommand(depRmCmd), "gh-2", "gh-3", "--json"); err == nil {

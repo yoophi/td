@@ -547,9 +547,10 @@ var depAddCmd = &cobra.Command{
 }
 
 var depRmCmd = &cobra.Command{
-	Use:     "rm <issue> <depends-on>",
+	Use:     "rm <issue> <depends-on>...",
 	Aliases: []string{"remove"},
 	Short:   "Remove a dependency",
+	Long:    "Remove a dependency. GitHub stores accept multiple targets and apply the complete delta in one source update. SQLite stores require exactly one target.",
 	Args:    cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()

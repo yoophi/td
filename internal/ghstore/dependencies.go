@@ -21,41 +21,91 @@ func (e *DependencyNotFoundError) Error() string {
 // Remove permits cleaning an edge whose target was deleted or became missing.
 // These are optimistic checks, not an atomic graph transaction or GitHub CAS.
 func (c *Client) ChangeDependencyObserved(ctx context.Context, observed *Record, target string, add bool, actor string) (*Record, error) {
+	result, _, err := c.changeDependenciesObserved(ctx, observed, []string{target}, add, actor, false)
+	return result, err
+}
+
+// DependencyChange describes one requested edge in its original argument order.
+// Repeated additions retain the CLI's already-exists reporting without writes.
+type DependencyChange struct {
+	TargetID      string
+	AlreadyExists bool
+}
+
+// ChangeDependenciesObserved plans all edge changes before any write, then
+// updates the single source once. Its one journal input/receipt covers the
+// complete delta, including uncertain-result recovery and command-wide undo.
+// Existing additions are no-ops; removals still allow missing/deleted targets.
+func (c *Client) ChangeDependenciesObserved(ctx context.Context, observed *Record, targets []string, add bool, actor string) (*Record, []DependencyChange, error) {
+	return c.changeDependenciesObserved(ctx, observed, targets, add, actor, true)
+}
+
+func (c *Client) changeDependenciesObserved(ctx context.Context, observed *Record, targets []string, add bool, actor string, allowExisting bool) (*Record, []DependencyChange, error) {
 	if observed == nil || observed.repository != c.repo || observed.revision == ([32]byte{}) {
-		return nil, fmt.Errorf("dependency change requires an observation from this repository")
+		return nil, nil, fmt.Errorf("dependency change requires an observation from this repository")
 	}
 	if observed.DeletedAt != nil {
-		return nil, workflowStateError("cannot change dependencies of deleted issue %s", observed.ID)
+		return nil, nil, workflowStateError("cannot change dependencies of deleted issue %s", observed.ID)
 	}
-	if strings.TrimSpace(actor) == "" {
-		return nil, &WorkflowInputError{Reason: "dependency change requires a session"}
+	if strings.TrimSpace(actor) == "" || len(targets) == 0 {
+		return nil, nil, &WorkflowInputError{Reason: "dependency change requires a session and targets"}
 	}
-	n, err := Number(target)
-	if err != nil {
-		return nil, &WorkflowInputError{Reason: err.Error()}
-	}
-	target = fmt.Sprintf("gh-%d", n)
 	details, err := observed.CopyDetails()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	exists := slices.Contains(details.Dependencies, target)
-	if add && exists {
-		return nil, workflowStateError("dependency already exists")
-	}
-	if !add && !exists {
-		return nil, &DependencyNotFoundError{IssueID: observed.ID, DependsOnID: target}
+	changes := make([]DependencyChange, 0, len(targets))
+	changed, existing := []string{}, []string{}
+	for _, raw := range targets {
+		n, err := Number(raw)
+		if err != nil {
+			return nil, nil, &WorkflowInputError{Reason: err.Error()}
+		}
+		target := fmt.Sprintf("gh-%d", n)
+		exists := slices.Contains(details.Dependencies, target)
+		if add && exists && !allowExisting {
+			return nil, nil, workflowStateError("dependency already exists")
+		}
+		if !add && !exists {
+			return nil, nil, &DependencyNotFoundError{IssueID: observed.ID, DependsOnID: target}
+		}
+		changes = append(changes, DependencyChange{TargetID: target, AlreadyExists: add && exists})
+		if add && exists {
+			if !slices.Contains(changed, target) && !slices.Contains(existing, target) {
+				existing = append(existing, target)
+			}
+			continue
+		}
+		changed = append(changed, target)
+		if add {
+			details.Dependencies = append(details.Dependencies, target)
+		} else {
+			details.Dependencies = slices.DeleteFunc(details.Dependencies, func(id string) bool { return id == target })
+		}
 	}
 	observations := []Record{}
 	if add {
-		observations, err = c.dependencyObservations(ctx, observed.ID, []string{target})
+		observations, err = c.dependencyObservations(ctx, observed.ID, changed)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-
-		details.Dependencies = append(details.Dependencies, target)
-	} else {
-		details.Dependencies = slices.DeleteFunc(details.Dependencies, func(id string) bool { return id == target })
+		seen := map[string]bool{observed.ID: true}
+		for _, r := range observations {
+			seen[r.ID] = true
+		}
+		for _, target := range existing {
+			if seen[target] {
+				continue
+			}
+			// Duplicate additions still require a live task. Do not expand
+			// its graph or repair unrelated historical edges for a no-op.
+			r, err := c.Get(ctx, target)
+			if err != nil {
+				return nil, nil, fmt.Errorf("validate existing dependency %s: %w", target, err)
+			}
+			observations = append(observations, *r)
+			seen[target] = true
+		}
 	}
 	verify := func(after bool) error {
 		verifyCtx := ctx
@@ -74,9 +124,20 @@ func (c *Client) ChangeDependencyObserved(ctx context.Context, observed *Record,
 		return nil
 	}
 	if err := verify(false); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if len(changed) == 0 {
+		current, err := c.Get(ctx, observed.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if current.revision != observed.revision {
+			return nil, nil, &ConflictError{ID: observed.ID}
+		}
+		return observed, changes, nil
 	}
 	now := time.Now().UTC()
+	operation := "td-op-" + rand.Text()
 	supersedeReviews(&details, now)
 	details.ReviewerSession = ""
 	details.ReviewedAt = nil
@@ -85,15 +146,17 @@ func (c *Client) ChangeDependencyObserved(ctx context.Context, observed *Record,
 	if add {
 		action = "add_dep"
 	}
-	details.Transitions = append(details.Transitions, TransitionRecord{OperationID: "td-op-" + rand.Text(), Action: action, From: observed.Status, To: observed.Status, SessionID: actor, At: now, RelatedIssueID: target})
+	for _, target := range changed {
+		details.Transitions = append(details.Transitions, TransitionRecord{OperationID: operation, Action: action, From: observed.Status, To: observed.Status, SessionID: actor, At: now, RelatedIssueID: target})
+	}
 	result, err := c.UpdateObserved(ctx, observed, Changes{Details: &details, journalRelated: observations})
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("%s dependencies for %s (operation %s): %w", action, observed.ID, operation, err)
 	}
 	if err := verify(true); err != nil {
-		return nil, fmt.Errorf("%s dependency %s -> %s was saved, but graph verification failed; inspect current state before retrying: %w", action, observed.ID, target, err)
+		return nil, nil, fmt.Errorf("%s dependency change for %s was saved (operation %s), but graph verification failed; inspect current state before retrying: %w", action, observed.ID, operation, err)
 	}
-	return result, nil
+	return result, changes, nil
 }
 
 // Capture the reachable graph used for validation, without refreshing the source.

@@ -20,6 +20,7 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | Multi-ID `delete` / `restore` | v17 planned independent task group; native open/closed state retained; deleted tasks included in selection | Existing device-local context |
 | Multi-target `ws log` / `ws handoff` without `--review` | v19 activity group fixes all complete inputs; partial recovery observes comments without replay; undo checks and removes actual results | Tags, history membership and end state remain local |
 | `config sync-state-labels` / `config sync-priority-labels --apply` with multiple repairs | v17 planned scalar `update` group fixes every repair's complete labels and original revision, including closed/deleted tasks | No local context change |
+| Multi-edge `dep add` / `dep rm` (`remove`) | One source PATCH and one existing update receipt for the full prevalidated delta; shared reachable targets are observed once per fence | No local context change |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -62,13 +63,37 @@ replaying repairs, and undo restores the original labels (including missing or
 incorrect mirrors) without changing task metadata, native state or deletion.
 Repository label definitions created during setup are not removed by undo.
 
+Dependency batches validate all requested edges before journal or source writes.
+A missing or invalid later target leaves earlier edges unchanged. One operation
+ID and timestamp cover the actual transition delta. A lost response is reconciled
+without replay, and one undo restores the entire command subject to the existing
+source, graph and historical-review checks. This uses the existing relation
+receipt format and does not introduce a journal schema. GitHub PATCH remains
+optimistic; it is not a graph transaction or conditional-write guarantee.
+
+Duplicate additions keep their per-argument `already_exists` results, including
+the `--depends-on` form, without extra writes. Each successful JSON result refers
+to the final source state, not a fabricated intermediate state. A completely
+unchanged command creates no receipt. Removal can clean edges to missing/deleted
+tasks; restoring such an invalid historical graph through undo is still refused.
+GitHub `dep rm`/`dep remove` now accept multiple targets. SQLite retains its
+existing exactly-one-target removal contract, documented in command help and
+the captured CLI inventory.
+
+Isolated `yoophi/td-sample` acceptance on 2026-10-11 verified two-edge additions
+and removals with exactly one source PATCH per command, whole-delta undo, and
+read-only duplicate additions/completed inverse confirmation. Before/after
+native title, body, state and labels were compared independently. Request logging
+captured only methods and endpoints. Lost-response recovery was exercised in CLI
+fixtures, not by injecting a GitHub service failure. Stage evidence is recorded
+on #65; this does not complete the full command/flag audit.
+
 ## Remaining writer integration
 
 | Writer | Current effects requiring an aggregate |
 |---|---|
 | Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
-| Multi-edge dependency add/remove | Repeated updates to the same source task |
 | `ws handoff --review` | Activity fanout followed by task review requests |
 | File link/unlink | One whole file-set update followed by an automatic activity comment |
 | Due/defer | Task schedule update followed by an automatic activity comment |

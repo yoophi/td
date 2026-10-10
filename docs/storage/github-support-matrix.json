@@ -721,9 +721,12 @@
       "command": "td dep add",
       "owner": "#4",
       "state": "partial",
-      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "reason": "CLI fixtures verify prevalidated multi-edge changes in one source receipt, complete undo, uncertain-result reconciliation without replay, duplicate no-ops and depends-on/JSON output. Isolated td-sample acceptance verifies one native source PATCH, complete undo and read-only no-ops/confirmation. Full option combinations remain pending.",
       "evidence": [
-        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions",
+        "TestGitHubJournalCLIDependencyBatchSingleEffect",
+        "TestGitHubJournalCLIDependencyBatchNoopsAndInvalidRemoval",
+        "TestGitHubRelationshipCommandsGraphAndBatchPreflight"
       ],
       "flags": {
         "depends-on": "pending",
@@ -737,9 +740,12 @@
       "command": "td dep rm",
       "owner": "#4",
       "state": "partial",
-      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "reason": "CLI fixtures verify GitHub multi-target rm/remove in one source receipt, complete undo, uncertain-result reconciliation without replay and preflight rejection of invalid later targets. Isolated td-sample acceptance verifies one native source PATCH, complete undo and read-only confirmation. SQLite retains single-target arity. Full option combinations remain pending.",
       "evidence": [
-        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions",
+        "TestGitHubJournalCLIDependencyBatchSingleEffect",
+        "TestGitHubJournalCLIDependencyBatchNoopsAndInvalidRemoval",
+        "TestDependencyRemoveArityByStore"
       ],
       "flags": {
         "help": "pending",
