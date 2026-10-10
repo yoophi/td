@@ -160,6 +160,8 @@ type Record struct {
 	managed                 bool
 	revision                [32]byte
 	repository              string
+	nativeBody              string
+	nativeState             string
 	Details                 *IssueDetails `json:"details,omitempty"`
 }
 
@@ -223,7 +225,7 @@ func (item apiIssue) record() (*Record, error) {
 		Status: models.Status(item.State), Type: meta.Type, Priority: meta.Priority,
 		Points: meta.Points, Acceptance: meta.Acceptance, Labels: labels,
 		CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, ClosedAt: item.ClosedAt,
-	}, Number: item.Number, URL: item.URL, meta: meta, managed: managed, revision: sha256.Sum256(snapshot), Details: meta.Details}
+	}, Number: item.Number, URL: item.URL, meta: meta, managed: managed, revision: sha256.Sum256(snapshot), Details: meta.Details, nativeBody: item.Body, nativeState: item.State}
 	if meta.Details != nil {
 		meta.Details.apply(&record.Issue)
 	}

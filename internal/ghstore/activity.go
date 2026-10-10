@@ -111,6 +111,21 @@ func decodeActivity(comment apiComment, issueID string) (models.Activity, error)
 	if comment.ID <= 0 {
 		return result, fmt.Errorf("invalid GitHub comment identity")
 	}
+	if strings.Contains(comment.Body, actionJournalPrefix) {
+		if strings.Contains(comment.Body, activityPrefix) {
+			return result, fmt.Errorf("comment %s mixes activity and action journal metadata", result.ID)
+		}
+		journal, err := decodeActionJournal(comment, issueID)
+		if err != nil {
+			return result, err
+		}
+		result.Kind = "action_journal"
+		result.Message = fmt.Sprintf("%s %s (%s)", journal.Action, journal.IssueID, journal.Phase)
+		result.OperationID = journal.OperationID
+		result.SessionID = journal.SessionID
+		result.Native = false
+		return result, nil
+	}
 	index := strings.Index(comment.Body, activityPrefix)
 	if index < 0 {
 		return result, nil

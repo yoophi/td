@@ -1,0 +1,276 @@
+package ghstore
+
+import (
+	"bytes"
+	"cmp"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"slices"
+	"strings"
+	"time"
+)
+
+const actionJournalPrefix = "<!-- td:action:"
+const actionJournalStart = actionJournalPrefix + "v1\n"
+
+// ActionIssueState preserves native values, including the complete metadata
+// body. UpdatedAt detects later edits even when content has returned to the
+// same value. Revision is a consistency checksum, not a signature or CAS token.
+type ActionIssueState struct {
+	Title     string    `json:"title"`
+	Body      string    `json:"body"`
+	State     string    `json:"state"`
+	Labels    []string  `json:"labels"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Revision  string    `json:"revision"`
+}
+
+func (s ActionIssueState) checksum() (string, error) {
+	s.Revision = ""
+	s.Labels = slices.Clone(s.Labels)
+	slices.Sort(s.Labels)
+	data, err := json.Marshal(s)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func actionIssueState(record *Record) (ActionIssueState, error) {
+	if record == nil || (record.nativeState != "open" && record.nativeState != "closed") {
+		return ActionIssueState{}, fmt.Errorf("native issue observation is required for action history")
+	}
+	state := ActionIssueState{Title: record.Title, Body: record.nativeBody, State: record.nativeState,
+		Labels: append([]string{}, record.Labels...), UpdatedAt: record.UpdatedAt}
+	var err error
+	state.Revision, err = state.checksum()
+	if err == nil {
+		err = state.validate()
+	}
+	return state, err
+}
+
+func (s ActionIssueState) validate() error {
+	if s.UpdatedAt.IsZero() {
+		return fmt.Errorf("action history requires an observed GitHub update time")
+	}
+	if s.State != "open" && s.State != "closed" {
+		return fmt.Errorf("invalid action native state")
+	}
+	if s.Labels == nil {
+		return fmt.Errorf("action labels must be an array")
+	}
+	labels := map[string]bool{}
+	for _, label := range s.Labels {
+		if label == "" || labels[label] {
+			return fmt.Errorf("invalid or repeated action label")
+		}
+		labels[label] = true
+	}
+	expected, err := s.checksum()
+	if err != nil || s.Revision != expected {
+		return fmt.Errorf("action state checksum mismatch")
+	}
+	return nil
+}
+
+// ActionJournal is a shared intent/result record. SessionID is attribution,
+// not authentication. GitHub supplies the comment author and timestamps.
+// Prepared records are never treated as successful or automatically replayed.
+type ActionJournal struct {
+	OperationID     string            `json:"operation_id"`
+	SessionID       string            `json:"session_id"`
+	IssueID         string            `json:"issue_id"`
+	Action          string            `json:"action"`
+	Phase           string            `json:"phase"`
+	Before          *ActionIssueState `json:"before,omitempty"`
+	After           *ActionIssueState `json:"after,omitempty"`
+	Restored        *ActionIssueState `json:"restored,omitempty"`
+	UndoOperationID string            `json:"undo_operation_id,omitempty"`
+}
+
+type ActionJournalRecord struct {
+	ActionJournal
+	ID        string    `json:"id"`
+	Author    string    `json:"author"`
+	URL       string    `json:"url"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (a ActionJournal) validate() error {
+	identity := func(value string) bool {
+		if value == "" {
+			return false
+		}
+		for _, c := range value {
+			allowed := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_'
+			if !allowed {
+				return false
+			}
+		}
+		return true
+	}
+	if !identity(a.OperationID) || !identity(a.SessionID) {
+		return fmt.Errorf("action history requires operation and session identity")
+	}
+	n, err := Number(a.IssueID)
+	if err != nil || a.IssueID != fmt.Sprintf("gh-%d", n) {
+		return fmt.Errorf("action requires canonical issue identity")
+	}
+	if !slices.Contains([]string{"create", "update", "delete", "restore", "transition", "relation", "note", "board"}, a.Action) {
+		return fmt.Errorf("unknown journal action %q", a.Action)
+	}
+	if !slices.Contains([]string{"prepared", "applied", "undo_prepared", "undone"}, a.Phase) {
+		return fmt.Errorf("unknown action phase %q", a.Phase)
+	}
+	if a.Action != "create" && a.Before == nil {
+		return fmt.Errorf("action requires before-state")
+	}
+	if a.Action == "create" && a.Before != nil {
+		return fmt.Errorf("creation has no before-state")
+	}
+	if a.Phase != "prepared" && a.After == nil {
+		return fmt.Errorf("verified action requires after-state")
+	}
+	undo := a.Phase == "undo_prepared" || a.Phase == "undone"
+	if undo != (a.UndoOperationID != "") || (undo && !identity(a.UndoOperationID)) || a.UndoOperationID == a.OperationID {
+		return fmt.Errorf("undo phase requires a distinct undo identity")
+	}
+	if (a.Phase == "undone") != (a.Restored != nil) {
+		return fmt.Errorf("undone action requires verified restored-state")
+	}
+	for _, state := range []*ActionIssueState{a.Before, a.After, a.Restored} {
+		if state != nil {
+			if err := state.validate(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func renderActionJournal(a ActionJournal) (string, error) {
+	if err := a.validate(); err != nil {
+		return "", err
+	}
+	data, err := json.Marshal(a)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, a.IssueID, a.Phase, actionJournalStart, data, markerEnd), nil
+}
+
+func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalRecord, error) {
+	index := strings.Index(comment.Body, actionJournalPrefix)
+	if index < 0 {
+		return nil, nil
+	}
+	block := strings.TrimSpace(comment.Body[index:])
+	if comment.ID <= 0 || strings.Count(comment.Body, actionJournalPrefix) != 1 || !strings.HasPrefix(block, actionJournalStart) || !strings.HasSuffix(block, markerEnd) {
+		return nil, fmt.Errorf("comment %d has unknown or malformed action journal", comment.ID)
+	}
+	raw := strings.TrimSuffix(strings.TrimPrefix(block, actionJournalStart), markerEnd)
+	var a ActionJournal
+	decoder := json.NewDecoder(bytes.NewBufferString(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&a); err != nil {
+		return nil, fmt.Errorf("invalid action journal: %w", err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return nil, fmt.Errorf("trailing action journal data")
+	}
+	if err := a.validate(); err != nil {
+		return nil, err
+	}
+	if a.IssueID != issueID {
+		return nil, fmt.Errorf("action journal belongs to %s, not %s", a.IssueID, issueID)
+	}
+	expected, err := renderActionJournal(a)
+	if err != nil || expected != comment.Body {
+		return nil, fmt.Errorf("comment %d action journal was edited or is noncanonical", comment.ID)
+	}
+	return &ActionJournalRecord{ActionJournal: a, ID: fmt.Sprintf("ghc-%d", comment.ID), Author: comment.User.Login,
+		URL: comment.URL, CreatedAt: comment.CreatedAt, UpdatedAt: comment.UpdatedAt}, nil
+}
+
+// ActionHistory reads all carriers' journals from the existing bulk comments,
+// including deleted issues, notes and boards. It performs no network requests.
+func (s *Snapshot) ActionHistory(sessionID string) ([]ActionJournalRecord, error) {
+	if !s.fullHistory {
+		return nil, fmt.Errorf("action history requires complete snapshot comments")
+	}
+	result := []ActionJournalRecord{}
+	seen := map[string]bool{}
+	for _, entry := range s.entries {
+		for _, comment := range entry.Comments {
+			a, err := decodeActionJournal(comment, fmt.Sprintf("gh-%d", entry.Issue.Number))
+			if err != nil {
+				return nil, err
+			}
+			if a == nil {
+				continue
+			}
+			if seen[a.OperationID] {
+				return nil, fmt.Errorf("duplicate action operation %s", a.OperationID)
+			}
+			seen[a.OperationID] = true
+			if sessionID == "" || a.SessionID == sessionID {
+				result = append(result, *a)
+			}
+		}
+	}
+	slices.SortFunc(result, func(a, b ActionJournalRecord) int {
+		if comparison := b.CreatedAt.Compare(a.CreatedAt); comparison != 0 {
+			return comparison
+		}
+		aNumber, _ := CommentNumber(a.ID)
+		bNumber, _ := CommentNumber(b.ID)
+		return cmp.Compare(bNumber, aNumber)
+	})
+	return result, nil
+}
+
+// IssueUndoPlan is only a checked inverse, not an executed write. The executor
+// must recheck immediately before PATCH and verify the result/receipt afterward.
+type IssueUndoPlan struct {
+	AlreadyUndone bool
+	Payload       map[string]any
+}
+
+func (a ActionJournalRecord) PlanIssueUndo(current *Record, sessionID, author string) (*IssueUndoPlan, error) {
+	if err := a.validate(); err != nil {
+		return nil, err
+	}
+	if sessionID == "" || author == "" || a.SessionID != sessionID || !strings.EqualFold(a.Author, author) {
+		return nil, fmt.Errorf("action is not attributed to the current session and GitHub author")
+	}
+	if current == nil || current.ID != a.IssueID {
+		return nil, fmt.Errorf("undo target identity differs from action history")
+	}
+	state, err := actionIssueState(current)
+	if err != nil {
+		return nil, err
+	}
+	if a.Phase == "prepared" || a.Phase == "undo_prepared" {
+		return nil, fmt.Errorf("action %s is %s with an unverified outcome; inspect GitHub before any retry", a.OperationID, a.Phase)
+	}
+	if a.Phase == "undone" {
+		if state.Revision != a.Restored.Revision {
+			return nil, &ConflictError{ID: a.IssueID}
+		}
+		return &IssueUndoPlan{AlreadyUndone: true}, nil
+	}
+	if state.Revision != a.After.Revision {
+		return nil, &ConflictError{ID: a.IssueID}
+	}
+	if a.Action == "create" {
+		return nil, fmt.Errorf("creation cannot be erased safely; use the explicit logical delete command for %s to preserve GitHub identity and history", a.IssueID)
+	}
+	return &IssueUndoPlan{Payload: map[string]any{"title": a.Before.Title, "body": a.Before.Body,
+		"state": a.Before.State, "labels": append([]string{}, a.Before.Labels...)}}, nil
+}
