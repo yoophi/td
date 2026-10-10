@@ -2077,7 +2077,7 @@
       "command": "td undo",
       "owner": "#9",
       "state": "partial",
-      "reason": "Bulk current-session journal list and verified latest scalar undo are implemented; workflow/graph/multi-target and sequential receipt-chain integration, default write journaling and native acceptance remain pending.",
+      "reason": "Bulk current-session journal list and verified latest scalar undo with receipt-chain verification are implemented; workflow/graph/multi-target integration, default write journaling and native acceptance remain pending.",
       "evidence": [
         "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads",
         "TestGitHubUndoCLIExecutesVerifiedLatestActionAndReportsFailures"

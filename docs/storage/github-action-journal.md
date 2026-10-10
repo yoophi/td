@@ -66,10 +66,21 @@ verified issue. Human output reports UNDONE only after receipt verification.
 With no remaining tracked action, JSON reports `action=no_tracked_actions` with
 session and explicit history scope; it does not claim there were no legacy
 changes. Repeating the command after undoing the sole tracked action writes
-nothing. Multi-step undo still needs receipt-chain verification: restoring a
-newer action changes the server clock, so an older action's original after
-revision cannot simply be accepted based on matching field values. That case
-currently remains a conflict rather than silently relaxing the revision guard.
+nothing. Sequential scalar undo uses verified receipt chains: an undone action's
+exact before revision links to its restored revision only when the restored
+content equals the before content and the action belongs to the same GitHub
+author, td session, target and carrier. The selected receipt must agree with a
+fresh complete bulk observation. Missing/ambiguous edges, unfinished outcomes,
+cycles, changed content and later native edits remain conflicts, even when field
+values have returned to their earlier values.
+
+The executor reads complete history only when the original revision guard
+fails. Before the target PATCH it bulk-reads history again to verify every used
+receipt and reject newly ambiguous edges, then rechecks the target revision.
+These are two repository issue/comment collection reads, rather than per-issue
+history requests. Original action snapshots are never rewritten to excuse a
+changed server clock. REST writes still lack atomic compare-and-swap; existing
+readback and uncertain-result limits continue to apply.
 
 `Snapshot.ActionHistory` consumes the existing bulk issue/comment observation,
 including note/board carriers and logically deleted issues. It makes no extra

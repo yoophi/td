@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -68,6 +69,19 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 		return nil, err
 	}
 	plan, err := action.PlanIssueUndo(current, sessionID, user.Login)
+	var witnesses []ActionJournalRecord
+	var conflict *ConflictError
+	if errors.As(err, &conflict) && action.Phase == "applied" {
+		snapshot, readErr := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+		if readErr != nil {
+			return nil, readErr
+		}
+		history, readErr := snapshot.ActionHistory("")
+		if readErr != nil {
+			return nil, readErr
+		}
+		plan, witnesses, err = planUndoThroughReceipts(action, current, sessionID, user.Login, history)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +97,19 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	prepared, err := c.rewriteActionJournal(ctx, action, pending)
 	if err != nil {
 		return nil, fmt.Errorf("undo intent is unverified; no target write attempted: %w", err)
+	}
+	if len(witnesses) > 0 {
+		snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+		if err != nil {
+			return nil, err
+		}
+		history, err := snapshot.ActionHistory("")
+		if err != nil {
+			return nil, err
+		}
+		if err := verifyUndoWitnesses(witnesses, history); err != nil {
+			return nil, err
+		}
 	}
 	latest, err := c.GetIncludingDeleted(ctx, current.ID)
 	if err != nil {
