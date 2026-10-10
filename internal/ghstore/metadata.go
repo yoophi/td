@@ -74,9 +74,12 @@ func validateMetadata(meta metadata) error {
 		return fmt.Errorf("invalid td issue metadata fields")
 	}
 	switch meta.EntityKind {
-	case "", "issue", "board", "note":
+	case "", "issue", "board", "note", "journal":
 	default:
 		return fmt.Errorf("unknown td entity kind %q", meta.EntityKind)
+	}
+	if meta.EntityKind == "journal" && (meta.Details != nil || meta.Board != nil || meta.Note != nil) {
+		return fmt.Errorf("journal carrier cannot contain task, board or note details")
 	}
 	if meta.Board != nil {
 		if meta.EntityKind != "board" || meta.Details != nil || meta.Note != nil {

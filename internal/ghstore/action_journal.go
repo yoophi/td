@@ -85,6 +85,7 @@ type ActionJournal struct {
 	OperationID     string            `json:"operation_id"`
 	SessionID       string            `json:"session_id"`
 	IssueID         string            `json:"issue_id"`
+	CarrierID       string            `json:"carrier_id,omitempty"`
 	Action          string            `json:"action"`
 	Phase           string            `json:"phase"`
 	Before          *ActionIssueState `json:"before,omitempty"`
@@ -121,6 +122,12 @@ func (a ActionJournal) validate() error {
 	n, err := Number(a.IssueID)
 	if err != nil || a.IssueID != fmt.Sprintf("gh-%d", n) {
 		return fmt.Errorf("action requires canonical issue identity")
+	}
+	if a.CarrierID != "" {
+		carrier, err := Number(a.CarrierID)
+		if err != nil || a.CarrierID != fmt.Sprintf("gh-%d", carrier) || a.CarrierID == a.IssueID {
+			return fmt.Errorf("action requires a distinct canonical journal carrier")
+		}
 	}
 	if !slices.Contains([]string{"create", "update", "delete", "restore", "transition", "relation", "note", "board"}, a.Action) {
 		return fmt.Errorf("unknown journal action %q", a.Action)
@@ -187,8 +194,12 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	if a.IssueID != issueID {
-		return nil, fmt.Errorf("action journal belongs to %s, not %s", a.IssueID, issueID)
+	carrier := a.CarrierID
+	if carrier == "" {
+		carrier = a.IssueID
+	}
+	if carrier != issueID {
+		return nil, fmt.Errorf("action journal belongs to carrier %s, not %s", carrier, issueID)
 	}
 	expected, err := renderActionJournal(a)
 	if err != nil || expected != comment.Body {

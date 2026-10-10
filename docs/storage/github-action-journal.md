@@ -1,12 +1,18 @@
 # GitHub action journal implementation
 
-This work belongs to #9. The codec, bulk reader and inverse planner are present;
-command dispatch, write journaling and undo execution are not yet implemented.
+This work belongs to #9. The codec, bulk reader, inverse planner and an opt-in
+issue-update write protocol are present. CLI dispatch, default write integration,
+creation/multi-target/note/board journaling and undo execution remain pending.
 `td last` and `td undo` remain unsupported for GitHub storage. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
 A journal is a versioned `td:action:v1` block on a repository carrier's GitHub
-comment. It identifies the operation, session, issue, action and phase, and
+comment. New tracked updates use a dedicated `entity_kind=journal` issue, excluded
+from task lists. Its comment writes are separate from the target issue, so the
+target's observed update time does not need to be ignored or refreshed after
+journaling. Optional `carrier_id` identifies this distinct carrier; records
+without it retain the original per-target comment format. The record identifies
+the operation, session, target issue, action and phase, and
 preserves native title, complete body (including td metadata), native state,
 labels and observed update time. Native `open` can represent td `in_progress`;
 the raw body and native state are preserved separately from display fields.
@@ -55,3 +61,33 @@ failure handling. Creation, physically deleted comments/issues and external API
 side effects need explicit compensation limits. Import/export preservation of
 the new journal is also still pending. GitHub PATCH cannot provide an atomic
 distributed transaction; this remains best-effort conflict detection.
+
+## Opt-in issue update protocol
+
+`Client.EnableActionJournal` validates session identity and finds one dedicated
+carrier through the complete issue collection. With none present, it creates
+one, verifies its response/readback and rescans for concurrent duplicate
+creation. Multiple carriers fail explicitly; none is selected or deleted to
+hide ambiguity. Changing a carrier into an ordinary task fails before any
+intent/target write. Closing its native GitHub issue does not repurpose it.
+
+On an enabled client, `UpdateObserved` keeps its existing input, policy, parent
+and revision checks. It writes a prepared comment, validates the response and
+readback, then rechecks the exact original target revision and parents before
+PATCH. The intent never excuses a stale policy decision. Existing PATCH response
+and target readback checks must succeed before writing an applied receipt. The
+receipt's prior identity/content/update time and its PATCH/readback are checked;
+the target is read again afterward to report later changes explicitly. An
+unverified intent prevents a target write; an uncertain target or receipt write
+returns an error and is never automatically retried. A verified target change
+with a failed receipt is reported as a partial result, not ordinary success.
+
+This adds explicit calls per mutation for carrier/intent/receipt verification;
+it does not add per-issue calls to history listing. Large batches still need
+cost/rate-limit testing and grouped partial-result handling. Fixture tests
+simulate target permissions, intent permissions/readback failure, uncertain
+target/receipt responses, concurrent target/journal edits, changed carrier
+identity and duplicate bootstrap. Native GitHub acceptance remains pending.
+Enabling is currently an internal API opt-in; CLI/HTTP/monitor writers have not
+yet been switched. Unchanged clients keep their existing behavior. No claim of
+full #9 support follows from this update-only protocol.

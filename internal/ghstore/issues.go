@@ -24,6 +24,7 @@ type Client struct {
 	invalidationCache *snapshotCache
 	cooldown          *apiCooldownScope
 	audit             func(auditlog.SecurityEvent) error
+	journal           *actionJournalScope
 	stateLabels       map[string]bool
 	dir, repo         string
 	run               func(context.Context, string, []byte, ...string) ([]byte, error)
@@ -628,6 +629,25 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	if err := c.verifyParentObservations(ctx, record.ID, parents, false); err != nil {
 		return nil, err
 	}
+	var journal *ActionJournalRecord
+	if c.journal != nil {
+		journal, err = c.prepareActionJournal(ctx, observed)
+		if err != nil {
+			return nil, err
+		}
+		// Journal comments are on a separate carrier; writing them cannot be
+		// used to excuse a changed target revision or refresh a policy decision.
+		latest, err = c.GetIncludingDeleted(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("verify %s after journal intent (no target write attempted): %w", id, err)
+		}
+		if latest.revision != observed.revision {
+			return nil, &ConflictError{ID: id}
+		}
+		if err := c.verifyParentObservations(ctx, record.ID, parents, false); err != nil {
+			return nil, err
+		}
+	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", record.Number), payload, false)
 	if err != nil {
 		return nil, err
@@ -666,6 +686,11 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	updated.repository = c.repo
 	if err := c.verifyParentObservations(ctx, record.ID, parents, true); err != nil {
 		return nil, err
+	}
+	if journal != nil {
+		if err := c.completeActionJournal(ctx, journal, updated); err != nil {
+			return nil, fmt.Errorf("%s update was verified, but action receipt %s is unverified; inspect GitHub before retrying: %w", id, journal.OperationID, err)
+		}
 	}
 	return updated, nil
 }
