@@ -276,15 +276,11 @@ func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, 
 			return nil, err
 		}
 	}
-	written, err := c.publishJournal(ctx, path, publication, a, fence)
+	verified, err := c.publishJournal(ctx, path, publication, a, fence)
 	if err != nil {
 		return nil, fmt.Errorf("group receipt unverified; inspect before retrying, no target replay: %w", err)
 	}
-	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
-	if err != nil {
-		return nil, err
-	}
-	if !sameJournalIdentity(a, verified) || !reflect.DeepEqual(written, verified) {
+	if !sameJournalIdentity(a, verified) {
 		return nil, fmt.Errorf("group receipt identity changed during readback")
 	}
 	return verified, nil

@@ -167,19 +167,12 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	if err != nil {
 		return nil, err
 	}
-	written, err := c.publishJournal(ctx, path, publication, action, nil)
+	verified, err := c.publishJournal(ctx, path, publication, action, nil)
 	if err != nil {
 		return nil, fmt.Errorf("recovery receipt %s is unverified; inspect before retrying (no target write replayed): %w", action.ID, err)
 	}
-	if !sameJournalIdentity(action, written) {
+	if !sameJournalIdentity(action, verified) {
 		return nil, fmt.Errorf("recovery receipt identity changed; inspect before retrying")
-	}
-	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
-	if err != nil {
-		return nil, fmt.Errorf("recovery receipt readback is unverified; inspect before retrying: %w", err)
-	}
-	if !reflect.DeepEqual(written, verified) {
-		return nil, fmt.Errorf("recovery receipt changed during readback; inspect before retrying")
 	}
 	observed, err := c.observeReconcileResult(ctx, verified)
 	if err != nil {

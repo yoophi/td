@@ -333,3 +333,57 @@ are evidence for a separate mutation-path optimization, not a claim of low write
 cost or a budget for ordinary small issues. Any reuse must stay within a verified
 mutation boundary and preserve rejection of changed parts, roots and watched
 targets; reusable display snapshots cannot replace those checks.
+
+### #70 publication readback budget
+
+The native trace exposed a repeated sequence immediately after manifest writes:
+a full carrier collection, a root point read, then the same full collection.
+The publisher now returns the verified native readback. Multipart publication
+uses one complete collection to compare the root with its write response and
+validate all referenced parts; callers do not repeat those reads. Inline
+publication retains its point readback. No display cache or observation from an
+earlier mutation substitutes for original-receipt, target, group or event checks.
+
+The deterministic `TestMultipartMutationReadbackBudget` exercises real client
+update and undo with different 28,000-byte random before/after descriptions and
+a one-page fixture. Counts include all client API invocations in each operation:
+
+| Operation | API calls before → after | Carrier collections before → after | Root point reads before → after |
+| --- | ---: | ---: | ---: |
+| Update | 32 → 28 | 9 → 7 | 3 → 1 |
+| Undo | 35 → 31 | 11 → 9 | 5 → 3 |
+
+The test also caps each publication at one readback request before the next
+target observation. Mutation tests retain failure handling for edited/missing
+parts, changed native root clocks/authors, incomplete publication, partial
+forward/inverse completion and explicit recovery without replay. A later inverse
+must reject a changed part even when publication and a display snapshot had
+previously verified it. Reads across uploads or separate mutation boundaries
+remain intentional and continue to use fresh native data.
+
+Actual GitHub comparison used the same two sample issues (#184/#185), the same
+28,000-byte seeded descriptions, and cache disabled. Before each variant's
+start, native title/body/state/label names matched the original inputs exactly.
+Both variants injected one group-completion PATCH rejection, reconciled without
+changing target bodies, revisions or comment counts, and undid the group back
+to its original contents. Test issues were logically deleted afterward; no
+SQLite database was created.
+
+| Command | API calls before → after | Observed HTTP responses before → after | Common-page HTTP workload before → after |
+| --- | ---: | ---: | ---: |
+| Start both, completion receipt rejected | 96 → 86 | 190 → 165 | 218 → 188 |
+| Apply reconciliation | 27 → 25 | 65 → 60 | 75 → 69 |
+| Undo both | 134 → 122 | 294 → 279 | 340 → 304 |
+| `last` after undo | 3 → 3 | 8 → 9 | 9 → 9 |
+
+Retained history grows between runs, so equal API calls can produce more HTTP
+pages (`last` above). The common-page column normalizes every GET endpoint to
+its largest observed page count across both variants, keeping actual write
+responses and zero-response injected failures. It is an estimate under equal
+pagination, not an additional native measurement. Observed counts come from
+td's parsed native-header counters, including `gh --slurp` pagination; they
+exclude `gh auth`'s internal network traffic. Successful multipart publications
+remain 5, 1 and 6 for start, recovery and undo respectively. The saved API
+invocations are exactly the removed point read and carrier collection per
+publication. The large-operation cost remains substantial; these results do
+not assert an API-limit guarantee for arbitrary workloads.

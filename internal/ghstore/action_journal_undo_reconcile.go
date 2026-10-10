@@ -180,19 +180,12 @@ func (c *Client) reconcileUndo(ctx context.Context, a *ActionJournalRecord, sess
 	if err != nil {
 		return nil, err
 	}
-	written, err := c.publishJournal(ctx, path, publication, a, nil)
+	verified, err := c.publishJournal(ctx, path, publication, a, nil)
 	if err != nil {
 		return nil, fmt.Errorf("undo recovery receipt is unverified; no target write replayed: %w", err)
 	}
-	if !sameJournalIdentity(a, written) {
+	if !sameJournalIdentity(a, verified) {
 		return nil, fmt.Errorf("undo recovery receipt identity changed; inspect before retrying")
-	}
-	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
-	if err != nil {
-		return nil, fmt.Errorf("undo recovery receipt readback is unverified; inspect before retrying: %w", err)
-	}
-	if !reflect.DeepEqual(written, verified) {
-		return nil, fmt.Errorf("undo recovery receipt changed during readback")
 	}
 	observed, err := c.observeUndoReconcile(ctx, verified)
 	if err != nil {

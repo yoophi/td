@@ -184,19 +184,12 @@ func (c *Client) reconcileForwardComment(ctx context.Context, a *ActionJournalRe
 	if err != nil {
 		return nil, err
 	}
-	written, err := c.publishJournal(ctx, path, publication, a, nil)
+	verified, err := c.publishJournal(ctx, path, publication, a, nil)
 	if err != nil {
 		return nil, fmt.Errorf("comment recovery receipt is unverified; inspect before retrying, no target replay: %w", err)
 	}
-	if !sameJournalIdentity(a, written) || !strings.EqualFold(written.Author, actor) {
+	if !sameJournalIdentity(a, verified) || !strings.EqualFold(verified.Author, actor) {
 		return nil, fmt.Errorf("comment recovery receipt identity changed; no target replay")
-	}
-	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
-	if err != nil {
-		return nil, fmt.Errorf("comment recovery receipt readback is unverified; no target replay: %w", err)
-	}
-	if !reflect.DeepEqual(written, verified) {
-		return nil, fmt.Errorf("comment recovery receipt changed during readback")
 	}
 	if _, _, err := c.observeForwardComment(ctx, verified); err != nil {
 		return nil, fmt.Errorf("comment recovery receipt saved but final observation failed; no target replay: %w", err)

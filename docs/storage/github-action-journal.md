@@ -1036,6 +1036,16 @@ the manifest from a fresh collection; cached UI data never authorizes writes.
 Point reads add a paginated carrier collection for multipart receipts, not one
 request per part. Small inline publications retain their previous request path.
 
+The publisher returns a verified native readback, rather than an unchecked write
+response. For a multipart publication, one fresh carrier collection must contain
+the exact returned root and every valid referenced part. Callers consume that
+result within the same publication boundary, without repeating a root point read
+and another full collection (#70). Inline publications still compare a fresh
+point read with their write response. The observation is not cached or retained
+as permission for a later phase: original-receipt, target, group and native-event
+checks still run at their respective mutation boundaries, including after part
+uploads and during explicit recovery.
+
 An upload or manifest failure returns its original diagnostic and operation
 identity; it never automatically retries the failed write. A failure before the
 prepared manifest is verified cannot start the target mutation. If a later

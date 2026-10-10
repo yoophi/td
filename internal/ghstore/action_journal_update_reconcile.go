@@ -273,19 +273,12 @@ func (c *Client) reconcileForwardUpdate(ctx context.Context, a *ActionJournalRec
 			return nil, err
 		}
 	}
-	written, err := c.publishJournal(ctx, path, publication, a, fence)
+	verified, err := c.publishJournal(ctx, path, publication, a, fence)
 	if err != nil {
 		return nil, fmt.Errorf("forward recovery receipt is unverified; inspect before retrying, no target replay: %w", err)
 	}
-	if !sameJournalIdentity(a, written) || !strings.EqualFold(written.Author, actor) {
+	if !sameJournalIdentity(a, verified) || !strings.EqualFold(verified.Author, actor) {
 		return nil, fmt.Errorf("forward recovery receipt identity changed; no target replay")
-	}
-	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
-	if err != nil {
-		return nil, fmt.Errorf("forward recovery receipt readback is unverified; no target replay: %w", err)
-	}
-	if !reflect.DeepEqual(written, verified) {
-		return nil, fmt.Errorf("forward recovery receipt changed during readback")
 	}
 	final, _, err := c.observeForwardUpdate(ctx, verified)
 	if err != nil {

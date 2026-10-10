@@ -100,6 +100,9 @@ func selectJournalUploadParts(plan *journalPublication, collection *journalPartC
 // upload immutable parts first and publish the manifest last. Re-entering after
 // an explicit recovery may reuse exact observed parts; no failed POST is retried
 // in this call and no target issue/comment is replayed here.
+// Success returns the receipt verified by a fresh native readback, not just the
+// write response. Callers may consume it immediately within this publication
+// boundary; subsequent writes must still reobserve their original receipts.
 func (c *Client) publishJournal(ctx context.Context, path string, plan *journalPublication, old *ActionJournalRecord, fence func() error) (*ActionJournalRecord, error) {
 	if plan == nil {
 		return nil, fmt.Errorf("journal publication plan is required")
@@ -200,5 +203,27 @@ func (c *Client) publishJournal(ctx context.Context, path string, plan *journalP
 	if err != nil {
 		return nil, err
 	}
-	return c.decodeJournalResponse(ctx, data, body, plan.carrierID)
+	written, err := c.decodeJournalResponse(withReadbackCost(ctx), data, body, plan.carrierID)
+	if err != nil {
+		return nil, err
+	}
+	if len(plan.partBodies) > 0 {
+		// Decoding a multipart response already reads the complete native carrier
+		// collection and compares its root with the response before resolving all
+		// referenced parts. That verified collection is the readback for this
+		// publication; it is not retained as permission for a subsequent write.
+		return written, nil
+	}
+	number, err := CommentNumber(written.ID)
+	if err != nil {
+		return nil, err
+	}
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), fmt.Sprintf("/issues/comments/%d", number), written)
+	if err != nil {
+		return nil, fmt.Errorf("journal publication readback failed: %w", err)
+	}
+	if !reflect.DeepEqual(written, verified) {
+		return nil, fmt.Errorf("journal publication changed during readback")
+	}
+	return verified, nil
 }

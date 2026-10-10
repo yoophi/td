@@ -286,19 +286,12 @@ func (c *Client) rewriteActionJournalGuarded(ctx context.Context, old *ActionJou
 			return nil, err
 		}
 	}
-	written, err := c.publishJournal(ctx, path, publication, old, fence)
+	verified, err := c.publishJournal(ctx, path, publication, old, fence)
 	if err != nil {
 		return nil, err
 	}
-	if !sameJournalIdentity(old, written) {
+	if !sameJournalIdentity(old, verified) {
 		return nil, fmt.Errorf("journal rewrite identity changed")
-	}
-	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
-	if err != nil {
-		return nil, err
-	}
-	if !sameJournalIdentity(written, verified) || !written.UpdatedAt.Equal(verified.UpdatedAt) {
-		return nil, fmt.Errorf("journal changed during rewrite verification")
 	}
 	return verified, nil
 }

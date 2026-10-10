@@ -240,20 +240,9 @@ func (c *Client) writePreparedJournal(ctx context.Context, a ActionJournal) (*Ac
 		return nil, err
 	}
 	path := fmt.Sprintf("/issues/%d/comments", c.journal.Carrier.Number)
-	written, err := c.publishJournal(ctx, path, publication, nil, nil)
+	verified, err := c.publishJournal(ctx, path, publication, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("journal intent %s is uncertain; no target write attempted: %w", a.OperationID, err)
-	}
-	number, err := CommentNumber(written.ID)
-	if err != nil {
-		return nil, err
-	}
-	verified, err := c.readJournalReceipt(withReadbackCost(ctx), fmt.Sprintf("/issues/comments/%d", number), written)
-	if err != nil {
-		return nil, fmt.Errorf("journal intent %s readback failed; no target write attempted: %w", a.OperationID, err)
-	}
-	if !sameJournalIdentity(written, verified) {
-		return nil, fmt.Errorf("journal intent identity changed; no target write attempted")
 	}
 	if c.journal.Group != nil && a.GroupOperationID == c.journal.Group.Journal.OperationID {
 		active := c.journal.Group
@@ -337,7 +326,7 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	if err := c.verifyPlannedUpdateGroup(ctx, after); err != nil {
 		return err
 	}
-	written, err := c.publishJournal(ctx, path, publication, prepared, func() error {
+	verified, err := c.publishJournal(ctx, path, publication, prepared, func() error {
 		if err := c.verifyPlannedUpdateGroup(ctx, after); err != nil {
 			return err
 		}
@@ -355,15 +344,8 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	if err != nil {
 		return err
 	}
-	if !sameJournalIdentity(prepared, written) {
+	if !sameJournalIdentity(prepared, verified) {
 		return fmt.Errorf("journal receipt identity changed")
-	}
-	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
-	if err != nil {
-		return err
-	}
-	if !sameJournalIdentity(written, verified) || !written.UpdatedAt.Equal(verified.UpdatedAt) {
-		return fmt.Errorf("journal receipt changed during verification")
 	}
 	latest, err := c.readJournalTarget(withReadbackCost(ctx), after.ID)
 	if err != nil {
