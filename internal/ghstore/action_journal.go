@@ -15,6 +15,7 @@ import (
 
 const actionJournalPrefix = "<!-- td:action:"
 const actionJournalStart = actionJournalPrefix + "v1\n"
+const actionCommentJournalStart = actionJournalPrefix + "v2\n"
 
 // ActionIssueState preserves native values, including the complete metadata
 // body. UpdatedAt detects later edits even when content has returned to the
@@ -82,17 +83,19 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
-	OperationID     string             `json:"operation_id"`
-	SessionID       string             `json:"session_id"`
-	IssueID         string             `json:"issue_id"`
-	CarrierID       string             `json:"carrier_id,omitempty"`
-	Action          string             `json:"action"`
-	Phase           string             `json:"phase"`
-	Before          *ActionIssueState  `json:"before,omitempty"`
-	After           *ActionIssueState  `json:"after,omitempty"`
-	Restored        *ActionIssueState  `json:"restored,omitempty"`
-	UndoOperationID string             `json:"undo_operation_id,omitempty"`
-	CreateInput     *ActionCreateInput `json:"create_input,omitempty"`
+	OperationID     string              `json:"operation_id"`
+	SessionID       string              `json:"session_id"`
+	IssueID         string              `json:"issue_id"`
+	CarrierID       string              `json:"carrier_id,omitempty"`
+	Action          string              `json:"action"`
+	Phase           string              `json:"phase"`
+	Before          *ActionIssueState   `json:"before,omitempty"`
+	After           *ActionIssueState   `json:"after,omitempty"`
+	Restored        *ActionIssueState   `json:"restored,omitempty"`
+	UndoOperationID string              `json:"undo_operation_id,omitempty"`
+	CreateInput     *ActionCreateInput  `json:"create_input,omitempty"`
+	CommentInput    *ActionCommentInput `json:"comment_input,omitempty"`
+	CommentAfter    *ActionCommentState `json:"comment_after,omitempty"`
 }
 
 // Creation intent has no allocated issue number or observed server clock yet.
@@ -160,7 +163,7 @@ func (a ActionJournal) validate() error {
 			return fmt.Errorf("action requires a distinct canonical journal carrier")
 		}
 	}
-	if !slices.Contains([]string{"create", "update", "delete", "restore", "transition", "relation", "note", "board"}, a.Action) {
+	if !slices.Contains([]string{"create", "update", "delete", "restore", "transition", "relation", "note", "board", "comment_create"}, a.Action) {
 		return fmt.Errorf("unknown journal action %q", a.Action)
 	}
 	if !slices.Contains([]string{"prepared", "applied", "undo_prepared", "undone"}, a.Phase) {
@@ -189,7 +192,7 @@ func (a ActionJournal) validate() error {
 			}
 		}
 	}
-	return nil
+	return a.validateCommentAction()
 }
 
 func renderActionJournal(a ActionJournal) (string, error) {
@@ -204,7 +207,11 @@ func renderActionJournal(a ActionJournal) (string, error) {
 	if target == "" {
 		target = "new issue"
 	}
-	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, target, a.Phase, actionJournalStart, data, markerEnd), nil
+	start := actionJournalStart
+	if a.Action == "comment_create" {
+		start = actionCommentJournalStart
+	}
+	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, target, a.Phase, start, data, markerEnd), nil
 }
 
 func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalRecord, error) {
@@ -213,10 +220,14 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		return nil, nil
 	}
 	block := strings.TrimSpace(comment.Body[index:])
-	if comment.ID <= 0 || strings.Count(comment.Body, actionJournalPrefix) != 1 || !strings.HasPrefix(block, actionJournalStart) || !strings.HasSuffix(block, markerEnd) {
+	start := actionJournalStart
+	if strings.HasPrefix(block, actionCommentJournalStart) {
+		start = actionCommentJournalStart
+	}
+	if comment.ID <= 0 || !strings.HasPrefix(block, start) || !strings.HasSuffix(block, markerEnd) {
 		return nil, fmt.Errorf("comment %d has unknown or malformed action journal", comment.ID)
 	}
-	raw := strings.TrimSuffix(strings.TrimPrefix(block, actionJournalStart), markerEnd)
+	raw := strings.TrimSuffix(strings.TrimPrefix(block, start), markerEnd)
 	var a ActionJournal
 	decoder := json.NewDecoder(bytes.NewBufferString(raw))
 	decoder.DisallowUnknownFields()
@@ -228,6 +239,12 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	}
 	if err := a.validate(); err != nil {
 		return nil, err
+	}
+	if (a.Action == "comment_create") != (start == actionCommentJournalStart) {
+		return nil, fmt.Errorf("action journal version does not match its payload")
+	}
+	if a.CommentAfter != nil && !strings.EqualFold(a.CommentAfter.Author, comment.User.Login) {
+		return nil, fmt.Errorf("comment result author differs from native journal author")
 	}
 	carrier := a.CarrierID
 	if carrier == "" {
@@ -291,6 +308,9 @@ type IssueUndoPlan struct {
 func (a ActionJournalRecord) PlanIssueUndo(current *Record, sessionID, author string) (*IssueUndoPlan, error) {
 	if err := a.validate(); err != nil {
 		return nil, err
+	}
+	if a.Action == "comment_create" {
+		return nil, &UndoScopeError{Reason: "comment undo requires its own guarded executor; no issue PATCH attempted"}
 	}
 	if sessionID == "" || author == "" || a.SessionID != sessionID || !strings.EqualFold(a.Author, author) {
 		return nil, fmt.Errorf("action is not attributed to the current session and GitHub author")

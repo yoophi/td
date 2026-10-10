@@ -54,6 +54,15 @@ advances the target clock on activity creation;
 write followed by its activity comment fails undo with a conflict, without
 changing the issue or marking the action undone. This validates the current
 safety boundary, not support for reversing the complete schedule operation.
+Version 2 comment-create records now preserve canonical activity input and the
+native comment identity, author, raw body and server clocks, alongside the
+issue before/after clock. They remain readable beside v1 issue records through
+the same bulk collections. `last` and `undo --list` JSON retain both the comment
+input/result and target issue identity. Actual subprocess tests exercise that
+read contract in both feature modes. This is a codec/read stage only: default
+activity writers do not emit v2 receipts yet, and a comment action cannot be
+planned as an issue PATCH. Its guarded creation/deletion executor remains work.
+
 Workflow history provides selected transitions but cannot reconstruct arbitrary
 issue, relationship, note or board changes. An activity feed is insufficient
 to fulfill #9.

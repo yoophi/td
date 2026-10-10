@@ -232,6 +232,39 @@ print('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(dat
 			t.Fatal("prepared action skipped", out, stderr, e)
 		}
 		assertBulk()
+		// A v2 comment receipt retains its native payload in last/undo --list.
+		commentBody := fmt.Sprintf("Recorded comment\n\n<!-- td:activity:v1\n{\"kind\":\"comment\",\"operation_id\":\"td-op-comment\",\"session_id\":%q,\"message\":\"Recorded comment\"}\n-->", state.Session.ID)
+		commentAfterIssue := *before
+		commentAfterIssue.UpdatedAt = clock.Add(time.Second)
+		commentAfterIssue.Revision = ""
+		encoded, e := json.Marshal(commentAfterIssue)
+		if e != nil {
+			t.Fatal(e)
+		}
+		digest := sha256.Sum256(encoded)
+		commentAfterIssue.Revision = hex.EncodeToString(digest[:])
+		nativeComment := &ghstore.ActionCommentState{ID: "ghc-42", IssueID: "gh-1", Body: commentBody, Author: "fixture-author", CreatedAt: clock, UpdatedAt: clock}
+		encoded, e = json.Marshal(nativeComment)
+		if e != nil {
+			t.Fatal(e)
+		}
+		digest = sha256.Sum256(encoded)
+		nativeComment.Revision = hex.EncodeToString(digest[:])
+		action := ghstore.ActionJournal{OperationID: "td-op-comment", SessionID: state.Session.ID, IssueID: "gh-1", CarrierID: "gh-99", Action: "comment_create", Phase: "applied", Before: before, After: &commentAfterIssue, CommentInput: &ghstore.ActionCommentInput{Body: commentBody}, CommentAfter: nativeComment}
+		encoded, e = json.Marshal(action)
+		if e != nil {
+			t.Fatal(e)
+		}
+		commentReceipt := map[string]any{"id": 7, "body": fmt.Sprintf("td action td-op-comment: comment_create gh-1 (applied)\n\n<!-- td:action:v2\n%s\n-->", encoded), "issue_url": "https://api.github.com/repos/owner/repo/issues/99", "user": map[string]string{"login": "fixture-author"}, "created_at": clock.Add(6 * time.Minute).Format(time.RFC3339), "updated_at": clock.Add(6 * time.Minute).Format(time.RFC3339)}
+		for _, args := range [][]string{{"last", "--json"}, {"undo", "--list", "--json"}} {
+			writeFixture(append(append([]map[string]any{}, comments...), commentReceipt), false)
+			out, stderr, e = run(args...)
+			var rows []githubActionHistoryRow
+			if e != nil || json.Unmarshal([]byte(out), &rows) != nil || len(rows) == 0 || rows[0].EntityType != "comment" || rows[0].EntityID != "ghc-42" || rows[0].TargetIssueID != "gh-1" || rows[0].CommentInput == nil || rows[0].CommentInput.Body != commentBody || rows[0].CommentAfter == nil || rows[0].CommentAfter.Author != "fixture-author" || rows[0].CommentDataFormat != "github-native-comment-state-v1" {
+				t.Fatal("comment history lost native state", rows, out, stderr, e)
+			}
+			assertBulk()
+		}
 		writeFixture(comments, true)
 		out, stderr, e = run("last", "--json")
 		if e == nil || !json.Valid([]byte(out)) || !strings.Contains(out, "HTTP 403 fixture comments denied") {

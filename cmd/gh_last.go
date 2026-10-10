@@ -14,14 +14,18 @@ import (
 
 type githubActionHistoryRow struct {
 	models.ActionLog
-	OperationID  string                     `json:"operation_id"`
-	Phase        string                     `json:"phase"`
-	CarrierID    string                     `json:"carrier_id,omitempty"`
-	Author       string                     `json:"author"`
-	URL          string                     `json:"url"`
-	DataFormat   string                     `json:"data_format"`
-	HistoryScope string                     `json:"history_scope"`
-	CreateInput  *ghstore.ActionCreateInput `json:"create_input,omitempty"`
+	OperationID       string                      `json:"operation_id"`
+	Phase             string                      `json:"phase"`
+	CarrierID         string                      `json:"carrier_id,omitempty"`
+	Author            string                      `json:"author"`
+	URL               string                      `json:"url"`
+	DataFormat        string                      `json:"data_format"`
+	HistoryScope      string                      `json:"history_scope"`
+	CreateInput       *ghstore.ActionCreateInput  `json:"create_input,omitempty"`
+	TargetIssueID     string                      `json:"target_issue_id,omitempty"`
+	CommentInput      *ghstore.ActionCommentInput `json:"comment_input,omitempty"`
+	CommentAfter      *ghstore.ActionCommentState `json:"comment_after,omitempty"`
+	CommentDataFormat string                      `json:"comment_data_format,omitempty"`
 }
 
 func init() {
@@ -181,11 +185,19 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 		if err != nil {
 			return nil, err
 		}
+		entityType, entityID, targetIssueID, commentFormat := "issue", action.IssueID, "", ""
+		if action.Action == "comment_create" {
+			entityType, entityID, targetIssueID, commentFormat = "comment", "new comment", action.IssueID, "github-native-comment-state-v1"
+			if action.CommentAfter != nil {
+				entityID = action.CommentAfter.ID
+			}
+		}
 		rows = append(rows, githubActionHistoryRow{ActionLog: models.ActionLog{ID: action.ID, SessionID: action.SessionID,
-			ActionType: models.ActionType(action.Action), EntityType: "issue", EntityID: action.IssueID,
+			ActionType: models.ActionType(action.Action), EntityType: entityType, EntityID: entityID,
 			PreviousData: before, NewData: after, Timestamp: action.CreatedAt, Undone: action.Phase == "undone"},
 			OperationID: action.OperationID, Phase: action.Phase, CarrierID: action.CarrierID, Author: action.Author, URL: action.URL,
-			DataFormat: "github-native-issue-state-v1", HistoryScope: "td-action-journal", CreateInput: action.CreateInput})
+			DataFormat: "github-native-issue-state-v1", HistoryScope: "td-action-journal", CreateInput: action.CreateInput,
+			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentDataFormat: commentFormat})
 	}
 	return rows, nil
 }

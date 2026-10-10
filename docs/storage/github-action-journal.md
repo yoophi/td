@@ -5,12 +5,14 @@ issue-update write protocol are present. `last` and `undo --list` have GitHub
 dispatch. CLI create/update (including creation shortcuts and the edit alias)
 now request action tracking with the real device-local td session. Their issue
 writes use durable intent and verified result protocols; carrier bootstrap is
-lazy, after input and target validation. HTTP/monitor/other command writers,
-note/board journaling and coordinated workflow/graph undo remain pending.
+lazy, after input and target validation. CLI transition, logical deletion,
+dependency, schedule, file and label-repair writers also request tracking.
+HTTP/monitor writers, activity/comment/note/board write protocols and coordinated
+workflow/graph undo remain pending.
 `td undo` executes the supported scalar inverse. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
-A journal is a versioned `td:action:v1` block on a repository carrier's GitHub
+An issue journal is a versioned `td:action:v1` block on a repository carrier's GitHub
 comment. New tracked updates use a dedicated `entity_kind=journal` issue, excluded
 from task lists. Its comment writes are separate from the target issue, so the
 target's observed update time does not need to be ignored or refreshed after
@@ -230,3 +232,44 @@ automatically. A target request failure identifies the operation and journal
 comment to inspect while retaining the original error. A saved prepared journal
 records an uncertain outcome; it is not a completed action. A lost response to a saved applied receipt can be reconciled
 by inspecting fresh history, rather than repeating the mutation.
+
+## Comment-create schema and readers (v2)
+
+`td:action:v2` currently defines `action=comment_create`. It stores exact
+`comment_input.body` for a canonical td activity with the same operation/session,
+plus verified `comment_after` with repository-local `ghc-N` identity, canonical
+issue membership, complete raw body, native author, created/updated clocks and a
+consistency checksum. This checksum is not authentication. The containing
+journal's native GitHub author must match the recorded comment result author.
+The carrier must be distinct, and issue create input cannot be mixed with comment
+input. A prepared intent has neither an issue after-state nor a comment result.
+Later phases require both. Comment creation may advance the issue clock but
+cannot change its title/body/state/labels; neither resulting nor restored clocks
+may move backwards.
+
+The common decoder accepts v1 issue and v2 comment records together, rejects
+payload/version mismatches and keeps unknown fields/versions as explicit errors.
+Exact canonical serialization distinguishes nested raw activity markers in JSON
+from a second top-level metadata block. The activity feed shows a concise journal
+summary without leaking snapshot bodies. `PlanIssueUndo` rejects comment actions
+with an explicit scope error so a comment receipt cannot become an issue PATCH.
+
+`last` and `undo --list` retain `comment_input`, `comment_after`,
+`target_issue_id` and `comment_data_format=github-native-comment-state-v1` in JSON.
+Their common before/after strings remain native issue snapshots with the existing
+`data_format`; entity type is comment, and the result ID is the native comment ID
+(or `new comment` for prepared creation). Bulk observations require no added
+per-comment queries. Actual CLI fixture tests cover v2 reads alongside v1 in both
+feature modes, including preserved native body and author.
+
+This is a schema/read stage. Activity creation does not yet emit v2 intents or
+verified receipts, and comment undo has no executor yet. Creation must next
+record intent before POST, check operation uniqueness from complete bulk history,
+recheck target immediately before write, validate native membership/author/body,
+read the comment and issue back, then verify the applied receipt. Lost/denied
+outcomes must remain explicitly uncertain without automatic POST retries.
+Deletion undo must verify exact current comment and issue state and preserve
+existing log/handoff protection. Recreating a deleted comment changes its ID,
+author attribution and server timestamps; that compensation needs an explicit
+limit rather than a claim of lossless restoration. These pending steps apply to
+automatic activity comments as well as direct comment/log/handoff commands.
