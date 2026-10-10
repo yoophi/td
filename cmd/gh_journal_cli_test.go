@@ -511,17 +511,14 @@ func TestGitHubJournalCLITracksDirectAutomaticAndFanoutActivities(t *testing.T) 
 	if first.CommentInput.OperationID != second.CommentInput.OperationID || first.OperationID == second.OperationID || first.IssueID == second.IssueID {
 		t.Fatal("work-session fanout identity corrupted", first, second)
 	}
-	before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	out, stderr, err := run("undo", "--json")
-	if err == nil || !strings.Contains(out+stderr, "unsupported_operation") {
-		t.Fatal("comment undo became an issue PATCH", out, stderr, err)
+	if err != nil || !json.Valid([]byte(out)) {
+		t.Fatal("guarded comment undo failed", out, stderr, err)
 	}
-	after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
-	if err != nil || !bytes.Equal(before, after) {
-		t.Fatal("unsupported comment undo mutated native state", err)
+	actions := fixtureAllJournals(t)
+	last := actions[len(actions)-1]
+	if last.Action != "comment_create" || last.Phase != "undone" || last.CommentAfter.Body != second.CommentAfter.Body || last.Restored == nil {
+		t.Fatal("comment undo did not preserve its original audit state", last)
 	}
 }
 

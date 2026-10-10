@@ -68,6 +68,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err != nil {
 		return nil, err
 	}
+	if action.Action == "comment_create" {
+		return c.undoCommentAction(ctx, action, current, sessionID, user.Login)
+	}
 	plan, err := action.PlanIssueUndo(current, sessionID, user.Login)
 	var witnesses []ActionJournalRecord
 	var conflict *ConflictError

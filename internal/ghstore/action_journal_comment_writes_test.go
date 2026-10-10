@@ -13,9 +13,10 @@ import (
 
 type commentWriteFixture struct {
 	*journalWriteFixture
-	native []apiComment
-	writes int
-	mode   string
+	native  []apiComment
+	writes  int
+	deletes int
+	mode    string
 }
 
 func newCommentWriteFixture(t *testing.T) *commentWriteFixture {
@@ -67,6 +68,24 @@ func newCommentWriteFixture(t *testing.T) *commentWriteFixture {
 				page = append(page, duplicate)
 			}
 			return encode([][]apiComment{page})
+		case strings.HasPrefix(path, "/issues/comments/20") && method == "DELETE":
+			f.deletes++
+			if f.mode == "delete-denied" {
+				return nil, errors.New("HTTP 403 delete denied")
+			}
+			if f.mode != "delete-noop" {
+				f.native = nil
+			}
+			issue := f.issues[1]
+			issue.UpdatedAt = issue.UpdatedAt.Add(time.Second)
+			if f.mode == "delete-target-changed" {
+				issue.Title = "Concurrent title"
+			}
+			f.issues[1] = issue
+			if f.mode == "delete-lost" {
+				return nil, errors.New("connection lost after DELETE")
+			}
+			return nil, nil
 		case strings.HasPrefix(path, "/issues/comments/20") && method == "GET":
 			if f.mode == "readback-denied" {
 				return nil, errors.New("HTTP 403 comment readback denied")

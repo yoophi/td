@@ -10,7 +10,7 @@ dependency, schedule, file and label-repair writers also request tracking.
 Tracked activity creation now records v2 receipts. HTTP/monitor writers,
 comment deletion/note/board write protocols and coordinated
 workflow/graph undo remain pending.
-`td undo` executes the supported scalar inverse. This document is
+`td undo` executes supported scalar and own comment-creation inverses. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
 An issue journal is a versioned `td:action:v1` block on a repository carrier's GitHub
@@ -293,19 +293,32 @@ checks provide a GitHub distributed transaction or atomic reservation.
 
 Actual CLI fixtures cover direct and automatic writes, two-target work-session
 fan-out with distinct journal IDs, failed receipt after a saved native comment,
-and refusal to undo an unfinished or unsupported comment action. The fixture now
+and refusal to undo an unfinished comment action. The fixture now
 stores native comments, membership/author/clocks, direct reads and issue clock
 changes. Separate library tests cover intent failures, stale targets, native
 POST denial/loss, unexpected membership/author, denied/changed readback, duplicate
 results, receipt failure/loss and a post-receipt external target edit. Fixture
 success does not substitute for actual GitHub acceptance.
 
-Comment undo still has no guarded executor. Deletion undo must verify exact
-current comment and issue state and preserve existing log/handoff protection.
-Recreating a deleted comment changes its ID, author attribution and server
-timestamps; that compensation needs an explicit limit rather than a claim of
-lossless restoration. Sequential field undo after activity creation requires
-comment inverse receipts with exact causal links; it must not simply ignore the
-issue clock. Comment deletion journaling, note/board state, coordinated policy/
-graph inverse operations, HTTP/monitor writers and portable journal transport
-remain required work.
+Comment-create undo now has a separate guarded DELETE executor. It requires the
+same td session and native GitHub author, exact issue revision and exact native
+comment ID/body/membership/author/clocks. An undo intent is saved and read back,
+then both objects are rechecked before DELETE. Two fresh complete collections
+verify absence of both the native comment ID and its logical operation, around
+the verified completion receipt. Issue contents must stay unchanged and the
+clock must not move backward. Completed replay rechecks absence and the exact
+restored issue revision without another DELETE. Unfinished intents, lost DELETE
+responses and denied/unverified receipts return errors without automatic retry.
+
+Own log/handoff creation can also be undone through this protocol: their complete
+original native body, author, timestamps and target remain in the immutable
+journal for audit. Generic manual comment deletion still protects log/handoff
+activities. This does not implement restoring a previously deleted comment:
+recreation changes its native ID, author attribution and timestamps. GitHub
+DELETE has no atomic compare-and-delete contract here; checks detect observed
+changes but cannot prevent an edit in the gap between the final read and DELETE.
+
+Sequential field undo after activity creation still requires comment inverse
+receipts with exact causal links; the issue clock is never ignored. Comment
+deletion journaling, note/board state, coordinated policy/graph inverse operations,
+HTTP/monitor writers and portable journal transport remain required work.

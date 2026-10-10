@@ -63,7 +63,7 @@ read contract in both feature modes. Tracked CLI clients now emit v2 receipts
 for direct comments/logs/handoffs and automatic activity comments, including
 work-session fan-out. Intent/POST/readback/uniqueness/receipt checks preserve
 uncertain outcomes without automatic retries. A comment action cannot be
-planned as an issue PATCH; guarded comment undo/deletion journaling remain work.
+planned as an issue PATCH; guarded own comment creation undo is implemented; deletion journaling remains work.
 
 Workflow history provides selected transitions but cannot reconstruct arbitrary
 issue, relationship, note or board changes. An activity feed is insufficient
