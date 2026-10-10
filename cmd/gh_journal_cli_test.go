@@ -612,6 +612,7 @@ func TestGitHubJournalCLIUndoRejectsUnjournaledCommentClock(t *testing.T) {
 
 func TestGitHubJournalCLITracksDirectAutomaticAndFanoutActivities(t *testing.T) {
 	_, sessionID, run := journalCLI(t)
+	useNativeCommentOrderFixture(t)
 	for _, args := range [][]string{
 		{"create", "First activity target"}, {"create", "Second activity target"},
 		{"comment", "gh-6", "Direct comment"}, {"comments", "add", "gh-6", "Nested comment"},

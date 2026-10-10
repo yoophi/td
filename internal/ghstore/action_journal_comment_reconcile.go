@@ -27,7 +27,7 @@ func (a ActionJournal) validateCommentObservation() error {
 		return nil
 	}
 	if a.Action != "comment_create" || a.Phase == "prepared" || a.Before == nil || a.After == nil || a.CommentAfter == nil ||
-		a.UpdateObservation != nil || a.UpdateIntent != nil || a.Reconciliation != nil || a.NativeUndo != nil || a.GroupOperationID != "" ||
+		a.UpdateObservation != nil || a.UpdateIntent != nil || a.Reconciliation != nil || a.NativeUndo != nil ||
 		o.Actor == "" || o.ObservedAt.IsZero() || o.Proof != commentObservationProof || o.State == nil || !reflect.DeepEqual(o.State, a.After) {
 		return fmt.Errorf("comment observation requires its original input and observed native result")
 	}
@@ -81,31 +81,9 @@ func (c *Client) observeForwardComment(ctx context.Context, a *ActionJournalReco
 	if !sameActionContents(*a.Before, state) || state.UpdatedAt.Before(a.Before.UpdatedAt) || a.After != nil && state.Revision != a.After.Revision {
 		return nil, nil, &ConflictError{ID: a.IssueID}
 	}
-	var found *ActionCommentState
-	for _, entry := range snapshot.entries {
-		if fmt.Sprintf("gh-%d", entry.Issue.Number) != a.IssueID {
-			continue
-		}
-		for _, comment := range entry.Comments {
-			activity, err := decodeActivity(comment, a.IssueID)
-			if err != nil {
-				return nil, nil, err
-			}
-			if activity.Kind == "action_journal" || activity.OperationID != a.commentOperationID() {
-				continue
-			}
-			if found != nil {
-				return nil, nil, fmt.Errorf("comment recovery found duplicate activity operation %s; no target replay", a.commentOperationID())
-			}
-			found, err = c.nativeCommentState(comment, a.IssueID, a.CommentInput.Body)
-			if err != nil {
-				return nil, nil, err
-			}
-			intentID, _ := CommentNumber(a.ID)
-			if comment.ID <= intentID || found.CreatedAt.Before(a.CreatedAt) || !strings.EqualFold(found.Author, a.Author) || !found.UpdatedAt.Equal(found.CreatedAt) || state.UpdatedAt.Before(found.UpdatedAt) {
-				return nil, nil, fmt.Errorf("comment recovery result has different attribution, predates intent or was edited")
-			}
-		}
+	found, err := c.commentCreationInSnapshot(snapshot, a, state)
+	if err != nil {
+		return nil, nil, err
 	}
 	if found == nil {
 		return nil, nil, fmt.Errorf("comment creation result is absent from the fresh collection; inspect before retrying, no target replay")
@@ -124,6 +102,39 @@ func (c *Client) observeForwardComment(ctx context.Context, a *ActionJournalReco
 		return nil, nil, &ConflictError{ID: a.IssueID}
 	}
 	return point, found, nil
+}
+
+func (c *Client) commentCreationInSnapshot(snapshot *Snapshot, a *ActionJournalRecord, state ActionIssueState) (*ActionCommentState, error) {
+	var found *ActionCommentState
+	for _, entry := range snapshot.entries {
+		if fmt.Sprintf("gh-%d", entry.Issue.Number) != a.IssueID {
+			continue
+		}
+		for _, comment := range entry.Comments {
+			activity, err := decodeActivity(comment, a.IssueID)
+			if err != nil {
+				return nil, err
+			}
+			if activity.Kind == "action_journal" || activity.OperationID != a.commentOperationID() {
+				continue
+			}
+			if found != nil {
+				return nil, fmt.Errorf("comment recovery found duplicate activity operation %s; no target replay", a.commentOperationID())
+			}
+			found, err = c.nativeCommentState(comment, a.IssueID, a.CommentInput.Body)
+			if err != nil {
+				return nil, err
+			}
+			intentID, _ := CommentNumber(a.ID)
+			if comment.ID <= intentID || found.CreatedAt.Before(a.CreatedAt) || !strings.EqualFold(found.Author, a.Author) || !found.UpdatedAt.Equal(found.CreatedAt) || state.UpdatedAt.Before(found.UpdatedAt) {
+				return nil, fmt.Errorf("comment recovery result has different attribution, predates intent or was edited")
+			}
+		}
+	}
+	if a.CommentAfter != nil && !reflect.DeepEqual(a.CommentAfter, found) {
+		return nil, fmt.Errorf("activity result changed or disappeared")
+	}
+	return found, nil
 }
 
 func (c *Client) reconcileForwardComment(ctx context.Context, a *ActionJournalRecord, session, actor string, apply bool) (*ActionReconcileResult, error) {

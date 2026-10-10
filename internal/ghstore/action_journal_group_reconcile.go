@@ -92,6 +92,30 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 		}
 		result := ActionGroupResultMember{IssueID: m.IssueID, State: state}
 		receipt := out.Receipts[m.IssueID]
+		var activity *ActionCommentState
+		if a.Group.activityGroup() && receipt == nil {
+			probe := *a
+			probe.IssueID, probe.CommentInput = m.IssueID, m.CommentInput
+			found, err := c.commentCreationInSnapshot(snapshot, &probe, state)
+			if err != nil {
+				return nil, err
+			}
+			if found != nil {
+				return nil, fmt.Errorf("unattempted group member acquired a native activity")
+			}
+		}
+		if a.Group.activityGroup() && receipt != nil {
+			if receipt.Phase == "undo_prepared" || receipt.Phase == "undone" {
+				if err := deletedCommentInSnapshot(snapshot, receipt); err != nil {
+					return nil, err
+				}
+			} else {
+				activity, err = c.commentCreationInSnapshot(snapshot, receipt, state)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 		if inverse {
 			forward := a.Group.Forward.Members[i]
 			if forward.Status == "noop" || forward.Status == "unattempted" || forward.Status == "unapplied" {
@@ -140,7 +164,7 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 				return nil, &ConflictError{ID: m.IssueID}
 			}
 			result.Status = "unattempted"
-			if m.Noop || normal && !a.Group.Planned {
+			if m.Noop || normal && !a.Group.Planned && !a.Group.activityGroup() {
 				result.Status = "noop"
 			} else if normal {
 				return nil, fmt.Errorf("planned group callback omitted required effect for %s", m.IssueID)
@@ -158,11 +182,15 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 				if normal {
 					return nil, fmt.Errorf("successful group callback has an unverified member %s", receipt.ID)
 				}
-				want, err := receipt.UpdateIntent.Target.contents()
-				if err != nil {
-					return nil, err
+				want := m.Before
+				if receipt.UpdateIntent != nil {
+					var err error
+					want, err = receipt.UpdateIntent.Target.contents()
+					if err != nil {
+						return nil, err
+					}
 				}
-				if sameActionContents(want, state) && !state.UpdatedAt.Before(m.Before.UpdatedAt) {
+				if sameActionContents(want, state) && !state.UpdatedAt.Before(m.Before.UpdatedAt) && (!a.Group.activityGroup() || activity != nil) {
 					result.Status = "pending-applied"
 					out.Pending = true
 				} else if state.Revision == m.Before.Revision {
@@ -175,7 +203,7 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 				if receipt.After == nil || state.Revision != receipt.After.Revision {
 					return nil, &ConflictError{ID: m.IssueID}
 				}
-				if receipt.UpdateIntent.NativeEvents != nil && !a.Group.hasPlannedInputs() {
+				if receipt.UpdateIntent != nil && receipt.UpdateIntent.NativeEvents != nil && !a.Group.hasPlannedInputs() {
 					events, err := c.readStateEvents(withReviewCost(ctx), m.IssueID)
 					if err != nil {
 						return nil, err
@@ -185,7 +213,7 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 					}
 				}
 				result.Status = "applied"
-				if receipt.UpdateObservation != nil {
+				if receipt.UpdateObservation != nil || receipt.CommentObservation != nil {
 					result.Status = "observed"
 				}
 			default:

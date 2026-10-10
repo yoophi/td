@@ -203,7 +203,7 @@ func validateGroupMember(group *ActionJournalRecord, member *ActionJournalRecord
 // The sequence validator supplies only an actual initial or predecessor After
 // observation. The legacy member contract always uses immutable initial state.
 func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJournalRecord, before *ActionIssueState) error {
-	if group.Group == nil || member.GroupOperationID != group.OperationID || member.Action != "update" || member.UpdateIntent == nil || member.Before == nil || member.SessionID != group.SessionID || member.CarrierID != group.CarrierID || !strings.EqualFold(member.Author, group.Author) {
+	if group.Group == nil || member.GroupOperationID != group.OperationID || member.Before == nil || member.SessionID != group.SessionID || member.CarrierID != group.CarrierID || !strings.EqualFold(member.Author, group.Author) {
 		return fmt.Errorf("member receipt differs from original group scope or native author")
 	}
 	groupNumber, groupErr := CommentNumber(group.ID)
@@ -216,6 +216,17 @@ func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJourna
 	}
 	if before == nil || member.Before.Revision != before.Revision {
 		return fmt.Errorf("member initial revision differs from immutable group membership")
+	}
+	if group.Group.activityGroup() {
+		for _, m := range group.Group.Members {
+			if m.IssueID == member.IssueID && member.Action == "comment_create" && member.UpdateIntent == nil && m.CommentInput != nil && reflect.DeepEqual(m.CommentInput, member.CommentInput) {
+				return member.validate()
+			}
+		}
+		return fmt.Errorf("comment member differs from immutable activity group input")
+	}
+	if member.Action != "update" || member.UpdateIntent == nil {
+		return fmt.Errorf("task group member requires a full update input")
 	}
 	after, err := member.UpdateIntent.Target.contents()
 	if err != nil {

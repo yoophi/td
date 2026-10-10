@@ -206,6 +206,29 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 		return active, nil
 	}
 	completed := []string{}
+	grouped := len(records) > 1 && !review
+	if grouped {
+		inputs := make([]ghstore.ActivityGroupInput, 0, len(records))
+		for _, record := range records {
+			entry := activity
+			if entry.Kind == "handoff" {
+				entry.Remaining = filterGitHubWSRemaining(entry.Remaining, record.ID)
+			}
+			inputs = append(inputs, ghstore.ActivityGroupInput{Issue: record, Activity: entry})
+		}
+		_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
+			if _, err := checkActive(current); err != nil {
+				return err
+			}
+			if err := client.TrackActions(current.Session.ID); err != nil {
+				return err
+			}
+			return client.BeginActivityGroup(cmd.Context(), "ws-"+activity.Kind, inputs)
+		})
+		if err != nil {
+			return err
+		}
+	}
 	if len(records) == 0 {
 		_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
 			active, err := checkActive(current)
@@ -250,6 +273,11 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 		}
 	}
 	reviewed := []string{}
+	if grouped {
+		if _, err := client.CompleteActionGroup(cmd.Context()); err != nil {
+			return err
+		}
+	}
 	if review {
 		for _, record := range records {
 			requested := false

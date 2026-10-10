@@ -240,8 +240,7 @@ func (c *Client) AppendActivity(ctx context.Context, id string, input models.Act
 	if input.OperationID == "" {
 		input.OperationID = "td-op-" + rand.Text()
 	}
-	data := activityData{Kind: input.Kind, OperationID: input.OperationID, SessionID: input.SessionID, WorkSessionID: input.WorkSessionID, Message: input.Message, LogType: input.LogType, Done: input.Done, Remaining: input.Remaining, Decisions: input.Decisions, Uncertain: input.Uncertain, Snapshot: input.Snapshot}
-	body, err := renderActivity(data)
+	data, body, err := prepareActivityInput("", input)
 	if err != nil {
 		return nil, err
 	}
@@ -250,10 +249,7 @@ func (c *Client) AppendActivity(ctx context.Context, id string, input models.Act
 		return nil, err
 	}
 	if data.Snapshot != nil {
-		snapshot := *data.Snapshot
-		snapshot.IssueID = issue.ID
-		data.Snapshot = &snapshot
-		body, err = renderActivity(data)
+		data, body, err = prepareActivityInput(issue.ID, input)
 		if err != nil {
 			return nil, err
 		}
@@ -277,4 +273,15 @@ func (c *Client) AppendActivity(ctx context.Context, id string, input models.Act
 		return nil, fmt.Errorf("activity may have been created for operation %s; inspect %s before retrying: %w", input.OperationID, issue.ID, err)
 	}
 	return &result, nil
+}
+
+func prepareActivityInput(issueID string, input models.Activity) (activityData, string, error) {
+	data := activityData{Kind: input.Kind, OperationID: input.OperationID, SessionID: input.SessionID, WorkSessionID: input.WorkSessionID, Message: input.Message, LogType: input.LogType, Done: input.Done, Remaining: input.Remaining, Decisions: input.Decisions, Uncertain: input.Uncertain, Snapshot: input.Snapshot}
+	if data.Snapshot != nil && issueID != "" {
+		snapshot := *data.Snapshot
+		snapshot.IssueID = issueID
+		data.Snapshot = &snapshot
+	}
+	body, err := renderActivity(data)
+	return data, body, err
 }

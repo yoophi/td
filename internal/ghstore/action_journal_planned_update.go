@@ -188,10 +188,13 @@ func (c *Client) verifyPlannedUpdateEvents(ctx context.Context, g *ActionGroup) 
 // Recheck the immutable plan and every watched task after writing a member
 // intent and before PATCH, and again against the actual result before receipt.
 func (c *Client) verifyPlannedUpdateGroup(ctx context.Context, after *Record) error {
-	if c.journal == nil || c.journal.Group == nil || !c.journal.Group.Journal.Group.hasPlannedInputs() {
+	if c.journal == nil || c.journal.Group == nil || (!c.journal.Group.Journal.Group.hasPlannedInputs() && !c.journal.Group.Journal.Group.activityGroup()) {
 		return nil
 	}
 	active := c.journal.Group
+	if active.Journal.Group.activityGroup() {
+		return c.verifyActivityGroupForward(ctx, after)
+	}
 	body, err := renderExistingActionJournal(active.Journal)
 	if err != nil {
 		return err
@@ -221,5 +224,8 @@ func (c *Client) verifyPlannedUpdateGroup(ctx context.Context, after *Record) er
 	if err := c.verifyGroupExpected(ctx, expected); err != nil {
 		return err
 	}
-	return c.verifyPlannedUpdateEvents(ctx, active.Journal.Group)
+	if active.Journal.Group.hasPlannedInputs() {
+		return c.verifyPlannedUpdateEvents(ctx, active.Journal.Group)
+	}
+	return nil
 }

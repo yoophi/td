@@ -73,9 +73,12 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 			return nil, err
 		}
 		chain := chains[a.IssueID]
+		if group.Group.activityGroup() && len(chain) > 0 {
+			return nil, fmt.Errorf("activity group member has repeated attempts")
+		}
 		if len(chain) > 0 {
 			previous := chain[len(chain)-1]
-			if previous.UpdateIntent.NativeEvents != nil {
+			if previous.UpdateIntent != nil && previous.UpdateIntent.NativeEvents != nil {
 				if a.UpdateIntent.NativeEvents == nil {
 					return nil, fmt.Errorf("ordered effect omitted its predecessor's native event continuation")
 				}
@@ -98,9 +101,13 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 			if err := a.After.validate(); err != nil {
 				return nil, err
 			}
-			want, err := a.UpdateIntent.Target.contents()
-			if err != nil {
-				return nil, err
+			want := before
+			if a.UpdateIntent != nil {
+				var err error
+				want, err = a.UpdateIntent.Target.contents()
+				if err != nil {
+					return nil, err
+				}
 			}
 			if !sameActionContents(want, *a.After) || a.After.UpdatedAt.Before(before.UpdatedAt) {
 				return nil, fmt.Errorf("ordered effect result differs from its original input")

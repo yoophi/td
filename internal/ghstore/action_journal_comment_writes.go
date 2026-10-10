@@ -104,6 +104,9 @@ func (c *Client) appendJournaledActivity(ctx context.Context, issue *Record, dat
 	if issue.ID == intent.CarrierID {
 		intent.CarrierID = "gh-2"
 	}
+	if err := c.bindActivityGroupIntent(&intent); err != nil {
+		return nil, err
+	}
 	// Validate before bootstrap so invalid activity cannot create a carrier.
 	if err := intent.validate(); err != nil {
 		return nil, err
@@ -125,6 +128,9 @@ func (c *Client) appendJournaledActivity(ctx context.Context, issue *Record, dat
 	}
 	if latest.revision != issue.revision {
 		return nil, &ConflictError{ID: issue.ID}
+	}
+	if err := c.verifyPlannedUpdateGroup(ctx, nil); err != nil {
+		return nil, err
 	}
 	uncertain := func(err error) (*models.Activity, error) {
 		return nil, fmt.Errorf("activity outcome for %s is unverified; inspect target %s and journal %s before retrying: %w", intent.OperationID, issue.ID, prepared.ID, err)

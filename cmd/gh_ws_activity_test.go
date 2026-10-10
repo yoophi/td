@@ -45,7 +45,7 @@ f=pathlib.Path(os.environ['TD_WS_STATE']);statepath=f
 comments=json.loads(statepath.read_text()) if statepath.exists() else {}
 issues=[{'number':n,'title':'Issue '+str(n),'state':'open','body':'','updated_at':'2026-10-09T00:00:00Z'} for n in [1,2]]
 for issue in issues:
- for _ in comments.get(str(issue['number']),[]):issue['updated_at']=fixture_tick(issue['updated_at'])
+ for comment in comments.get(str(issue['number']),[]):issue['updated_at']=max(issue['updated_at'],comment['updated_at'])
 if os.environ.get('TD_WS_CLOSED'):
  issues[0]['state']='closed'
 if os.environ.get('TD_WS_DELETED'):
@@ -67,8 +67,8 @@ elif '/comments' in path:
  if method=='POST':
   if os.environ.get('TD_WS_FAIL')==n:sys.stderr.write('write unavailable');sys.exit(1)
   body=json.load(sys.stdin)['body']
-  data={'id':100+sum(len(a) for a in comments.values()),'body':body,'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'},'issue_url':'https://api.github.com/repos/owner/repo/issues/'+n}
-  data['created_at']=fixture_tick(issues[int(n)-1]['updated_at']);data['updated_at']=data['created_at']
+  data={'id':20000+sum(len(a) for a in comments.values()),'body':body,'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'},'issue_url':'https://api.github.com/repos/owner/repo/issues/'+n}
+  data['created_at']=fixture_tick(max(issues[int(n)-1]['updated_at'],journal['comments'][-1]['created_at']));data['updated_at']=data['created_at']
   comments.setdefault(n,[]).append(data);statepath.write_text(json.dumps(comments))
  else:
   data=[comments.get(n,[])]

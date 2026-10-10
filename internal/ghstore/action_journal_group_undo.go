@@ -13,9 +13,10 @@ import (
 
 type groupUndoContextKey struct{}
 type groupUndoGate struct {
-	OperationID string
-	Fence       func() error
-	Member      func(*ActionJournalRecord) error
+	CommentFence func(*ActionJournalRecord, *Record, bool) error
+	OperationID  string
+	Fence        func() error
+	Member       func(*ActionJournalRecord) error
 }
 
 func groupUndoContext(ctx context.Context) string {
@@ -80,6 +81,15 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 		}
 		receipt := observed.Receipts[m.IssueID]
 		current := observed.Records[m.IssueID]
+		if receipt.Action == "comment_create" {
+			if _, err := receipt.planActionUndo(&current, session, user.Login); err != nil {
+				return nil, err
+			}
+			if err := c.readNativeComment(ctx, receipt.CommentAfter); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if _, native, err := nativeUndoScope(receipt); err != nil {
 			return nil, err
 		} else if native {
@@ -157,7 +167,7 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 		}
 		return c.verifyGroupExpected(ctx, expected)
 	}
-	gated := context.WithValue(ctx, groupUndoContextKey{}, &groupUndoGate{OperationID: a.OperationID, Fence: fence, Member: func(member *ActionJournalRecord) error {
+	gate := &groupUndoGate{OperationID: a.OperationID, Fence: fence, Member: func(member *ActionJournalRecord) error {
 		if err := validateGroupMember(a, member); err != nil {
 			return err
 		}
@@ -165,7 +175,13 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 			return fmt.Errorf("group member receipt changed before inverse")
 		}
 		return nil
-	}})
+	}}
+	if a.Group.activityGroup() {
+		gate.CommentFence = func(member *ActionJournalRecord, current *Record, deleted bool) error {
+			return c.checkActivityGroupInverse(ctx, a, observed.Receipts, expected, member, current, deleted)
+		}
+	}
+	gated := context.WithValue(ctx, groupUndoContextKey{}, gate)
 	// Reverse the declared command order. A failure retains all member receipts
 	// and the original group undo identity; no automatic write retry is made.
 	ordered := slices.Clone(observed.Members)

@@ -39,7 +39,7 @@ func (c *Client) undoCommentAction(ctx context.Context, action *ActionJournalRec
 	}
 	pending := action.ActionJournal
 	pending.Phase, pending.UndoOperationID = "undo_prepared", "td-op-"+rand.Text()
-	prepared, err := c.rewriteActionJournal(ctx, action, pending)
+	prepared, err := c.rewriteActionJournalGuarded(ctx, action, pending, func() error { return checkGroupCommentUndoGate(ctx, action, current, false) })
 	if err != nil {
 		return nil, fmt.Errorf("undo intent is unverified; no comment DELETE attempted: %w", err)
 	}
@@ -56,6 +56,9 @@ func (c *Client) undoCommentAction(ctx context.Context, action *ActionJournalRec
 	}
 	if latest.revision != current.revision {
 		return nil, &ConflictError{ID: current.ID}
+	}
+	if err := checkGroupCommentUndoGate(ctx, prepared, current, false); err != nil {
+		return nil, err
 	}
 	uncertain := func(err error) (*ActionUndoResult, error) {
 		return nil, fmt.Errorf("comment undo %s is unverified; inspect target %s and journal %s before retrying: %w", pending.UndoOperationID, current.ID, action.ID, err)
@@ -83,7 +86,7 @@ func (c *Client) undoCommentAction(ctx context.Context, action *ActionJournalRec
 	}
 	done := prepared.ActionJournal
 	done.Phase, done.Restored = "undone", &restoredState
-	receipt, err := c.rewriteActionJournal(ctx, prepared, done)
+	receipt, err := c.rewriteActionJournalGuarded(ctx, prepared, done, func() error { return checkGroupCommentUndoGate(ctx, prepared, restored, true) })
 	if err != nil {
 		return uncertain(err)
 	}
@@ -96,6 +99,9 @@ func (c *Client) undoCommentAction(ctx context.Context, action *ActionJournalRec
 	}
 	if latest.revision != restored.revision {
 		return uncertain(&ConflictError{ID: current.ID, AfterWrite: true})
+	}
+	if err := checkGroupCommentUndoGate(ctx, receipt, restored, true); err != nil {
+		return uncertain(err)
 	}
 	return &ActionUndoResult{Issue: restored, Journal: receipt, UndoOutcome: observedForwardInverseOutcome(receipt)}, nil
 }

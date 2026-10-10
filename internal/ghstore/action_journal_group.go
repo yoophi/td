@@ -18,10 +18,11 @@ const actionPlannedUpdateGroupJournalStart = actionJournalPrefix + "v16\n"
 const actionGroupMemberJournalStart = actionJournalPrefix + "v11\n"
 
 type ActionGroupMember struct {
-	IssueID string              `json:"issue_id"`
-	Before  ActionIssueState    `json:"before"`
-	Input   *ActionUpdateIntent `json:"input,omitempty"`
-	Noop    bool                `json:"noop,omitempty"`
+	CommentInput *ActionCommentInput `json:"comment_input,omitempty"`
+	IssueID      string              `json:"issue_id"`
+	Before       ActionIssueState    `json:"before"`
+	Input        *ActionUpdateIntent `json:"input,omitempty"`
+	Noop         bool                `json:"noop,omitempty"`
 }
 
 type ActionGroupResultMember struct {
@@ -64,7 +65,7 @@ func canonicalGroupID(id string) bool {
 }
 
 func groupCommandSupported(g *ActionGroup) bool {
-	return groupBasicCommand(g.Command) || g.Command == "review" || g.Command == "update" || nativeGroupCommand(g.Command) || g.Planned && plannedTaskCommand(g.Command)
+	return groupBasicCommand(g.Command) || g.Command == "review" || g.Command == "update" || nativeGroupCommand(g.Command) || g.Planned && plannedTaskCommand(g.Command) || g.activityGroup()
 }
 
 func (a ActionJournal) validateGroupAction() error {
@@ -95,6 +96,9 @@ func (a ActionJournal) validateGroupAction() error {
 			return fmt.Errorf("group member must be an observed live task")
 		}
 		if err := a.validatePlannedTaskMember(m); err != nil {
+			return err
+		}
+		if err := a.validateActivityGroupMemberInput(m); err != nil {
 			return err
 		}
 	}

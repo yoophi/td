@@ -13,24 +13,7 @@ import (
 
 func TestGitHubJournalCLIRecoversCreatedActivityWithoutReplay(t *testing.T) {
 	_, _, run := journalCLI(t)
-	// Older fixture comments use a separate ID/clock namespace. This recovery
-	// test needs native comments allocated after their actual journal intent.
-	gh, err := exec.LookPath("gh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	script, err := os.ReadFile(gh)
-	if err != nil {
-		t.Fatal(err)
-	}
-	needle := "state['comments'].append(data);n="
-	replacement := "data.update(id=20000+len(state['comments']),created_at=fixture_tick(journal['comments'][-1]['created_at']),updated_at=fixture_tick(journal['comments'][-1]['created_at']));issues[path.split('/issues/')[1].split('/')[0]]['updated_at']=data['updated_at'];state['comments'].append(data);n="
-	if !bytes.Contains(script, []byte(needle)) {
-		t.Fatal("native comment fixture seam missing")
-	}
-	if err := os.WriteFile(gh, bytes.Replace(script, []byte(needle), []byte(replacement), 1), 0755); err != nil {
-		t.Fatal(err)
-	}
+	useNativeCommentOrderFixture(t)
 	execute := func(args ...string) string {
 		t.Helper()
 		out, stderr, err := run(append(args, "--json")...)
@@ -79,5 +62,27 @@ func TestGitHubJournalCLIRecoversCreatedActivityWithoutReplay(t *testing.T) {
 	var remote struct{ Comments []any }
 	if err := json.Unmarshal(read(state), &remote); err != nil || len(remote.Comments) != 0 {
 		t.Fatal("comment inverse was not applied", remote, err)
+	}
+}
+
+func useNativeCommentOrderFixture(t *testing.T) {
+	t.Helper()
+	// Older fixture comments use a separate ID/clock namespace. This recovery
+	// test needs native comments allocated after their actual journal intent.
+	gh, err := exec.LookPath("gh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script, err := os.ReadFile(gh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	needle := "state['comments'].append(data);n="
+	replacement := "data.update(id=20000+len(state['comments']),created_at=fixture_tick(journal['comments'][-1]['created_at']),updated_at=fixture_tick(journal['comments'][-1]['created_at']));issues[path.split('/issues/')[1].split('/')[0]]['updated_at']=data['updated_at'];state['comments'].append(data);n="
+	if !bytes.Contains(script, []byte(needle)) {
+		t.Fatal("native comment fixture seam missing")
+	}
+	if err := os.WriteFile(gh, bytes.Replace(script, []byte(needle), []byte(replacement), 1), 0755); err != nil {
+		t.Fatal(err)
 	}
 }

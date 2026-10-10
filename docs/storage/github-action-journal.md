@@ -975,3 +975,28 @@ undo chain for earlier actions. Completed confirmations are read-only.
 This recovery is a prerequisite for work-session activity groups and mixed
 writers; it does not by itself connect those command-wide groups. Running
 monitors/servers must use a v18-capable build to read the new observations.
+
+## Work-session activity groups (#65)
+
+Multi-target `ws log` and `ws handoff` without `--review` now use v19 group and
+member receipts. The original group freezes every selected task revision and
+complete activity body, including per-task filtered handoff items and snapshot
+identity, before journal bootstrap or the first native comment. All members
+share the actual work-session and activity operation, with distinct journal
+operations. Invalid inputs, stale or missing selections, and oversized archives
+stop before any write.
+
+`last` exposes one command group. Recovery records only actually observed
+comments and preserves partial membership and separate observer provenance;
+it never reposts a missing activity. Group undo removes the verified comments
+in reverse order. Every native POST/DELETE boundary checks the original group,
+all member receipts, task revisions and native activity bodies from a fresh
+bulk snapshot. A changed other-member comment stops the operation even if its
+task clock did not change. GitHub still has no atomic cross-issue transaction.
+
+Remote undo preserves local tags, work-session history membership and session
+end state. Single-target and local-only work-session paths retain their existing
+behavior. `ws handoff --review` still needs mixed comment/workflow grouping;
+this activity-only integration does not complete #65. A monitor or server must
+run a v19-capable build before reading these groups; restart already-running
+processes after upgrading the executable.

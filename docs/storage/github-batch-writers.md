@@ -18,6 +18,7 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | Multi-ID `update` with scalar fields only | v16 group with every member's complete input fixed before the first write; existing v11 effect receipts | No focus change |
 | Multi-ID `reject` | v17 planned independent task group; existing review and inverse checkpoint checks | Focus cleared after actual rejection/no-op, as before |
 | Multi-ID `delete` / `restore` | v17 planned independent task group; native open/closed state retained; deleted tasks included in selection | Existing device-local context |
+| Multi-target `ws log` / `ws handoff` without `--review` | v19 activity group fixes all complete inputs; partial recovery observes comments without replay; undo checks and removes actual results | Tags, history membership and end state remain local |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -56,7 +57,6 @@ validation still rejects restoration of invalid historical review evidence.
 | Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 | Multi-edge dependency add/remove | Repeated updates to the same source task |
-| `ws log` / `ws handoff` | Activity comments on multiple tagged tasks |
 | `ws handoff --review` | Activity fanout followed by task review requests |
 | File link/unlink | One whole file-set update followed by an automatic activity comment |
 | Due/defer | Task schedule update followed by an automatic activity comment |
@@ -69,10 +69,10 @@ individual receipts are not evidence of command-wide undo support. HTTP/monitor
 adapter coverage and the complete command/flag inventory must be checked against
 #31 before closing #65/#68.
 
-Individual uncertain activity creations now support receipt-only reconciliation
-with explicit v18 observer provenance. This supplies the missing recovery proof
-for a future activity group; the work-session and mixed writers above still
-need their aggregate membership, execution and inverse checks.
+Individual uncertain activity creations support receipt-only reconciliation
+with explicit v18 observer provenance. Work-session activity groups carry the
+same observer provenance in v19 members. Mixed writers above still need their
+aggregate membership, execution and inverse checks.
 
 Board/note operations currently mutate one entity per command; rendering and
 filter loops do not constitute batch writes. Session cleanup and work-session
