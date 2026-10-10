@@ -1055,3 +1055,83 @@ func TestGitHubJournalCLIUndoesDeleteAndRestore(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubJournalCLINativeCompensationAndRecovery(t *testing.T) {
+	for _, enabled := range []string{"false", "true"} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+			t.Setenv("TD_GH_FIXTURE_NATIVE_EVENTS", "1")
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) string {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil || !json.Valid([]byte(out)) {
+					t.Fatal(args, out, stderr, err)
+				}
+				return out
+			}
+			execute("create", "Native compensation CLI fixture")
+			execute("start", "gh-6")
+			execute("handoff", "gh-6", "--done", "Synthetic fixture work")
+			execute("review", "gh-6")
+			execute("approve", "gh-6", "--record-only", "--self-review", "--reason", "Synthetic fixture review")
+			execute("close", "gh-6", "--reason", "Close existing fixture approval")
+			out := execute("undo")
+			if !strings.Contains(out, `"compensation":`) || !strings.Contains(out, `"requires_new_review":true`) || !strings.Contains(out, `"causal_undo_chain_eligible":false`) {
+				t.Fatal(out)
+			}
+			before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, stderr, err := run("approve", "gh-6", "--self-review", "--reason", "Must not reuse invalidated fixture review", "--json")
+			if err == nil || !strings.Contains(out+stderr, "stale") {
+				t.Fatal(out, stderr, err)
+			}
+			after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("old review closed compensated issue", err)
+			}
+			// A genuinely new review cycle is allowed; the old one is not revived.
+			execute("start", "gh-6")
+			execute("handoff", "gh-6", "--done", "Synthetic fixture rereview work")
+			execute("review", "gh-6")
+			execute("approve", "gh-6", "--self-review", "--reason", "Synthetic new fixture approval")
+			t.Setenv("TD_GH_JOURNAL_FAIL", "undo-completion-denied")
+			out, stderr, err = run("undo", "--json")
+			if err == nil || !strings.Contains(out+stderr, "unverified") {
+				t.Fatal(out, stderr, err)
+			}
+			t.Setenv("TD_GH_JOURNAL_FAIL", "")
+			var rows []struct{ ID, Phase string }
+			latest := execute("last", "--n", "1")
+			if err := json.Unmarshal([]byte(latest), &rows); err != nil || len(rows) != 1 || rows[0].Phase != "undo_prepared" {
+				t.Fatal(latest, err)
+			}
+			before, err = os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			execute("undo", "--reconcile", rows[0].ID)
+			out = execute("undo", "--reconcile", rows[0].ID, "--apply")
+			if !strings.Contains(out, `"applied":true`) || !strings.Contains(out, `"target_write_verified":false`) || !strings.Contains(out, `"causal_undo_chain_eligible":false`) {
+				t.Fatal(out)
+			}
+			execute("undo", "--reconcile", rows[0].ID, "--apply")
+			after, err = os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("native recovery replayed target", err)
+			}
+			execute("create", "Unreviewed native reopen fixture")
+			execute("close", "gh-7", "--admin", "Synthetic explicit fixture closure")
+			execute("reopen", "gh-7", "--reason", "Synthetic fixture reopening")
+			out = execute("undo")
+			if !strings.Contains(out, `"requires_new_review":false`) || !strings.Contains(out, `"status":"closed"`) {
+				t.Fatal(out)
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite fallback", err)
+			}
+		})
+	}
+}

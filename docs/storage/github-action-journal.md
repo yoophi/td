@@ -11,7 +11,7 @@ Tracked activity creation now records v2 receipts. HTTP and monitor client
 factories now enable the same issue/activity protocols with their actual scoped
 actors. Raw comment deletion now preserves v4 original comment snapshots;
 single-target linked-file and relation undo also restore verified original review
-state. Coordinated workflow and multi-target undo remain pending.
+state. Single-target native close/reopen changes have a guarded compensation executor. Coordinated workflow and multi-target undo remain pending.
 `td undo` executes supported scalar, linked-file, single-source relation and own comment-creation inverses. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
@@ -201,10 +201,10 @@ look like the old values.
 
 Current scope includes title, visible description, acceptance, type, priority,
 points, labels and minor/sprint/date scalar data when workflow/graph/review data
-remains unchanged. Native state changes, session/review/transition/history or
-multi-target effects
-still require coordinated undo integration. They return an explicit scope
-error before target writes. Legacy per-target journals also need separate-carrier
+remains unchanged. Dedicated executors below recognize basic workflow, review,
+visibility and native-state changes. Unrecognized session/history edits and
+coordinated multi-target effects still return an explicit scope error before
+target writes. Legacy per-target journals also need separate-carrier
 migration before execution, avoiding receipt writes on the target itself.
 Creation retains the explicit logical-delete alternative. These are pending
 implementation boundaries, not SQLite-only exemptions or proof of #9 completion.
@@ -237,9 +237,9 @@ receipt proves a new restored revision, allowing sequential undo only through
 unambiguous verified same-session/author/carrier edges. Restoration touches
 metadata links, not repository files or commits. GitHub does not provide an
 atomic transaction across issue state, handoff comments and events, so checks
-at these fences remain best-effort conflict detection. Explicit reconciliation
-of an `undo_prepared` file/scalar result is still pending; it cannot be treated
-as success just because fields look restored. This is a completed implementation
+at these fences remain best-effort conflict detection. Explicit observation of
+an `undo_prepared` result uses the non-causal recovery policy below; matching
+fields alone cannot prove the original target write. This is a completed implementation
 stage within #9, not closure of the whole task.
 
 ## Single-source relation inverse
@@ -551,9 +551,10 @@ and cannot rewrite the original attempted action. Creation reconciliation is
 not creation undo; native comment deletion remains irreversible.
 
 This completes explicit result recovery for issue/auxiliary creation and native
-comment deletion. Scalar/workflow/graph partial-write and inverse reconciliation
-need their own proofs and remain #9 implementation work; they are refused rather
-than passed through this result-only executor.
+comment deletion. Uncertain inverse reconciliation uses the separate policy
+below. Forward scalar/workflow/graph partial writes and coordinated group
+recovery remain #9 implementation work rather than passing through this
+creation/deletion result-only executor.
 
 ## Basic workflow inverse
 
@@ -576,11 +577,11 @@ source revision check follows the proof reads. Existing undone receipts also
 recheck the original review and source revision without writing again.
 
 This is single-source restoration, not a coordinated undo of a multi-ID command
-or cascade. Review/approve/reject/close/reopen, native state changes, logical
-deletion, and coordinated multi-target inverse planning still require dedicated
-policies. In particular, a new GitHub close/reopen event cannot be removed or
-represented as an old review event. Partial/undo-prepared recovery and portable
-journal history also remain work under #9. Failures preserve the existing
+or cascade. Review, native state, logical visibility and uncertain inverse
+observation have dedicated policies below. A new GitHub close/reopen event
+cannot be removed or represented as an old review event. Coordinated
+multi-target inverse planning, forward partial-write recovery and portable
+journal history remain work under #9. Failures preserve the existing
 uncertain-result diagnostics and do not automatically repeat the target PATCH.
 
 ## Review checkpoint inverse
@@ -606,9 +607,10 @@ Every original checkpoint being restored must still pass its content basis,
 native close/reopen event digest and original handoff verification at all four
 write fences. Native/transport errors retain their cause; stale evidence is a
 conflict. Already-undone observations also recheck the original proof and final
-source revision without replaying a write. Closing approvals, close/reopen
-native-state compensation, logical deletion, coordinated cascades, explicit
-partial/undo-prepared recovery and portable journal history remain under #9.
+source revision without replaying a write. Closing approvals and close/reopen use the separate native compensation policy
+below; logical deletion and uncertain inverse observation also have dedicated
+executors. Coordinated cascades, partial group recovery and portable journal
+history remain under #9.
 
 ## Observe an uncertain inverse without replaying it
 
@@ -643,8 +645,8 @@ Receipt failure remains uncertain and keeps the original diagnostic. Repeating
 explicit observation rechecks the saved state/proofs and writes nothing if the
 receipt already exists. Later target/proof changes remain conflicts. The v6
 reader retains v1–v5 compatibility; older readers fail closed on a new version.
-Native close/reopen compensation and coordinated multi-target/partial recovery
-still need their own proof policies rather than generic matching contents.
+Native close/reopen uses the v7 proof policy below. Coordinated multi-target
+and partial group recovery still need their own proof policies.
 
 ### Logical deletion and restoration inverses
 
@@ -662,3 +664,46 @@ fails explicitly. Uncertain completion can be observed with `undo --reconcile`
 without replaying target writes, under the same non-causal observation policy.
 Multi-target deletion is still represented by individual journals; this does
 not claim atomic rollback for a batch or support native close/reopen inverses.
+
+
+## Native close/reopen compensation
+
+Single-target `close`, closing `approve`, and `reopen` now have a guarded
+compensation executor. It recognizes the complete writer effect, including
+review rows, session closure and the unique original transition. Arbitrary
+content/history changes and coordinated cascades are rejected. The current td
+session and authenticated GitHub author must match the original journal.
+
+The executor restores the former task state and claims while retaining forward
+review/session/transition audit rows. It supersedes active approvals, clears the
+review basis/requester/reviewer/handoff checkpoint, and adds an attributed
+`undo_native` transition. Ordinary reviewed work needs a genuinely new review
+before another approval; optional minor-review and administrative closures do
+not invent a review requirement. A compensated closed issue does not acquire
+an approval by undoing a reopen.
+
+GitHub's native close/reopen events cannot be erased through the issue-events
+REST API. Compensation checks the complete original event prefix and requires
+exactly one appended opposite state event. It also checks the original content
+review basis and handoff identity/time, then performs a final target revision
+read at intent and completion fences. Native API failures retain their cause.
+The optimistic read/write boundary cannot provide a GitHub atomic CAS.
+
+A v7 receipt records the immutable compensation plan and original event
+baseline before the single target PATCH. Successful completion records the
+exact resulting issue revision and event sequence with
+`proof=verified-native-inverse`. JSON adds `compensation` and `undo_outcome`;
+human output says `COMPENSATED`. `exact_historical_restore=false` and
+`causal_undo_chain_eligible=false` are explicit, because native events and
+forward audit rows remain. Even a verified compensation cannot bridge an
+older scalar undo over a changed native revision.
+
+If the target write or completion receipt is uncertain, there is no automatic
+replay. `td undo --reconcile ghc-ID` observes the exact planned target contents,
+original proofs and appended inverse event. `--apply` writes only the existing
+pending receipt with `proof=inverse-contents-observed`, the actual observer
+session/time, and `target_write_verified=false`; it preserves original
+before/after, session, plan and undo identity. An already completed receipt is
+confirmed without writes. Stale, extra, missing or delayed native events fail
+explicitly until the remote evidence can be inspected. v1–v6 reading remains
+supported; older readers reject v7 rather than silently accepting it.

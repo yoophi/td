@@ -15,6 +15,8 @@ type UndoScopeError struct{ Reason string }
 func (e *UndoScopeError) Error() string { return e.Reason }
 
 type ActionUndoResult struct {
+	Compensation  *NativeIssueUndoPlan `json:"compensation,omitempty"`
+	UndoOutcome   *ActionUndoOutcome   `json:"undo_outcome,omitempty"`
 	Issue         *Record              `json:"issue"`
 	Journal       *ActionJournalRecord `json:"journal"`
 	AlreadyUndone bool                 `json:"already_undone"`
@@ -23,7 +25,7 @@ type ActionUndoResult struct {
 // UndoAction rehydrates the remote receipt rather than trusting a caller's
 // snapshots. Supported inverses restore scalar fields, files, relations,
 // open-native workflow/review checkpoints and auxiliary configuration.
-// Native close/reopen and multi-target operations need coordinated policies.
+// Native close/reopen uses compensation; multi-target operations remain pending.
 func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionUndoResult, error) {
 	number, err := CommentNumber(id)
 	if err != nil {
@@ -67,6 +69,11 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	current, err := c.readJournalTarget(ctx, action.IssueID)
 	if err != nil {
 		return nil, err
+	}
+	if _, supported, err := nativeUndoScope(action); err != nil {
+		return nil, err
+	} else if supported || action.NativeUndo != nil {
+		return c.undoNativeAction(ctx, action, current, sessionID, user.Login)
 	}
 	if action.Action == "comment_create" {
 		return c.undoCommentAction(ctx, action, current, sessionID, user.Login)
@@ -215,6 +222,10 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 }
 
 func (c *Client) rewriteActionJournal(ctx context.Context, old *ActionJournalRecord, next ActionJournal) (*ActionJournalRecord, error) {
+	return c.rewriteActionJournalGuarded(ctx, old, next, nil)
+}
+
+func (c *Client) rewriteActionJournalGuarded(ctx context.Context, old *ActionJournalRecord, next ActionJournal, fence func() error) (*ActionJournalRecord, error) {
 	oldBody, err := renderActionJournal(old.ActionJournal)
 	if err != nil {
 		return nil, err
@@ -228,6 +239,9 @@ func (c *Client) rewriteActionJournal(ctx context.Context, old *ActionJournalRec
 	}
 	if old.Action != next.Action || !reflect.DeepEqual(old.Before, next.Before) || !reflect.DeepEqual(old.After, next.After) || !reflect.DeepEqual(old.CreateInput, next.CreateInput) || !reflect.DeepEqual(old.CommentInput, next.CommentInput) || !reflect.DeepEqual(old.CommentAfter, next.CommentAfter) || !reflect.DeepEqual(old.CommentBefore, next.CommentBefore) || !reflect.DeepEqual(old.Reconciliation, next.Reconciliation) || !reflect.DeepEqual(old.UndoObservation, next.UndoObservation) {
 		return nil, fmt.Errorf("undo receipt cannot rewrite original action snapshots")
+	}
+	if err := validateNativeUndoRewrite(old.NativeUndo, next.NativeUndo); err != nil {
+		return nil, err
 	}
 	allowedPhase := (old.Phase == "applied" && next.Phase == "undo_prepared") || (old.Phase == "undo_prepared" && next.Phase == "undone" && old.UndoOperationID == next.UndoOperationID)
 	if !allowedPhase {
@@ -244,6 +258,11 @@ func (c *Client) rewriteActionJournal(ctx context.Context, old *ActionJournalRec
 	}
 	if !sameJournalIdentity(old, current) || !old.UpdatedAt.Equal(current.UpdatedAt) {
 		return nil, fmt.Errorf("journal changed before rewrite")
+	}
+	if fence != nil {
+		if err := fence(); err != nil {
+			return nil, err
+		}
 	}
 	written, err := c.journalComment(ctx, path, map[string]string{"body": newBody}, newBody, old.CarrierID)
 	if err != nil {

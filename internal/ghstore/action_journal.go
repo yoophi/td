@@ -87,6 +87,7 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
+	NativeUndo      *ActionNativeUndo      `json:"native_undo,omitempty"`
 	OperationID     string                 `json:"operation_id"`
 	SessionID       string                 `json:"session_id"`
 	IssueID         string                 `json:"issue_id"`
@@ -208,6 +209,9 @@ func (a ActionJournal) validate() error {
 	if err := a.validateUndoObservation(); err != nil {
 		return err
 	}
+	if err := a.validateNativeUndo(); err != nil {
+		return err
+	}
 	return a.validateReconciliation()
 }
 
@@ -224,7 +228,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		target = "new issue"
 	}
 	start := actionJournalStart
-	if a.UndoObservation != nil {
+	if a.NativeUndo != nil {
+		start = actionNativeUndoJournalStart
+	} else if a.UndoObservation != nil {
 		start = actionUndoObservedJournalStart
 	} else if a.Reconciliation != nil {
 		start = actionReconciledJournalStart
@@ -245,7 +251,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	}
 	block := strings.TrimSpace(comment.Body[index:])
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionUndoObservedJournalStart) {
+	if strings.HasPrefix(block, actionNativeUndoJournalStart) {
+		start = actionNativeUndoJournalStart
+	} else if strings.HasPrefix(block, actionUndoObservedJournalStart) {
 		start = actionUndoObservedJournalStart
 	} else if strings.HasPrefix(block, actionReconciledJournalStart) {
 		start = actionReconciledJournalStart
@@ -272,19 +280,22 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
+	if (a.NativeUndo != nil) != (start == actionNativeUndoJournalStart) || a.NativeUndo != nil && !strings.EqualFold(a.NativeUndo.Plan.Actor, comment.User.Login) {
+		return nil, fmt.Errorf("native undo version or actor differs from native receipt")
+	}
 	if (a.UndoObservation != nil) != (start == actionUndoObservedJournalStart) || a.UndoObservation != nil && !strings.EqualFold(a.UndoObservation.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("undo observation version or native author does not match its payload")
 	}
 	if (a.Reconciliation != nil) != (start == actionReconciledJournalStart) {
 		return nil, fmt.Errorf("reconciliation journal version does not match its payload")
 	}
-	if a.Reconciliation == nil && a.UndoObservation == nil && (a.entityKind() != "") != (start == actionEntityJournalStart) {
+	if a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.entityKind() != "") != (start == actionEntityJournalStart) {
 		return nil, fmt.Errorf("entity journal version does not match its payload")
 	}
-	if a.Reconciliation == nil && a.UndoObservation == nil && (a.Action == "comment_delete") != (start == actionDeletedCommentJournalStart) {
+	if a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_delete") != (start == actionDeletedCommentJournalStart) {
 		return nil, fmt.Errorf("deleted comment journal version does not match its payload")
 	}
-	if a.Reconciliation == nil && a.UndoObservation == nil && (a.Action == "comment_create") != (start == actionCommentJournalStart) {
+	if a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_create") != (start == actionCommentJournalStart) {
 		return nil, fmt.Errorf("action journal version does not match its payload")
 	}
 	if a.Reconciliation != nil && !strings.EqualFold(a.Reconciliation.Actor, comment.User.Login) {

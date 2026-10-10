@@ -34,6 +34,16 @@ def with_journal_observation(path,data):
   data[0].append(journal_carrier)
  if path=='repos/owner/repo/issues/comments?per_page=100':
   data[0].extend(journal['comments'])
+ if os.environ.get('TD_GH_FIXTURE_NATIVE_EVENTS')=='1':
+  states=journal.setdefault('native_states',{});events=journal.setdefault('native_events',{});changed=False
+  if isinstance(data,dict) and 'number' in data and 'state' in data and data['number']!=999:
+   key=str(data['number']);state=data['state']
+   if key not in states:events[key]=([{'id':1,'event':'closed'}] if state=='closed' else []);changed=True
+   elif states[key]!=state:events[key].append({'id':len(events[key])+1,'event':'closed' if state=='closed' else 'reopened'});changed=True
+   states[key]=state
+  if '/events?' in path:
+   key=path.split('/issues/')[1].split('/')[0];data=[events.get(key,[])]
+  if changed:journal_file.write_text(json.dumps(journal))
  return data
 if path=='repos/owner/repo/issues/999':
  if journal_carrier is None:sys.stderr.write('HTTP 404 journal carrier missing');sys.exit(1)

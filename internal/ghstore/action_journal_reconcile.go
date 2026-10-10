@@ -40,6 +40,7 @@ func (a ActionJournal) validateReconciliation() error {
 }
 
 type ActionReconcileResult struct {
+	Compensation        *NativeIssueUndoPlan `json:"compensation,omitempty"`
 	Issue               *Record              `json:"issue"`
 	Journal             *ActionJournalRecord `json:"journal"`
 	Applied             bool                 `json:"applied"`
@@ -93,6 +94,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	}
 	if actor.Login == "" || !strings.EqualFold(actor.Login, action.Author) {
 		return nil, fmt.Errorf("recovery receipt is not attributed to the authenticated GitHub author; no write attempted")
+	}
+	if action.NativeUndo != nil {
+		return c.reconcileNativeUndo(ctx, action, sessionID, actor.Login, apply)
 	}
 	if action.Phase == "undo_prepared" || action.Phase == "undone" {
 		return c.reconcileUndo(ctx, action, sessionID, actor.Login, apply)
