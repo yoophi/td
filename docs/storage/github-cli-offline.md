@@ -180,3 +180,15 @@ format. Global `--json` and `--format json` retain precedence over valid human
 display modifiers. Invalid formats still fail even when JSON is requested.
 These rules apply equally to root list/ls and task/epic shortcuts, ordinary
 filters and TDQ, and SQLite/GitHub paths.
+
+`td --json --help`, command `--help`, and `td --json help <command>` return
+structured help instead of human text. The object identifies the canonical
+command, usage, descriptions, examples, aliases and whether it is hidden or
+runnable. `flags` includes type, usage, default, shorthand and inherited,
+hidden and deprecated markers; `commands` describes immediate children,
+including hidden commands with their marker. Empty collections are arrays.
+This is discovery metadata, not a claim that every advertised flag is supported
+by the GitHub store. Human help remains unchanged without `--json`.
+CLI tests cover root, nested, alias, hidden-command and hidden-flag help in both
+sync feature modes, including the `help list` dispatch path. Help does not call
+gh or initialize an issue database/session, even with analytics/autosync enabled.
