@@ -27,3 +27,26 @@ removed by logout. gh failures remain failures; no fallback credentials are used
 GitHub auth does not change the configured repository or Git remotes. Account
 authentication alone does not prove access to the configured repository;
 normal store operations still validate origin, permissions and Issues support.
+
+## Verification (2026-10-11)
+
+The installed td `d1b5bbf` successfully reported the active github.com account
+through read-only `auth status --json`. Its authentication code matches the
+reviewed source. The command tests cover registration with `sync_cli` both off
+and on, the original SQLite routing, logout scope and preserved 401 diagnostics.
+The shared API runner's cancellation test also passes in the ghstore race suite.
+
+An isolated executable-gh fixture verified 13 additional CLI cases: status with
+both feature settings, empty account response, 401 and rate-limit failures,
+noninteractive/JSON login guards, logout confirmation guards, PTY login, explicit
+account logout, logout failure and missing gh. It checked the exact github.com
+host/account arguments, one call per attempted operation, no calls after guard
+failure, uncontaminated JSON, unchanged project configuration and no SQLite DB.
+An extra token field in the synthetic account response was neither reported nor
+persisted. The fixture has no Git origin, confirming that account status is
+host-scoped. Actual user credentials were not changed; login/logout success was
+verified through the fixture, not a real credential replacement.
+
+Evidence is recorded under the tracking checkout's
+`artifacts/task-audit-2026-10-10/gh-28-native-auth-status.json` and
+`gh-28-auth-contract-results.json`.
