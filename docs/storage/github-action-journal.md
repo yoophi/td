@@ -861,6 +861,12 @@ groups through the public undo entrypoint. Code from 4e88db0 was verified on
 actual GitHub, with existing v10/v12/v13 compatibility covered by regressions.
 The managed build was activated and its shell resolutions verified separately.
 
+Restart running monitors and servers after activating a build that introduces
+a new journal schema. Already-running processes retain the old decoder even
+when the managed executable symlink changes. A pre-v14 process rejects a v14
+compressed envelope with a schema validation error; this does not itself mean
+the stored archive is corrupt.
+
 The source implementation supports observation and receipt-only reconciliation
 of v14 records.
 It reads one fresh bulk history and actual watched states, compares every frozen

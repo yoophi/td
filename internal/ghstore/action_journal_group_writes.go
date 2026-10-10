@@ -22,6 +22,34 @@ func (c *Client) BeginActionGroup(ctx context.Context, command string, ids []str
 	if command == "review" {
 		return c.beginReviewActionGroup(ctx, ids)
 	}
+	return c.beginBasicActionGroup(ctx, command, ids, nil)
+}
+
+// BeginObservedActionGroup keeps a sweep or work-session selection tied to the
+// observations that authorized it. A fresh group read cannot adopt a new owner
+// or changed task in place of a selected observation.
+func (c *Client) BeginObservedActionGroup(ctx context.Context, command string, records []Record) error {
+	ids := make([]string, 0, len(records))
+	observed := make(map[string]ActionIssueState, len(records))
+	for i := range records {
+		r := &records[i]
+		if r.repository != c.repo || r.revision == ([32]byte{}) {
+			return fmt.Errorf("group requires observations from this repository; no target write attempted")
+		}
+		if _, duplicate := observed[r.ID]; duplicate {
+			return fmt.Errorf("group repeats %s; no target write attempted", r.ID)
+		}
+		state, err := actionIssueState(r)
+		if err != nil {
+			return err
+		}
+		ids = append(ids, r.ID)
+		observed[r.ID] = state
+	}
+	return c.beginBasicActionGroup(ctx, command, ids, observed)
+}
+
+func (c *Client) beginBasicActionGroup(ctx context.Context, command string, ids []string, observed map[string]ActionIssueState) error {
 	if len(ids) < 2 {
 		return nil
 	}
@@ -52,6 +80,9 @@ func (c *Client) BeginActionGroup(ctx context.Context, command string, ids []str
 		state, err := actionIssueState(&record)
 		if err != nil {
 			return err
+		}
+		if previous, pinned := observed[id]; pinned && previous.Revision != state.Revision {
+			return &ConflictError{ID: id}
 		}
 		if state.State != "open" {
 			return &UndoScopeError{Reason: "basic group native-state changes need their own compensation integration; no target write attempted"}

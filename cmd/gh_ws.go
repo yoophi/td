@@ -212,6 +212,29 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 	}
 	results := make([]string, 0, len(records))
 	noStart, _ := cmd.Flags().GetBool("no-start")
+	starts := []ghstore.Record{}
+	var snapshot *models.GitSnapshot
+	if original == wsTagCmd && !noStart {
+		for _, record := range records {
+			if record.Status == models.StatusOpen {
+				starts = append(starts, *record)
+			}
+		}
+		if len(starts) > 0 {
+			snapshot, err = gitHubSnapshot(cmd.Context(), scope.Worktree)
+			if err != nil {
+				return err
+			}
+		}
+		if len(starts) > 1 {
+			if err := client.TrackActions(state.Session.ID); err != nil {
+				return err
+			}
+			if err := client.BeginObservedActionGroup(cmd.Context(), "start", starts); err != nil {
+				return err
+			}
+		}
+	}
 	for _, record := range records {
 		// Pin the active bundle while applying each operation. Remote changes use
 		// observed revisions; GitHub cannot provide an atomic multi-issue write.
@@ -226,10 +249,6 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 				return current.UntagWorkSession(record.ID)
 			}
 			if !noStart && record.Status == models.StatusOpen {
-				snapshot, err := gitHubSnapshot(cmd.Context(), scope.Worktree)
-				if err != nil {
-					return err
-				}
 				if err := client.TrackActions(current.Session.ID); err != nil {
 					return err
 				}
@@ -243,6 +262,11 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 			return fmt.Errorf("ws %s failed for %s (completed local IDs: %s; any remote success is retained, no automatic retry): %w", original.Name(), record.ID, strings.Join(results, ","), err)
 		}
 		results = append(results, record.ID)
+	}
+	if len(starts) > 1 {
+		if _, err := client.CompleteActionGroup(cmd.Context()); err != nil {
+			return fmt.Errorf("work-session tags and starts saved but group completion is unverified; inspect and reconcile before retrying: %w", err)
+		}
 	}
 	action := "tagged_work_session"
 	if original == wsUntagCmd {

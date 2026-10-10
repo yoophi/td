@@ -146,6 +146,16 @@ func runGitHubClaimSweep(cmd *cobra.Command, client *ghstore.Client, scope ghcon
 	var failure error
 	if options.Force {
 		reported = []githubSweepClaim{}
+		grouped := len(claims) > 1
+		if grouped {
+			observed := make([]ghstore.Record, 0, len(claims))
+			for _, claim := range claims {
+				observed = append(observed, claim.observed)
+			}
+			if err := client.BeginObservedActionGroup(cmd.Context(), "unstart", observed); err != nil {
+				return err
+			}
+		}
 		for _, claim := range claims {
 			current, err := scope.Update(cmd.Context(), nil)
 			if err != nil {
@@ -196,6 +206,11 @@ func runGitHubClaimSweep(cmd *cobra.Command, client *ghstore.Client, scope ghcon
 			if err != nil {
 				failure = fmt.Errorf("%s was released but local focus update failed: %w", claim.ID, err)
 				break
+			}
+		}
+		if grouped && failure == nil {
+			if _, err := client.CompleteActionGroup(cmd.Context()); err != nil {
+				failure = fmt.Errorf("claim releases saved but group completion is unverified; inspect and reconcile before retrying: %w", err)
 			}
 		}
 	}
