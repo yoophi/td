@@ -995,11 +995,33 @@ bulk snapshot. A changed other-member comment stops the operation even if its
 task clock did not change. GitHub still has no atomic cross-issue transaction.
 
 Remote undo preserves local tags, work-session history membership and session
-end state. Single-target and local-only work-session paths retain their existing
-behavior. `ws handoff --review` still needs mixed comment/workflow grouping;
-this activity-only integration does not complete #65. A monitor or server must
-run a v19-capable build before reading these groups; restart already-running
-processes after upgrading the executable.
+end state. Single-target activity-only and local-only work-session paths retain
+their existing behavior. A monitor or server must run a v19-capable build before
+reading these groups; restart already-running processes after upgrading the
+executable. The compound review path below uses its own stricter contract.
+
+## Work-session handoff and review groups (#65)
+
+`ws handoff --review` uses v23 command and v24 effect receipts, including for one
+tagged task. The command freezes all handoff bodies, original task observations
+and review templates before its first effect. It publishes every handoff first,
+then requests review only for the tasks originally in progress. Each review binds
+its actual preceding handoff's native ID and timestamp; no future observation
+or alternate handoff can substitute for that result.
+
+Recovery observes uncertain outcomes and saves receipts without repeating any
+target write. Undo restores reviews first, then deletes only this command's
+handoffs in reverse order. Every selected task, native handoff, original receipt
+and required native state-event baseline is fenced. The command's own observed
+review inverse may bridge its companion comment's clock, without authorizing
+undo of unrelated earlier actions. Observed proof remains weaker than a verified
+write. Local work-session end state, tags and history membership remain separate.
+
+`last` and `undo --list` expose one command. These semantic formats retain the
+bounded v9 compression and v20 multipart transport; running readers must be
+upgraded and restarted before writing them. Mixed multi-ID updates and creation
+with relationships remain separate #65 work; see
+[compound writer coverage](github-batch-writers.md).
 
 ## Multipart transport (#67)
 
