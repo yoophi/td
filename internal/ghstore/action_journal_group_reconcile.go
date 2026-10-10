@@ -252,7 +252,24 @@ func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, 
 
 func (c *Client) reconcileActionGroup(ctx context.Context, a *ActionJournalRecord, session, actor string, apply, normal bool) (*ActionReconcileResult, error) {
 	if a.Group != nil && a.Group.Ordered != nil {
-		return nil, &UndoScopeError{Reason: "ordered group recovery integration is incomplete; no target or receipt write attempted"}
+		if apply {
+			return nil, &UndoScopeError{Reason: "ordered group recovery integration is incomplete; no target or receipt write attempted"}
+		}
+		if !strings.EqualFold(a.Author, actor) {
+			return nil, fmt.Errorf("ordered inspection requires its native author")
+		}
+		observed, err := c.observeOrderedGroup(ctx, a, false)
+		if err != nil {
+			return nil, err
+		}
+		root := observed.Records[a.IssueID]
+		result := &ActionReconcileResult{Journal: a, Issue: &root, GroupMembers: observed.Members, AlreadyReconciled: a.Phase == "applied" || a.Phase == "undone", TargetWriteReplayed: false}
+		if a.Phase == "undo_prepared" || a.Phase == "undone" {
+			result.UndoOutcome = groupResultOutcome(a, true)
+		} else {
+			result.ForwardOutcome = groupResultOutcome(a, false)
+		}
+		return result, nil
 	}
 	if a.Group == nil || !strings.EqualFold(a.Author, actor) {
 		return nil, fmt.Errorf("group recovery requires its native author")

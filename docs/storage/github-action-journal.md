@@ -858,6 +858,16 @@ for repeated effects on one issue. They are not yet emitted by command writers;
 ordered execution and recovery currently fail explicitly before any write.
 The installed, verified command behavior remains the v10/v12/v13 integration.
 
+The source implementation supports read-only reconciliation of v14 records.
+It reads one fresh bulk history and actual watched states, compares every frozen
+original receipt including its native clock and body digest, and reads native
+events for affected targets and any additional frozen watched observations.
+It distinguishes an applied but unrecorded forward attempt, an unapplied tail
+after earlier effects, a completed inverse step and an uncertain inverse input.
+Observation never replays a target write or invents a completed receipt. The
+point-read helper also checks the original native comment body and identity;
+the future executor still needs to invoke it before each write.
+
 An ordered member declares its sequence and actual preceding receipt on the
 same target. The group freezes original receipt snapshots, native comment body
 digests, forward outcomes and event observations. A terminal unapplied input
