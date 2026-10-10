@@ -81,6 +81,15 @@ func (c *Client) createBoard(ctx context.Context, name, expression, actor string
 	if err != nil {
 		return nil, err
 	}
+	journal, err := c.prepareEntityCreationJournal(ctx, operation, name, body, actor)
+	if err != nil {
+		return nil, err
+	}
+	if journal != nil {
+		if err := c.checkBoardName(ctx, name, except); err != nil {
+			return nil, err
+		}
+	}
 	data, err := c.request(ctx, "POST", "/issues", map[string]any{"title": name, "body": body}, false)
 	if err != nil {
 		return nil, fmt.Errorf("create board operation %s failed; the write outcome may be unknown, inspect GitHub before retrying: %w", operation, err)
@@ -106,6 +115,9 @@ func (c *Client) createBoard(ctx context.Context, name, expression, actor string
 	}
 	if err := c.checkBoardName(ctx, name, board.ID); err != nil {
 		return nil, fmt.Errorf("board %s was created, but catalog verification failed; reconcile duplicate carriers before retrying: %w", board.ID, err)
+	}
+	if err := c.completeEntityJournal(ctx, journal, &board.observed, data); err != nil {
+		return nil, err
 	}
 	return board, nil
 }
@@ -201,6 +213,10 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 	if current.observed.revision != original.revision {
 		return nil, &ConflictError{ID: before.ID}
 	}
+	journal, err := c.prepareEntityJournal(ctx, &original, actor)
+	if err != nil {
+		return nil, err
+	}
 	// Preserve native state, labels and clocks; this writes configuration only.
 	payload := map[string]any{"body": body}
 	if changes.Name != nil {
@@ -236,6 +252,9 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 		if err := c.checkBoardName(ctx, name, before.ID); err != nil {
 			return nil, fmt.Errorf("board %s rename was saved, but catalog verification failed; inspect before retrying: %w", before.ID, err)
 		}
+	}
+	if err := c.completeEntityJournal(ctx, journal, &result.observed, data); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

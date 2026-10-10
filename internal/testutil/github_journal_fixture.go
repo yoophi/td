@@ -66,7 +66,7 @@ func (f GitHubJournalFixture) Journals(t *testing.T) []GitHubJournalReceipt {
 	}
 	records := []GitHubJournalReceipt{}
 	for _, c := range state.Comments {
-		for _, marker := range []string{"<!-- td:action:v1\n", "<!-- td:action:v2\n"} {
+		for _, marker := range []string{"<!-- td:action:v1\n", "<!-- td:action:v2\n", "<!-- td:action:v3\n"} {
 			if index := strings.Index(c.Body, marker); index >= 0 {
 				var a GitHubJournalReceipt
 				if err := json.Unmarshal([]byte(c.Body[index+len(marker):len(c.Body)-len("\n-->")]), &a); err != nil {

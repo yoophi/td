@@ -163,6 +163,10 @@ func (c *Client) CreateNote(ctx context.Context, title, content, actor string) (
 	if err != nil {
 		return nil, err
 	}
+	journal, err := c.prepareEntityCreationJournal(ctx, operation, title, body, actor)
+	if err != nil {
+		return nil, err
+	}
 	data, err := c.request(ctx, "POST", "/issues", map[string]any{"title": title, "body": body}, false)
 	if err != nil {
 		return nil, fmt.Errorf("create note operation %s failed; outcome may be unknown, inspect GitHub before retrying: %w", operation, err)
@@ -176,7 +180,14 @@ func (c *Client) CreateNote(ctx context.Context, title, content, actor string) (
 	if err != nil {
 		return nil, fmt.Errorf("note creation operation %s returned invalid carrier; inspect GitHub before retrying: %w", operation, err)
 	}
-	return c.confirmNote(ctx, note, data, title, body)
+	confirmed, err := c.confirmNote(ctx, note, data, title, body)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.completeEntityJournal(ctx, journal, &confirmed.observed, data); err != nil {
+		return nil, err
+	}
+	return confirmed, nil
 }
 
 type NoteChanges struct {
@@ -266,6 +277,10 @@ func (c *Client) UpdateNoteObserved(ctx context.Context, observed *NoteRecord, c
 	if err != nil {
 		return nil, false, err
 	}
+	journal, err := c.prepareEntityJournal(ctx, &original, actor)
+	if err != nil {
+		return nil, false, err
+	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", original.Number), map[string]any{"title": title, "body": body}, false)
 	if err != nil {
 		return nil, false, fmt.Errorf("note %s operation %s failed; outcome may be unknown, inspect GitHub before retrying: %w", before.ID, operation, err)
@@ -283,7 +298,13 @@ func (c *Client) UpdateNoteObserved(ctx context.Context, observed *NoteRecord, c
 		return nil, false, fmt.Errorf("note %s write returned invalid metadata; inspect GitHub before retrying: %w", before.ID, err)
 	}
 	confirmed, err := c.confirmNote(ctx, result, data, title, body)
-	return confirmed, err == nil, err
+	if err != nil {
+		return nil, false, err
+	}
+	if err := c.completeEntityJournal(ctx, journal, &confirmed.observed, data); err != nil {
+		return nil, false, err
+	}
+	return confirmed, true, nil
 }
 
 func (c *Client) confirmNote(ctx context.Context, note *NoteRecord, data []byte, title, body string) (*NoteRecord, error) {

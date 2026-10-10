@@ -28,6 +28,7 @@ func journalHTTP(t *testing.T) (testutil.GitHubJournalFixture, string, func(stri
 	s.EnableGitHubComments(store)
 	s.EnableGitHubWorkflow(store)
 	s.EnableGitHubDeletion(store)
+	s.EnableGitHubBoardWrites(store)
 	request := func(method, path, body string, want int) string {
 		t.Helper()
 		w := httptest.NewRecorder()
@@ -109,5 +110,24 @@ func TestGitHubHTTPFactoryRejectsRetiredWebSession(t *testing.T) {
 	request("PATCH", "/v1/issues/gh-1", `{"title":"Retired web actor must not write"}`, 409)
 	if len(f.Journals(t)) != 0 {
 		t.Fatal("retired actor wrote journal")
+	}
+}
+
+func TestGitHubHTTPProductionFactoryJournalsBoardChanges(t *testing.T) {
+	f, actor, request := journalHTTP(t)
+	request("POST", "/v1/boards", `{"name":"HTTP journal board","query":"status = open"}`, 201)
+	request("PATCH", "/v1/boards/bd-gh-2", `{"name":"HTTP renamed journal board"}`, 200)
+	request("DELETE", "/v1/boards/bd-gh-2", `{}`, 200)
+	actions := f.Journals(t)
+	if len(actions) != 3 {
+		t.Fatal(actions)
+	}
+	for _, a := range actions {
+		if a.Phase != "applied" || a.SessionID != actor {
+			t.Fatal(a)
+		}
+	}
+	if actions[0].Action != "create" || actions[1].Action != "board" || actions[2].Action != "board" {
+		t.Fatal(actions)
 	}
 }

@@ -19,6 +19,7 @@ type journalWriteFixture struct {
 	mode                                                                   string
 	targetWrites, receiptWrites, intentWrites, carrierWrites, commentReads int
 	creationWrites                                                         int
+	targetNumber                                                           int
 }
 
 func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
@@ -28,7 +29,7 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 		t.Fatal(err)
 	}
 	clock := time.Date(2026, 10, 10, 1, 0, 0, 0, time.UTC)
-	f := &journalWriteFixture{mode: mode, issues: map[int]apiIssue{
+	f := &journalWriteFixture{mode: mode, targetNumber: 1, issues: map[int]apiIssue{
 		1: {Number: 1, Title: "Target", Body: "Before", State: "open", UpdatedAt: clock},
 		9: {Number: 9, Title: "Journal", Body: body, State: "open", UpdatedAt: clock},
 	}}
@@ -141,10 +142,10 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 					return nil, errors.New("readback unavailable")
 				}
 				if f.mode == "target-conflict" && f.commentReads == 1 {
-					target := f.issues[1]
+					target := f.issues[f.targetNumber]
 					target.Body = "Concurrent edit"
 					target.UpdatedAt = clock.Add(time.Second)
-					f.issues[1] = target
+					f.issues[f.targetNumber] = target
 				}
 				if f.mode == "journal-concurrent" && f.commentReads == 2 {
 					f.comment.Body = "Edited journal"
@@ -220,11 +221,11 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 					return nil, errors.New("connection lost after target write")
 				}
 			}
-			if n == 1 && ((f.mode == "target-later" && f.commentReads >= 3) || (f.mode == "undo-later" && f.commentReads >= 5)) {
-				target := f.issues[1]
+			if n == f.targetNumber && ((f.mode == "target-later" && f.commentReads >= 3) || (f.mode == "undo-later" && f.commentReads >= 5)) {
+				target := f.issues[f.targetNumber]
 				target.Body = "Later edit"
 				target.UpdatedAt = clock.Add(4 * time.Second)
-				f.issues[1] = target
+				f.issues[f.targetNumber] = target
 			}
 			return encode(f.issues[n])
 		default:

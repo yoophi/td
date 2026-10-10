@@ -301,7 +301,7 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	if !sameJournalIdentity(written, verified) || !written.UpdatedAt.Equal(verified.UpdatedAt) {
 		return fmt.Errorf("journal receipt changed during verification")
 	}
-	latest, err := c.GetIncludingDeleted(withReadbackCost(ctx), after.ID)
+	latest, err := c.readJournalTarget(withReadbackCost(ctx), after.ID)
 	if err != nil {
 		return err
 	}

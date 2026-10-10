@@ -575,3 +575,66 @@ func TestGitHubJournalCLIUndoThroughCommentReceipts(t *testing.T) {
 		t.Fatal(out, stderr, err)
 	}
 }
+
+func TestGitHubJournalCLITracksAuxiliaryEntityChangesAndHistoryIdentity(t *testing.T) {
+	_, actor, run := journalCLI(t)
+	for _, args := range [][]string{
+		{"board", "create", "Journal board", "--query", "status = open"},
+		{"board", "edit", "bd-gh-6", "--name", "Renamed journal board"},
+		{"board", "edit", "bd-gh-6", "--view-mode", "backlog"},
+		{"board", "move", "bd-gh-6", "gh-1", "1"},
+		{"board", "unposition", "bd-gh-6", "gh-1"},
+		{"board", "delete", "bd-gh-6"},
+		{"note", "add", "Journal note", "--content", "Original content"},
+		{"note", "edit", "nt-gh-7", "--title", "Renamed journal note", "--content", "Changed content"},
+		{"note", "pin", "nt-gh-7"}, {"note", "unpin", "nt-gh-7"},
+		{"note", "archive", "nt-gh-7"},
+		{"note", "unarchive", "nt-gh-7"},
+		{"note", "delete", "nt-gh-7"}, {"note", "restore", "nt-gh-7"},
+	} {
+		out, stderr, err := run(append(args, "--json")...)
+		if err != nil || !json.Valid([]byte(out)) {
+			t.Fatal(args, out, stderr, err)
+		}
+	}
+	actions := fixtureAllJournals(t)
+	if len(actions) != 14 {
+		t.Fatal(actions)
+	}
+	for _, a := range actions {
+		if a.Phase != "applied" || a.SessionID != actor {
+			t.Fatal(a)
+		}
+	}
+	out, stderr, err := run("last", "--n", "20", "--json")
+	var rows []githubActionHistoryRow
+	if err != nil || json.Unmarshal([]byte(out), &rows) != nil || len(rows) != 14 {
+		t.Fatal(out, stderr, err)
+	}
+	for _, row := range rows {
+		switch row.EntityType {
+		case "note":
+			if row.EntityID != "nt-gh-7" || row.TargetIssueID != "gh-7" {
+				t.Fatal(row)
+			}
+		case "board":
+			if row.EntityID != "bd-gh-6" || row.TargetIssueID != "gh-6" {
+				t.Fatal(row)
+			}
+		default:
+			t.Fatal("auxiliary history leaked as task", row)
+		}
+	}
+	before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, err = run("undo", "--json")
+	if err == nil || !strings.Contains(out+stderr, "unsupported_operation") {
+		t.Fatal(out, stderr, err)
+	}
+	after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("pending auxiliary inverse wrote", err)
+	}
+}

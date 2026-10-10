@@ -9,7 +9,7 @@ lazy, after input and target validation. CLI transition, logical deletion,
 dependency, schedule, file and label-repair writers also request tracking.
 Tracked activity creation now records v2 receipts. HTTP and monitor client
 factories now enable the same issue/activity protocols with their actual scoped
-actors. Comment deletion/note/board write protocols and coordinated
+actors. Comment deletion and coordinated
 workflow/graph undo remain pending.
 `td undo` executes supported scalar and own comment-creation inverses. This document is
 an implementation boundary, not an acceptance or completion declaration.
@@ -337,8 +337,8 @@ journal protocols; no new SQLite fallback or automatic retry is introduced.
 Monitor data/board factories enable tracking without remote writes. The real
 model revalidates configuration, worktree/branch and session before opening
 clients for issue, board or notes operations. Retired context requests fail
-before reaching GitHub. Board/note entity writers still need their own journal
-protocols; merely enabling tracking does not journal their direct raw requests.
+before reaching GitHub. Board/note entity writers now use the v3 protocol below; simply enabling
+tracking never substitutes for their native confirmation checks.
 
 Production-factory subprocess tests cover HTTP creation/update/comment/workflow
 and monitor creation/edit/workflow/deletion, including automatic handoff activity.
@@ -348,3 +348,32 @@ not invent applied receipts. Session rotation blocks old HTTP writers; session,
 branch and store replacement block monitor issue/board/notes clients. Aggregate
 read request-count tests remain applicable: enabling tracking itself makes no
 GitHub request and creates no carrier or receipt on reads.
+
+## Auxiliary entity journals (v3)
+
+`td:action:v3` records note/board configuration writes. Creation keeps the raw
+validated input separately from an unallocated target, then records native
+identity and exact verified result. Updates preserve native before/after title,
+full metadata body, state, labels and update clock. The input/body identifies
+entity kind, so no extra versionless discriminator is added. v1 issue and v2
+comment records remain readable; entity payloads in those versions are rejected.
+Older binaries do not read v3 records and running monitors must be restarted
+after upgrading. A new protocol is never presented as backward-readable data.
+
+Board and notes client factories enable tracking with their real scoped actor.
+Entity creation uses durable intent, response/author/readback confirmation,
+fresh bulk operation uniqueness and completion receipt. Board catalog uniqueness
+is still checked separately. Entity updates recheck the target after durable
+intent, retain existing native/catalog confirmations and then verify receipt plus
+final target revision. Invalid input, stale observations and actor mismatch do
+not authorize a target write; uncertain POST/PATCH or receipts are explicit
+errors and never automatic retries or invented success. Note no-op flag changes
+retain their existing no-write behavior. No SQLite fallback is introduced.
+
+`last`/`undo --list` display `note`/`board` with nt-gh-N/bd-gh-N (or the builtin
+board identity), retain target_issue_id and preserve native snapshot contracts.
+Entity inverses are still pending and refuse without a target write. Native
+creation cannot be erased losslessly; explicit note/board logical deletion is
+the supported compensation for custom entities. Builtin board materialization
+cannot be logically deleted under the builtin policy; select another board or
+explicitly adjust its settings while retaining identity/history.

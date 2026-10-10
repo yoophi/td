@@ -63,7 +63,7 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err := json.Unmarshal(profile, &user); err != nil || user.Login == "" {
 		return nil, fmt.Errorf("GitHub actor identity is unverified")
 	}
-	current, err := c.GetIncludingDeleted(ctx, action.IssueID)
+	current, err := c.readJournalTarget(ctx, action.IssueID)
 	if err != nil {
 		return nil, err
 	}

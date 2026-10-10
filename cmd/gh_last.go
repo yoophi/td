@@ -144,7 +144,7 @@ func executeGitHubUndo(cmd *cobra.Command, client *ghstore.Client, actions []ghs
 		return withErrorCode("conflict", fmt.Errorf("latest tracked action %s is %s with an unverified outcome; inspect GitHub before retrying; no target write attempted", selected.OperationID, selected.Phase))
 	}
 	if selected.Action == "create" {
-		return withErrorCode("unsupported_operation", fmt.Errorf("creation %s cannot be erased safely; use explicit logical delete for %s to preserve identity/history; no target write attempted", selected.OperationID, selected.IssueID))
+		return withErrorCode("unsupported_operation", fmt.Errorf("creation %s: %s; no target write attempted", selected.OperationID, selected.CreationUndoLimit()))
 	}
 	result, err := client.UndoAction(cmd.Context(), selected.ID, sessionID)
 	if err != nil {
@@ -186,6 +186,9 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 			return nil, err
 		}
 		entityType, entityID, targetIssueID, commentFormat := "issue", action.IssueID, "", ""
+		if kind, id := action.EntityIdentity(); kind != "issue" {
+			entityType, entityID, targetIssueID = kind, id, action.IssueID
+		}
 		if action.Action == "comment_create" {
 			entityType, entityID, targetIssueID, commentFormat = "comment", "new comment", action.IssueID, "github-native-comment-state-v1"
 			if action.CommentAfter != nil {

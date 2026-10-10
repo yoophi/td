@@ -350,7 +350,14 @@ func (s *Store) client() (*ghstore.Client, error) {
 	if state.Session.ID != s.actor {
 		return nil, fmt.Errorf("notes session changed; reopen the store before making requests")
 	}
-	return ghstore.Open(s.ctx, s.baseDir, s.selected)
+	client, err := ghstore.Open(s.ctx, s.baseDir, s.selected)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.TrackActions(s.actor); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 func (s *Store) getGitHub(id string, deleted bool) (*Note, error) {
 	// Validate before starting any network request.

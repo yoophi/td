@@ -157,3 +157,57 @@ func TestGitHubMonitorModelRejectsRetiredContextBeforeJournalWrites(t *testing.T
 		})
 	}
 }
+
+func TestGitHubMonitorModelJournalsBoardAndNotesWriters(t *testing.T) {
+	f := testutil.NewGitHubJournalFixture(t)
+	m, err := NewGitHubModel(context.Background(), f.Directory, time.Minute, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = m.Close() }()
+	source := m.BoardSource.(*GitHubBoardSource)
+	board, err := source.CreateBoard("Monitor journal board", "status = open")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, editors, err := source.ListBoardsForEditing()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := editors[board.ID].Save("Monitor renamed board", "status = open"); err != nil {
+		t.Fatal(err)
+	}
+	_, editors, err = source.ListBoardsForEditing()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := editors[board.ID].Delete(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := m.NotesFactory(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	note, err := raw.Create("Monitor journal note", "Original body")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.DeleteObserved(note); err != nil {
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	actions := f.Journals(t)
+	if len(actions) != 5 {
+		t.Fatal(actions)
+	}
+	for _, a := range actions {
+		if a.Phase != "applied" || a.SessionID != m.SessionID {
+			t.Fatal(a)
+		}
+	}
+	if actions[0].Action != "create" || actions[1].Action != "board" || actions[2].Action != "board" || actions[3].Action != "create" || actions[4].Action != "note" {
+		t.Fatal(actions)
+	}
+}

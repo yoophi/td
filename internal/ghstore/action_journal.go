@@ -16,6 +16,7 @@ import (
 const actionJournalPrefix = "<!-- td:action:"
 const actionJournalStart = actionJournalPrefix + "v1\n"
 const actionCommentJournalStart = actionJournalPrefix + "v2\n"
+const actionEntityJournalStart = actionJournalPrefix + "v3\n"
 
 // ActionIssueState preserves native values, including the complete metadata
 // body. UpdatedAt detects later edits even when content has returned to the
@@ -143,7 +144,7 @@ func (a ActionJournal) validate() error {
 			return fmt.Errorf("creation input requires a create action, title and label array")
 		}
 		_, meta, managed, err := decodeBody(a.CreateInput.Body)
-		if err != nil || !managed || meta.OperationID != a.OperationID || (meta.EntityKind != "" && meta.EntityKind != "issue") {
+		if err != nil || !managed || meta.OperationID != a.OperationID || (!slices.Contains([]string{"", "issue", "note", "board"}, meta.EntityKind)) {
 			return fmt.Errorf("creation input requires issue metadata with the same operation identity")
 		}
 		if a.After != nil {
@@ -192,6 +193,9 @@ func (a ActionJournal) validate() error {
 			}
 		}
 	}
+	if err := a.validateEntityAction(); err != nil {
+		return err
+	}
 	return a.validateCommentAction()
 }
 
@@ -210,6 +214,8 @@ func renderActionJournal(a ActionJournal) (string, error) {
 	start := actionJournalStart
 	if a.Action == "comment_create" {
 		start = actionCommentJournalStart
+	} else if a.entityKind() != "" {
+		start = actionEntityJournalStart
 	}
 	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, target, a.Phase, start, data, markerEnd), nil
 }
@@ -223,6 +229,8 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	start := actionJournalStart
 	if strings.HasPrefix(block, actionCommentJournalStart) {
 		start = actionCommentJournalStart
+	} else if strings.HasPrefix(block, actionEntityJournalStart) {
+		start = actionEntityJournalStart
 	}
 	if comment.ID <= 0 || !strings.HasPrefix(block, start) || !strings.HasSuffix(block, markerEnd) {
 		return nil, fmt.Errorf("comment %d has unknown or malformed action journal", comment.ID)
@@ -239,6 +247,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	}
 	if err := a.validate(); err != nil {
 		return nil, err
+	}
+	if (a.entityKind() != "") != (start == actionEntityJournalStart) {
+		return nil, fmt.Errorf("entity journal version does not match its payload")
 	}
 	if (a.Action == "comment_create") != (start == actionCommentJournalStart) {
 		return nil, fmt.Errorf("action journal version does not match its payload")
@@ -335,7 +346,7 @@ func (a ActionJournalRecord) PlanIssueUndo(current *Record, sessionID, author st
 		return nil, &ConflictError{ID: a.IssueID}
 	}
 	if a.Action == "create" {
-		return nil, fmt.Errorf("creation cannot be erased safely; use the explicit logical delete command for %s to preserve GitHub identity and history", a.IssueID)
+		return nil, fmt.Errorf("%s", a.CreationUndoLimit())
 	}
 	return &IssueUndoPlan{Payload: map[string]any{"title": a.Before.Title, "body": a.Before.Body,
 		"state": a.Before.State, "labels": append([]string{}, a.Before.Labels...)}}, nil

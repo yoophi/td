@@ -107,6 +107,9 @@ func runGitHubBoard(cmd *cobra.Command, args []string, cfg *models.Config) error
 		return err
 	}
 	actor := state.Session.ID
+	if err := client.TrackActions(actor); err != nil {
+		return err
+	}
 	if name == "list" {
 		boards, err := client.ListBoards(cmd.Context())
 		if err != nil {
