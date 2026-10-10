@@ -15,11 +15,12 @@ type UndoScopeError struct{ Reason string }
 func (e *UndoScopeError) Error() string { return e.Reason }
 
 type ActionUndoResult struct {
-	Compensation  *NativeIssueUndoPlan `json:"compensation,omitempty"`
-	UndoOutcome   *ActionUndoOutcome   `json:"undo_outcome,omitempty"`
-	Issue         *Record              `json:"issue"`
-	Journal       *ActionJournalRecord `json:"journal"`
-	AlreadyUndone bool                 `json:"already_undone"`
+	GroupMembers  []ActionGroupResultMember `json:"group_members,omitempty"`
+	Compensation  *NativeIssueUndoPlan      `json:"compensation,omitempty"`
+	UndoOutcome   *ActionUndoOutcome        `json:"undo_outcome,omitempty"`
+	Issue         *Record                   `json:"issue"`
+	Journal       *ActionJournalRecord      `json:"journal"`
+	AlreadyUndone bool                      `json:"already_undone"`
 }
 
 // UndoAction rehydrates the remote receipt rather than trusting a caller's
@@ -49,6 +50,12 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	}
 	if action == nil {
 		return nil, fmt.Errorf("comment %s is not an action journal", id)
+	}
+	if action.Group != nil {
+		return c.undoActionGroup(ctx, action, sessionID)
+	}
+	if action.GroupOperationID != "" && groupUndoContext(ctx) != action.GroupOperationID {
+		return nil, &UndoScopeError{Reason: "group member must be undone through its complete group; no target write attempted"}
 	}
 	if action.CarrierID == "" {
 		return nil, &UndoScopeError{Reason: "legacy per-target journal execution requires migration to a separate carrier; no target write attempted"}
@@ -160,6 +167,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if latest.revision != current.revision {
 		return nil, &ConflictError{ID: current.ID}
 	}
+	if err := checkGroupUndoGate(ctx); err != nil {
+		return nil, err
+	}
 	data, err = c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", current.Number), plan.Payload, false)
 	if err != nil {
 		return nil, fmt.Errorf("undo %s has an uncertain result; inspect target and receipt before retrying: %w", pending.UndoOperationID, err)
@@ -239,6 +249,9 @@ func (c *Client) rewriteActionJournalGuarded(ctx context.Context, old *ActionJou
 	}
 	if old.Action != next.Action || !reflect.DeepEqual(old.Before, next.Before) || !reflect.DeepEqual(old.After, next.After) || !reflect.DeepEqual(old.CreateInput, next.CreateInput) || !reflect.DeepEqual(old.CommentInput, next.CommentInput) || !reflect.DeepEqual(old.CommentAfter, next.CommentAfter) || !reflect.DeepEqual(old.CommentBefore, next.CommentBefore) || !reflect.DeepEqual(old.UpdateObservation, next.UpdateObservation) || !reflect.DeepEqual(old.UpdateIntent, next.UpdateIntent) || !reflect.DeepEqual(old.Reconciliation, next.Reconciliation) || !reflect.DeepEqual(old.UndoObservation, next.UndoObservation) {
 		return nil, fmt.Errorf("undo receipt cannot rewrite original action snapshots")
+	}
+	if err := validateGroupRewrite(old.ActionJournal, next); err != nil {
+		return nil, err
 	}
 	if err := validateNativeUndoRewrite(old.NativeUndo, next.NativeUndo); err != nil {
 		return nil, err

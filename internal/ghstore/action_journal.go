@@ -87,6 +87,8 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
+	Group             *ActionGroup             `json:"group,omitempty"`
+	GroupOperationID  string                   `json:"group_operation_id,omitempty"`
 	UpdateObservation *ActionUpdateObservation `json:"update_observation,omitempty"`
 	UpdateIntent      *ActionUpdateIntent      `json:"update_intent,omitempty"`
 	NativeUndo        *ActionNativeUndo        `json:"native_undo,omitempty"`
@@ -141,6 +143,12 @@ func (a ActionJournal) validate() error {
 	}
 	if !identity(a.OperationID) || !identity(a.SessionID) {
 		return fmt.Errorf("action history requires operation and session identity")
+	}
+	if a.Group != nil || a.Action == "group" {
+		return a.validateGroupAction()
+	}
+	if a.GroupOperationID != "" && (!identity(a.GroupOperationID) || a.GroupOperationID == a.OperationID || a.UpdateIntent == nil || a.Action != "update") {
+		return fmt.Errorf("group member requires its distinct immutable group and full update input")
 	}
 	pendingCreate := a.Action == "create" && a.Phase == "prepared" && a.IssueID == "" && a.CarrierID != "" && a.CreateInput != nil && a.After == nil
 	if !pendingCreate {
@@ -237,7 +245,11 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		target = "new issue"
 	}
 	start := actionJournalStart
-	if a.UpdateIntent != nil {
+	if a.Group != nil {
+		start = actionGroupJournalStart
+	} else if a.GroupOperationID != "" {
+		start = actionGroupMemberJournalStart
+	} else if a.UpdateIntent != nil {
 		start = actionUpdateIntentJournalStart
 	} else if a.NativeUndo != nil {
 		start = actionNativeUndoJournalStart
@@ -273,7 +285,11 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionUpdateIntentJournalStart) {
+	if strings.HasPrefix(block, actionGroupJournalStart) {
+		start = actionGroupJournalStart
+	} else if strings.HasPrefix(block, actionGroupMemberJournalStart) {
+		start = actionGroupMemberJournalStart
+	} else if strings.HasPrefix(block, actionUpdateIntentJournalStart) {
 		start = actionUpdateIntentJournalStart
 	} else if strings.HasPrefix(block, actionNativeUndoJournalStart) {
 		start = actionNativeUndoJournalStart
@@ -304,7 +320,10 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	planned := start == actionUpdateIntentJournalStart
+	if (a.Group != nil) != (start == actionGroupJournalStart) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart) || !groupNativeAuthor(a, comment.User.Login) {
+		return nil, fmt.Errorf("group version or native attribution differs from payload")
+	}
+	planned := start == actionUpdateIntentJournalStart || start == actionGroupMemberJournalStart
 	if a.UpdateObservation != nil && !strings.EqualFold(a.UpdateObservation.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("update observer differs from native journal author")
 	}

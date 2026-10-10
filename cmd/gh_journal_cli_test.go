@@ -1198,3 +1198,253 @@ func TestGitHubJournalCLIForwardUpdateRecovery(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubJournalCLIGroupedBasicTransitionsAndPartialRecovery(t *testing.T) {
+	for _, mode := range []string{"complete", "receipt-denied", "target-denied", "noop"} {
+		t.Run(mode, func(t *testing.T) {
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) string {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil {
+					t.Fatal(args, out, stderr, err)
+				}
+				return out
+			}
+			execute("create", "Group first")
+			execute("create", "Group second")
+			execute("create", "Group third")
+			if mode == "noop" {
+				execute("start", "gh-6")
+			}
+			before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "receipt-denied" || mode == "target-denied" {
+				t.Setenv("TD_GH_JOURNAL_FAIL", mode)
+				if mode == "target-denied" {
+					t.Setenv("TD_SCHEDULE_FAIL_WRITE", "1")
+				}
+			}
+			out, stderr, err := run("start", "gh-6", "gh-7", "gh-8", "--json")
+			if (err != nil) != (mode == "receipt-denied" || mode == "target-denied") {
+				t.Fatal(out, stderr, err)
+			}
+			t.Setenv("TD_GH_JOURNAL_FAIL", "")
+			t.Setenv("TD_SCHEDULE_FAIL_WRITE", "")
+			var rows []struct {
+				ID, ActionType, Phase string
+				Group                 *ghstore.ActionGroup `json:"group"`
+			}
+			last := execute("last", "--n", "1")
+			if json.Unmarshal([]byte(last), &rows) != nil || len(rows) != 1 || rows[0].Group == nil {
+				t.Fatal("member escaped group history", last)
+			}
+			rid := rows[0].ID
+			native, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			execute("undo", "--reconcile", rid)
+			recovery := execute("undo", "--reconcile", rid, "--apply")
+			if mode == "receipt-denied" || mode == "target-denied" {
+				if !strings.Contains(recovery, `"group_receipt_saved":true`) || !strings.Contains(recovery, `"partial":true`) || !strings.Contains(recovery, `"target_write_verified":false`) {
+					t.Fatal("partial result lost", recovery)
+				}
+			}
+			execute("undo", "--reconcile", rid, "--apply")
+			recovered, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil || !bytes.Equal(native, recovered) {
+				t.Fatal("group recovery replayed target", err)
+			}
+			inverse := execute("undo")
+			if !strings.Contains(inverse, `"group_members":`) || !strings.Contains(inverse, `"causal_undo_chain_eligible":false`) {
+				t.Fatal(inverse)
+			}
+			restored, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Compare content/state/labels while retaining genuine new server clocks.
+			var b, a struct {
+				Issues map[string]map[string]any `json:"issues"`
+			}
+			if json.Unmarshal(before, &b) != nil || json.Unmarshal(restored, &a) != nil {
+				t.Fatal("native fixture invalid")
+			}
+			for _, id := range []string{"6", "7", "8"} {
+				for _, field := range []string{"title", "body", "state", "labels"} {
+					bv, _ := json.Marshal(b.Issues[id][field])
+					av, _ := json.Marshal(a.Issues[id][field])
+					if !bytes.Equal(bv, av) {
+						t.Fatal("group inverse changed original contents", id, field, string(bv), string(av))
+					}
+				}
+			}
+			execute("undo", "--reconcile", rid, "--apply")
+			confirmed, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if !bytes.Equal(restored, confirmed) {
+				t.Fatal("group inverse confirmation wrote target")
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite fallback", err)
+			}
+		})
+	}
+}
+
+func TestGitHubJournalCLIGroupInverseRecoveryContinuesWithoutReplayingCompletedMember(t *testing.T) {
+	_, _, run := journalCLI(t)
+	execute := func(args ...string) string {
+		t.Helper()
+		out, stderr, err := run(append(args, "--json")...)
+		if err != nil {
+			t.Fatal(args, out, stderr, err)
+		}
+		return out
+	}
+	for _, title := range []string{"One", "Two", "Three"} {
+		execute("create", title)
+	}
+	execute("start", "gh-6", "gh-7", "gh-8")
+	var rows []struct {
+		ID, Phase, UndoOperationID string
+		Group                      *ghstore.ActionGroup `json:"group"`
+	}
+	last := execute("last", "--n", "1")
+	if json.Unmarshal([]byte(last), &rows) != nil || rows[0].Group == nil {
+		t.Fatal(last)
+	}
+	rid := rows[0].ID
+	t.Setenv("TD_GH_JOURNAL_FAIL", "undo-completion-denied")
+	out, stderr, err := run("undo", "--json")
+	if err == nil || !strings.Contains(out+stderr, "unverified") {
+		t.Fatal(out, stderr, err)
+	}
+	t.Setenv("TD_GH_JOURNAL_FAIL", "")
+	pending := execute("last", "--n", "1")
+	// Inspect the group identity directly rather than inventing a new undo.
+	var pendingValue []map[string]json.RawMessage
+	if json.Unmarshal([]byte(pending), &pendingValue) != nil || string(pendingValue[0]["phase"]) != `"undo_prepared"` {
+		t.Fatal(pending)
+	}
+	identity := string(pendingValue[0]["undo_operation_id"])
+	before, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	execute("undo", "--reconcile", rid, "--apply")
+	after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if !bytes.Equal(before, after) {
+		t.Fatal("inverse recovery replayed target")
+	}
+	// The already restored last member retains its exact clock while the two
+	// remaining members are explicitly undone in the next command invocation.
+	var state struct{ Issues map[string]json.RawMessage }
+	if json.Unmarshal(after, &state) != nil {
+		t.Fatal("bad fixture")
+	}
+	restored8 := string(state.Issues["8"])
+	done := execute("undo")
+	if !strings.Contains(done, `"action":"undone"`) {
+		t.Fatal(done)
+	}
+	latest, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if json.Unmarshal(latest, &state) != nil || string(state.Issues["8"]) != restored8 {
+		t.Fatal("completed inverse member was replayed")
+	}
+	confirmation := execute("undo", "--reconcile", rid, "--apply")
+	var confirmed struct {
+		Journal struct {
+			UndoOperationID string `json:"undo_operation_id"`
+		}
+	}
+	if json.Unmarshal([]byte(confirmation), &confirmed) != nil || `"`+confirmed.Journal.UndoOperationID+`"` != identity {
+		t.Fatal("group undo identity changed", confirmation)
+	}
+}
+
+func TestGitHubJournalCLIGroupRejectsDuplicateAndForeignMemberBeforeWrites(t *testing.T) {
+	_, _, run := journalCLI(t)
+	for _, title := range []string{"One", "Two"} {
+		if out, stderr, err := run("create", title, "--json"); err != nil {
+			t.Fatal(out, stderr, err)
+		}
+	}
+	native, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	journals, _ := os.ReadFile(os.Getenv("TD_GH_FIXTURE_JOURNAL"))
+	if out, stderr, err := run("start", "gh-6", "gh-6", "--json"); err == nil || !strings.Contains(out+stderr, "repeats") {
+		t.Fatal(out, stderr, err)
+	}
+	next, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	history, _ := os.ReadFile(os.Getenv("TD_GH_FIXTURE_JOURNAL"))
+	if !bytes.Equal(native, next) || !bytes.Equal(journals, history) {
+		t.Fatal("duplicate preflight wrote")
+	}
+	if out, stderr, err := run("start", "gh-6", "gh-7", "--json"); err != nil {
+		t.Fatal(out, stderr, err)
+	}
+	changed, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	var state map[string]any
+	if json.Unmarshal(changed, &state) != nil {
+		t.Fatal("fixture")
+	}
+	state["issues"].(map[string]any)["7"].(map[string]any)["title"] = "Concurrent same-clock foreign edit"
+	data, _ := json.Marshal(state)
+	if err := os.WriteFile(os.Getenv("TD_SCHEDULE_STATE"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	history, _ = os.ReadFile(os.Getenv("TD_GH_FIXTURE_JOURNAL"))
+	if out, stderr, err := run("undo", "--json"); err == nil || !strings.Contains(out+stderr, "conflict") {
+		t.Fatal(out, stderr, err)
+	}
+	final, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	latestHistory, _ := os.ReadFile(os.Getenv("TD_GH_FIXTURE_JOURNAL"))
+	if !bytes.Equal(data, final) || !bytes.Equal(history, latestHistory) {
+		t.Fatal("foreign member was partially undone")
+	}
+}
+
+func TestGitHubJournalCLIGroupedBlockUnblockAndUnstart(t *testing.T) {
+	for _, command := range []string{"block", "unblock", "unstart"} {
+		t.Run(command, func(t *testing.T) {
+			_, _, run := journalCLI(t)
+			execute := func(args ...string) string {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil {
+					t.Fatal(args, out, stderr, err)
+				}
+				return out
+			}
+			execute("create", "One")
+			execute("create", "Two")
+			if command == "unblock" {
+				execute("block", "gh-6")
+				execute("block", "gh-7")
+			}
+			if command == "unstart" {
+				execute("start", "gh-6")
+				execute("start", "gh-7")
+			}
+			before, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			execute(command, "gh-6", "gh-7")
+			out := execute("undo")
+			if !strings.Contains(out, `"group_members":`) {
+				t.Fatal(out)
+			}
+			after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			var a, b struct{ Issues map[string]map[string]any }
+			if json.Unmarshal(before, &a) != nil || json.Unmarshal(after, &b) != nil {
+				t.Fatal("fixture")
+			}
+			for _, id := range []string{"6", "7"} {
+				for _, field := range []string{"title", "body", "state", "labels"} {
+					x, _ := json.Marshal(a.Issues[id][field])
+					y, _ := json.Marshal(b.Issues[id][field])
+					if !bytes.Equal(x, y) {
+						t.Fatal("basic group inverse", command, id, field)
+					}
+				}
+			}
+		})
+	}
+}

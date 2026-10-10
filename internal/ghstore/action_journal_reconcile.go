@@ -40,14 +40,16 @@ func (a ActionJournal) validateReconciliation() error {
 }
 
 type ActionReconcileResult struct {
-	ForwardOutcome      *ActionUndoOutcome   `json:"forward_outcome,omitempty"`
-	Compensation        *NativeIssueUndoPlan `json:"compensation,omitempty"`
-	Issue               *Record              `json:"issue"`
-	Journal             *ActionJournalRecord `json:"journal"`
-	Applied             bool                 `json:"applied"`
-	AlreadyReconciled   bool                 `json:"already_reconciled"`
-	UndoOutcome         *ActionUndoOutcome   `json:"undo_outcome,omitempty"`
-	TargetWriteReplayed bool                 `json:"target_write_replayed"`
+	GroupMembers        []ActionGroupResultMember `json:"group_members,omitempty"`
+	GroupReceiptSaved   bool                      `json:"group_receipt_saved,omitempty"`
+	ForwardOutcome      *ActionUndoOutcome        `json:"forward_outcome,omitempty"`
+	Compensation        *NativeIssueUndoPlan      `json:"compensation,omitempty"`
+	Issue               *Record                   `json:"issue"`
+	Journal             *ActionJournalRecord      `json:"journal"`
+	Applied             bool                      `json:"applied"`
+	AlreadyReconciled   bool                      `json:"already_reconciled"`
+	UndoOutcome         *ActionUndoOutcome        `json:"undo_outcome,omitempty"`
+	TargetWriteReplayed bool                      `json:"target_write_replayed"`
 }
 
 // ReconcileAction previews by default. Explicit apply changes only the existing
@@ -95,6 +97,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	}
 	if actor.Login == "" || !strings.EqualFold(actor.Login, action.Author) {
 		return nil, fmt.Errorf("recovery receipt is not attributed to the authenticated GitHub author; no write attempted")
+	}
+	if action.Group != nil {
+		return c.reconcileActionGroup(ctx, action, sessionID, actor.Login, apply, false)
 	}
 	if action.NativeUndo != nil {
 		return c.reconcileNativeUndo(ctx, action, sessionID, actor.Login, apply)

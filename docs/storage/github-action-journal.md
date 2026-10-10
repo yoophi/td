@@ -749,3 +749,42 @@ journal history, or multipart transport for large incompressible snapshots.
 Older updates without recorded full inputs cannot be recovered by guessing
 what the original command requested. Optimistic GitHub checks do not provide
 an atomic compare-and-swap boundary.
+
+## Explicit basic transition groups
+
+A command with several IDs for `start`, `unstart`, `block` or `unblock` records
+one immutable v10 group intent before any target write. It preserves declared
+order and actual initial task revisions. Every attempted member stores its
+complete v11 update input and original group operation ID before its own write.
+Unattempted future inputs are never invented. Capacity checks reserve group
+completion and inverse space before writes. Group membership checks use fresh
+bulk task snapshots; changing a sibling prevents subsequent writes.
+
+`last` and `undo --list` collapse linked members into one command entry. Members
+cannot be directly undone outside their validated group. Group `undo` checks
+all member policy/revisions before its first inverse, records a group inverse
+intent, and executes supported inverses in reverse declaration order. It
+rechecks every watched target after individual intent reads and immediately
+before each target PATCH. These optimistic checks do not provide GitHub atomic
+CAS or a transaction. A failure retains earlier results and original undo IDs.
+
+`undo --reconcile <group receipt>` previews all member states. `--apply` writes
+only pending member/group receipts; it never replays targets. Results distinguish
+applied, observed, noop, unattempted, unapplied (exact starting revision only),
+and undone. Matching starting contents cannot claim that an uncertain attempt
+never happened; it records only the observed unchanged revision. Unknown,
+duplicate, foreign, changed or missing members fail explicitly. A partial
+inverse completion can be observed and then a later explicit `undo` continues
+remaining applied members without replaying already restored ones. An inverse
+whose planned result is not observed remains unverified and is not retried.
+
+Observers/session/time and original group membership, member inputs and group
+undo identity are preserved. Observed proofs report unverified target writes;
+even verified group inverses are excluded from causal undo-chain witnesses.
+Completed/recovered group confirmations are read-only. v1–v9 reading remains
+supported, and bounded v9 transport can wrap v10/v11 payloads.
+
+Cascades, native-state groups, other explicit command batches, claim sweeps,
+work-session fanout and portable history still require their grouping/inverse
+integration. Their existing single-member receipts do not claim whole-command
+rollback. Large incompressible groups still require multipart transport.

@@ -86,7 +86,7 @@ func TestCompressedJournalRejectsCorruptionAndUnboundedInflation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, change := range map[string]func(*actionJournalEnvelope){
-		"unknown schema":   func(e *actionJournalEnvelope) { e.Schema = "v10" },
+		"unknown schema":   func(e *actionJournalEnvelope) { e.Schema = "v99" },
 		"recursive schema": func(e *actionJournalEnvelope) { e.Schema = "v9" },
 		"encoding":         func(e *actionJournalEnvelope) { e.Encoding = "raw" },
 		"checksum":         func(e *actionJournalEnvelope) { e.SHA256 = strings.Repeat("0", 64) },

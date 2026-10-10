@@ -152,6 +152,12 @@ func init() {
 					return fmt.Errorf("capture start snapshot: %w", err)
 				}
 			}
+			grouped := len(args) > 1 && slices.Contains([]string{"start", "unstart", "block", "unblock"}, command.Name())
+			if grouped {
+				if err := client.BeginActionGroup(cmd.Context(), command.Name(), args); err != nil {
+					return err
+				}
+			}
 			completed := []string{}
 			for _, id := range args {
 				record, noop, err := client.TransitionWithCascades(cmd.Context(), id, command.Name(), options)
@@ -195,6 +201,11 @@ func init() {
 					}
 				}
 				completed = append(completed, record.ID)
+			}
+			if grouped {
+				if _, err := client.CompleteActionGroup(cmd.Context()); err != nil {
+					return err
+				}
 			}
 			return nil
 		}

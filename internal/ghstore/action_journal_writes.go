@@ -12,6 +12,7 @@ import (
 )
 
 type actionJournalScope struct {
+	Group     *activeActionGroup
 	SessionID string
 	Carrier   Record
 }
@@ -167,6 +168,9 @@ func (c *Client) prepareActionJournal(ctx context.Context, before *Record, paylo
 	}
 	a := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: before.ID,
 		CarrierID: c.journal.Carrier.ID, Action: "update", Phase: "prepared", Before: &state, UpdateIntent: intent}
+	if err := c.attachActionGroupMember(ctx, &a); err != nil {
+		return nil, err
+	}
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
@@ -244,6 +248,12 @@ func (c *Client) writePreparedJournal(ctx context.Context, a ActionJournal) (*Ac
 	if !sameJournalIdentity(written, verified) {
 		return nil, fmt.Errorf("journal intent identity changed; no target write attempted")
 	}
+	if c.journal.Group != nil && a.GroupOperationID == c.journal.Group.Journal.OperationID {
+		if err := validateGroupMember(c.journal.Group.Journal, verified); err != nil {
+			return nil, fmt.Errorf("group member intent is unverified (no target write attempted): %w", err)
+		}
+		c.journal.Group.Attempted[a.IssueID] = true
+	}
 	return verified, nil
 }
 
@@ -319,6 +329,9 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	}
 	if latest.revision != after.revision {
 		return &ConflictError{ID: after.ID, AfterWrite: true}
+	}
+	if c.journal != nil && c.journal.Group != nil && prepared.GroupOperationID == c.journal.Group.Journal.OperationID {
+		c.journal.Group.Expected[after.ID] = state
 	}
 	return nil
 }

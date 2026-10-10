@@ -146,6 +146,9 @@ func (c *Client) completeEntityJournal(ctx context.Context, prepared *ActionJour
 
 // EntityIdentity keeps auxiliary carriers distinct from tasks in history output.
 func (a ActionJournal) EntityIdentity() (string, string) {
+	if a.Group != nil {
+		return "action_group", a.OperationID
+	}
 	kind := a.entityKind()
 	if kind == "" {
 		return "issue", a.IssueID
