@@ -222,3 +222,179 @@ func TestGitHubJournalCLIBootstrapValidationAndHumanOutput(t *testing.T) {
 		t.Fatal(journals)
 	}
 }
+
+func TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions(t *testing.T) {
+	dir, sessionID, run := journalCLI(t)
+	if err := os.WriteFile(filepath.Join(dir, "linked.go"), []byte("package fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	execute := func(args ...string) {
+		t.Helper()
+		out, stderr, err := run(append(args, "--json")...)
+		if err != nil || !json.Valid([]byte(out)) {
+			t.Fatal(args, out, stderr, err)
+		}
+	}
+	commands := [][]string{
+		{"create", "Journal workflow fixture"},
+		{"start", "gh-6"}, {"unstart", "gh-6"}, {"start", "gh-6"},
+		{"block", "gh-6", "--reason", "fixture blocker"}, {"unblock", "gh-6"},
+		{"due", "gh-6", "2026-12-01"}, {"defer", "gh-6", "2026-12-02"},
+		{"dep", "add", "gh-6", "gh-1"}, {"dep", "rm", "gh-6", "gh-1"},
+		{"link", "gh-6", "linked.go"}, {"unlink", "gh-6", "linked.go"},
+		{"delete", "gh-6", "--yes"}, {"restore", "gh-6"},
+	}
+	for i, args := range commands {
+		execute(args...)
+		journals := fixtureJournals(t)
+		if len(journals) != i+1 {
+			t.Fatal("missing or duplicate issue write journal", args, journals)
+		}
+		last := journals[len(journals)-1]
+		if last.SessionID != sessionID || last.Phase != "applied" || last.IssueID != "gh-6" || last.After == nil || (i > 0 && last.Before == nil) {
+			t.Fatal(args, last)
+		}
+	}
+	// No-op transitions/deletion must not generate fictitious remote actions.
+	execute("start", "gh-6")
+	count := len(fixtureJournals(t))
+	execute("start", "gh-6")
+	if len(fixtureJournals(t)) != count {
+		t.Fatal("no-op generated an action")
+	}
+	execute("unstart", "gh-6")
+	execute("ws", "start", "Journal bundle")
+	execute("ws", "tag", "gh-6")
+	execute("ws", "handoff", "--review", "--done", "fixture handoff")
+	if len(fixtureJournals(t)) != count+3 {
+		t.Fatal("work session transitions were not journaled", fixtureJournals(t))
+	}
+	before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, err := run("undo", "--json")
+	if err == nil || !strings.Contains(out+stderr, "unsupported_operation") {
+		t.Fatal("workflow undo bypassed policy boundary", out, stderr, err)
+	}
+	after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("unsupported undo changed native state")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("SQLite fallback")
+	}
+}
+
+func TestGitHubJournalCLITracksLabelRepairWritesButNotPreview(t *testing.T) {
+	_, sessionID, run := journalCLI(t)
+	execute := func(args ...string) {
+		t.Helper()
+		out, stderr, err := run(append(args, "--json")...)
+		if err != nil || !json.Valid([]byte(out)) {
+			t.Fatal(args, out, stderr, err)
+		}
+	}
+	execute("create", "Label journal fixture")
+	remove := func(label string) {
+		t.Helper()
+		file := os.Getenv("TD_SCHEDULE_STATE")
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var remote map[string]any
+		if err := json.Unmarshal(data, &remote); err != nil {
+			t.Fatal(err)
+		}
+		target := remote["issues"].(map[string]any)["6"].(map[string]any)
+		labels := []any{}
+		for _, raw := range target["labels"].([]any) {
+			if raw.(map[string]any)["name"] != label {
+				labels = append(labels, raw)
+			}
+		}
+		target["labels"] = labels
+		clock, err := time.Parse(time.RFC3339, target["updated_at"].(string))
+		if err != nil {
+			t.Fatal(err)
+		}
+		target["updated_at"] = clock.Add(time.Second).Format(time.RFC3339)
+		data, err = json.Marshal(remote)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	remove("td:priority:P2")
+	out, stderr, err := run("config", "sync-priority-labels", "--id", "gh-6")
+	if err != nil || !strings.Contains(out, "Preview: 1 repairs") || stderr != "" {
+		t.Fatal("human preview must be on stdout", out, stderr, err)
+	}
+	execute("config", "sync-priority-labels", "--id", "gh-6")
+	if len(fixtureJournals(t)) != 1 {
+		t.Fatal("preview wrote journal")
+	}
+	execute("config", "sync-priority-labels", "--id", "gh-6", "--apply")
+	if len(fixtureJournals(t)) != 2 {
+		t.Fatal("priority repair missing journal")
+	}
+	remove("td:open")
+	execute("config", "sync-state-labels")
+	journals := fixtureJournals(t)
+	if len(journals) != 3 || journals[2].SessionID != sessionID || journals[2].Phase != "applied" {
+		t.Fatal(journals)
+	}
+}
+
+func TestGitHubJournalCLIWriterReceiptFailuresRetainUnverifiedHistory(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"transition", []string{"start", "gh-6"}},
+		{"delete", []string{"delete", "gh-6", "--yes"}},
+		{"dependency", []string{"dep", "add", "gh-6", "gh-1"}},
+		{"schedule", []string{"due", "gh-6", "2026-12-01"}},
+		{"files", []string{"link", "gh-6", "linked.go"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, sessionID, run := journalCLI(t)
+			if err := os.WriteFile(filepath.Join(dir, "linked.go"), []byte("package fixture\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if out, stderr, err := run("create", "Writer failure fixture", "--json"); err != nil {
+				t.Fatal(out, stderr, err)
+			}
+			t.Setenv("TD_GH_JOURNAL_FAIL", "receipt-denied")
+			out, stderr, err := run(append(tc.args, "--json")...)
+			if err == nil || !strings.Contains(out+stderr, "HTTP 403 journal receipt denied") || !strings.Contains(out+stderr, "unverified") {
+				t.Fatal("unverified receipt reported success", tc.name, out, stderr, err)
+			}
+			journals := fixtureJournals(t)
+			if len(journals) != 2 || journals[1].Phase != "prepared" || journals[1].SessionID != sessionID || journals[1].After != nil {
+				t.Fatal("failed receipt falsely completed or retried", journals)
+			}
+			before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, stderr, err = run("undo", "--json")
+			if err == nil || !strings.Contains(out+stderr, "unverified outcome") {
+				t.Fatal("pending action skipped", out, stderr, err)
+			}
+			after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatal("pending action undo wrote target")
+			}
+		})
+	}
+}

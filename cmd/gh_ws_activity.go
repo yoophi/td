@@ -261,6 +261,9 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 				if observed.Status != models.StatusInProgress {
 					return nil
 				}
+				if err := client.TrackActions(current.Session.ID); err != nil {
+					return err
+				}
 				requested = true
 				_, _, err = client.TransitionObserved(cmd.Context(), observed, "review", ghstore.TransitionOptions{SessionID: state.Session.ID, AgentType: state.Session.AgentType, Mode: mode, Reason: "Submitted for review via ws handoff --review", Snapshot: activity.Snapshot})
 				return err

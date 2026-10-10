@@ -143,6 +143,9 @@ func init() {
 				if err != nil {
 					return err
 				}
+				if err := client.TrackActions(state.Session.ID); err != nil {
+					return err
+				}
 				result, noop, err := client.ReplaceLinkedFilesObserved(cmd.Context(), observed, files)
 				if err != nil {
 					return err

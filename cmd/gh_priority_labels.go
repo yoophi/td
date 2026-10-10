@@ -14,6 +14,7 @@ var syncPriorityLabelsCmd = &cobra.Command{
 	Short: "Preview GitHub priority label repairs; --apply saves them",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		cmd.SetOut(cmd.OutOrStdout())
 		cfg, err := config.Load(getBaseDir())
 		if err != nil {
 			return err
@@ -30,6 +31,11 @@ var syncPriorityLabelsCmd = &cobra.Command{
 		client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
 		if err != nil {
 			return err
+		}
+		if apply {
+			if err := trackGitHubCommandActions(cmd, client, cfg.GitHub.Repo); err != nil {
+				return err
+			}
 		}
 		result, err := client.SyncPriorityLabels(cmd.Context(), apply, ids...)
 		if err != nil {

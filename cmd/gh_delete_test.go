@@ -40,29 +40,27 @@ func TestGitHubDeleteRestoreCLIWithoutSQLite(t *testing.T) {
 	}
 	t.Setenv("TD_TEST_DELETION_FILE", fixture)
 	bin := t.TempDir()
-	script := `#!/usr/bin/env python3
-import sys,json,os
+	script := githubJournalFixtureScript(t, `#!/usr/bin/env python3
+import sys,json,os,pathlib
 args=sys.argv[1:]
 if args[0]=='auth':sys.exit(0)
-if '--include' in args:sys.stdout.write('HTTP/2.0 200 OK\nContent-Type: application/json\r\n\r\n')
-if args[3]=='repos/owner/repo':print(json.dumps({'full_name':'owner/repo','has_issues':True}));sys.exit(0)
-method,path=args[4:6]
-p=os.environ['TD_TEST_DELETION_FILE']
-with open(p) as f: issue=json.load(f)
-if method=='GET' and '/labels?' in path:print(json.dumps([[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]))
-elif method=='GET' and '?state=' in path:print(json.dumps([[issue]]))
+path=next(a for a in args if a.startswith('repos/owner/repo'));method=args[args.index('--method')+1] if '--method' in args else 'GET'
+f=pathlib.Path(os.environ['TD_TEST_DELETION_FILE'])
+issue=json.loads(f.read_text());issue.setdefault('body','');issue.setdefault('updated_at','2026-10-09T00:00:00Z')
+if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
+elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
+elif '?state=' in path:data=[[issue]]
+elif '/comments?' in path:data=[[]]
 elif path=='repos/owner/repo/issues/1':
  if method=='PATCH':
-  patch=json.load(sys.stdin)
-  assert 'state' not in patch
+  patch=json.load(sys.stdin);assert 'state' not in patch
   if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]
-  issue.update(patch)
-  with open(p,'w') as f:json.dump(issue,f)
+  issue.update(patch);issue['updated_at']=fixture_tick(issue['updated_at']);f.write_text(json.dumps(issue))
  elif method!='GET':raise Exception('unexpected destructive operation')
- print(json.dumps(issue))
-else:
- print('fixture not found (HTTP 404)',file=sys.stderr);sys.exit(1)
-`
+ data=issue
+else:sys.stderr.write('fixture not found (HTTP 404)');sys.exit(1)
+sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(data))
+`)
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}

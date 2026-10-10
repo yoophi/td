@@ -38,8 +38,17 @@ the verified scalar inverse including receipt-verified sequential undo; workflow
 multi-target integration remains pending. The SQLite path remains
 in `cmd/undo.go`. `internal/ghstore/action_journal*.go` provides before/after
 snapshots and create/update protocols, now connected to default CLI create/update
-with lazy bootstrap and real session attribution. Other command/HTTP/monitor
-writers, comment/note/board journaling and coordinated cascade undo remain work.
+with lazy bootstrap and real session attribution. CLI status transitions, logical
+delete/restore, dependencies, scheduling, linked files, label repairs and work-session
+auto-start/review writes now use the same journal protocol. Actual CLI tests cover
+receipt failures and no-op start/preview behavior. HTTP/monitor writers,
+comment/note/board journaling and coordinated cascade undo remain work.
+
+These writer hooks do not make workflow, relationship, file or deletion undo
+supported: their policy and graph checks still require dedicated inverse planning.
+Activity comments appended after a field receipt may also advance the native
+issue revision; comment-aware causal receipts remain necessary before those
+changes can safely participate in sequential undo.
 Workflow history provides selected transitions but cannot reconstruct arbitrary
 issue, relationship, note or board changes. An activity feed is insufficient
 to fulfill #9.

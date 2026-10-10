@@ -102,9 +102,11 @@
     {
       "command": "td block",
       "owner": "#3",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -553,9 +555,11 @@
     {
       "command": "td config sync-priority-labels",
       "owner": "#49",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksLabelRepairWritesButNotPreview"
+      ],
       "flags": {
         "apply": "pending",
         "help": "pending",
@@ -568,9 +572,11 @@
     {
       "command": "td config sync-state-labels",
       "owner": "#31",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksLabelRepairWritesButNotPreview"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -647,9 +653,11 @@
     {
       "command": "td defer",
       "owner": "#19",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "clear": "pending",
         "help": "pending",
@@ -661,9 +669,11 @@
     {
       "command": "td delete",
       "owner": "#18",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "force": "pending",
         "help": "pending",
@@ -704,9 +714,11 @@
     {
       "command": "td dep add",
       "owner": "#4",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "depends-on": "pending",
         "help": "pending",
@@ -718,9 +730,11 @@
     {
       "command": "td dep rm",
       "owner": "#4",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -770,9 +784,11 @@
     {
       "command": "td due",
       "owner": "#19",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "clear": "pending",
         "help": "pending",
@@ -1122,9 +1138,11 @@
     {
       "command": "td link",
       "owner": "#4",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "depends-on": "pending",
         "help": "pending",
@@ -1451,9 +1469,11 @@
     {
       "command": "td restore",
       "owner": "#18",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -1623,9 +1643,11 @@
     {
       "command": "td start",
       "owner": "#3",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "force": "pending",
         "help": "pending",
@@ -2072,9 +2094,11 @@
     {
       "command": "td unblock",
       "owner": "#3",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -2116,9 +2140,11 @@
     {
       "command": "td unlink",
       "owner": "#4",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -2129,9 +2155,11 @@
     {
       "command": "td unstart",
       "owner": "#3",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "force": "pending",
         "help": "pending",
@@ -2297,9 +2325,11 @@
     {
       "command": "td ws handoff",
       "owner": "#15",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "continue": "pending",
         "decision": "pending",
@@ -2362,9 +2392,11 @@
     {
       "command": "td ws start",
       "owner": "#15",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -2375,9 +2407,11 @@
     {
       "command": "td ws tag",
       "owner": "#15",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",

@@ -70,6 +70,9 @@ func runGitHubSchedule(cmd *cobra.Command, args []string, cfg *models.Config, de
 	if err != nil {
 		return err
 	}
+	if err := client.TrackActions(state.Session.ID); err != nil {
+		return err
+	}
 	change := ghstore.Changes{DueDate: &value}
 	action, message := "due_date_set", "Due date set: "+value
 	if clearDate {

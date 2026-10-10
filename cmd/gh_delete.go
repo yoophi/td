@@ -112,6 +112,9 @@ func init() {
 			if err != nil {
 				return err
 			}
+			if err := client.TrackActions(actor); err != nil {
+				return err
+			}
 			completed := []string{}
 			results := []map[string]any{}
 			for _, id := range args {

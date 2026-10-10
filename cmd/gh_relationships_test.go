@@ -42,9 +42,10 @@ path=next(a for a in args if a.startswith('repos/owner/repo'))
 method=args[args.index('--method')+1] if '--method' in args else 'GET'
 f=pathlib.Path(os.environ['TD_REL_STATE'])
 def issue(n,typ='task',details=None):
- return {'number':n,'title':'Fixture '+str(n),'state':'open','body':'<!-- td:issue:v1\n'+json.dumps({'type':typ,'priority':'P2','points':0,'details':details or {}})+'\n-->','labels':[{'name':'td:open'}]}
+ return {'number':n,'title':'Fixture '+str(n),'state':'open','updated_at':'2026-10-09T00:00:00Z','body':'<!-- td:issue:v1\n'+json.dumps({'type':typ,'priority':'P2','points':0,'details':details or {}})+'\n-->','labels':[{'name':'td:open'}]}
 issues=json.loads(f.read_text()) if f.exists() else {'1':issue(1,'epic'),'2':issue(2,details={'parent_id':'gh-1','dependencies':['gh-3']}),'3':issue(3),'4':dict(issue(4),pull_request={'url':'https://example.test/pr'})}
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
+elif '/comments?' in path:data=[[]]
 elif '/labels?' in path:data=[[{'name':'td:'+s} for s in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
 elif path.startswith('repos/owner/repo/issues?'):
  data=[[v for k,v in issues.items() if k!='4' and (k!='3' or not os.environ.get('TD_REL_LAG'))]]
@@ -55,10 +56,11 @@ else:
   if os.environ.get('TD_REL_FAIL')==n:sys.stderr.write('HTTP 403 permission denied');sys.exit(1)
   patch=json.load(sys.stdin)
   if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]
-  issues[n].update(patch);f.write_text(json.dumps(issues))
+  issues[n].update(patch);issues[n]['updated_at']=fixture_tick(issues[n]['updated_at']);f.write_text(json.dumps(issues))
  data=issues[n]
 sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(data))
 `
+	script = githubJournalFixtureScript(t, script)
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}

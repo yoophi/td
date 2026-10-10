@@ -92,6 +92,9 @@ func changeGitHubDependencies(original, cmd *cobra.Command, args []string, cfg *
 	if err != nil {
 		return err
 	}
+	if err := client.TrackActions(state.Session.ID); err != nil {
+		return err
+	}
 	added := original != depRmCmd
 	completed := []string{}
 	for _, target := range targets {

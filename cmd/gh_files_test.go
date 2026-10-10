@@ -39,8 +39,10 @@ args=sys.argv[1:]
 if args[0]=='auth':sys.exit(0)
 path=next(a for a in args if a.startswith('repos/owner/repo'))
 method=args[args.index('--method')+1] if '--method' in args else 'GET'
-f=pathlib.Path(os.environ['TD_FILE_STATE']);s=json.loads(f.read_text()) if f.exists() else {'issue':{'number':1,'title':'Fixture','state':'open','body':'','labels':[{'name':'td:open'}]},'comments':[]}
+f=pathlib.Path(os.environ['TD_FILE_STATE']);s=json.loads(f.read_text()) if f.exists() else {'issue':{'number':1,'title':'Fixture','state':'open','updated_at':'2026-10-09T00:00:00Z','body':'','labels':[{'name':'td:open'}]},'comments':[]}
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
+elif '/issues?' in path:data=[[s['issue']]]
+elif '/comments?' in path:data=[s['comments']]
 elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
 elif path.endswith('/comments') and method=='POST':
  if os.environ.get('TD_FILE_FAIL_COMMENT'):sys.stderr.write('HTTP 403 comment denied');sys.exit(1)
@@ -50,10 +52,11 @@ else:
   if os.environ.get('TD_FILE_FAIL_WRITE'):sys.stderr.write('HTTP 403 write denied');sys.exit(1)
   patch=json.load(sys.stdin)
   if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]
-  s['issue'].update(patch);f.write_text(json.dumps(s))
+  s['issue'].update(patch);s['issue']['updated_at']=fixture_tick(s['issue']['updated_at']);f.write_text(json.dumps(s))
  data=s['issue']
 sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(data))
 `
+	script = githubJournalFixtureScript(t, script)
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}

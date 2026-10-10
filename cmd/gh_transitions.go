@@ -119,6 +119,9 @@ func init() {
 			if err != nil {
 				return err
 			}
+			if err := client.TrackActions(state.Session.ID); err != nil {
+				return err
+			}
 			options.SessionID = state.Session.ID
 			options.AgentType = state.Session.AgentType
 			if sweep {

@@ -498,3 +498,21 @@ func gitHubUpdateComment(cmd *cobra.Command) (string, error) {
 	}
 	return text, nil
 }
+
+// Request tracking for command writers which do not otherwise need local
+// context. Preview/read paths do not call this helper.
+func trackGitHubCommandActions(cmd *cobra.Command, client *ghstore.Client, repo string) error {
+	dir, err := gitHubContextDirectory()
+	if err != nil {
+		return err
+	}
+	scope, err := ghcontext.Resolve(cmd.Context(), dir, repo)
+	if err != nil {
+		return err
+	}
+	state, err := scope.Update(cmd.Context(), nil)
+	if err != nil {
+		return err
+	}
+	return client.TrackActions(state.Session.ID)
+}

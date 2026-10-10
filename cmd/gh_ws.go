@@ -230,6 +230,9 @@ func runGitHubWorkSession(original, cmd *cobra.Command, args []string, cfg *mode
 				if err != nil {
 					return err
 				}
+				if err := client.TrackActions(current.Session.ID); err != nil {
+					return err
+				}
 				if _, _, err := client.TransitionObserved(cmd.Context(), record, "start", ghstore.TransitionOptions{SessionID: current.Session.ID, Reason: "Started via work session " + wsID, Snapshot: snapshot}); err != nil {
 					return err
 				}

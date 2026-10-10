@@ -14,6 +14,7 @@ var syncStateLabelsCmd = &cobra.Command{
 	Short: "Repair GitHub state labels from authoritative td metadata",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		cmd.SetOut(cmd.OutOrStdout())
 		cfg, err := config.Load(getBaseDir())
 		if err != nil {
 			return err
@@ -27,6 +28,9 @@ var syncStateLabelsCmd = &cobra.Command{
 		}
 		client, err := ghstore.Open(cmd.Context(), getBaseDir(), cfg.GitHub)
 		if err != nil {
+			return err
+		}
+		if err := trackGitHubCommandActions(cmd, client, cfg.GitHub.Repo); err != nil {
 			return err
 		}
 		count, err := client.SyncStateLabels(cmd.Context())

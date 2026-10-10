@@ -37,7 +37,7 @@ if args[0]=='auth':sys.exit(0)
 path=next(a for a in args if a.startswith('repos/owner/repo'))
 method=args[args.index('--method')+1] if '--method' in args else 'GET'
 f=pathlib.Path(os.environ['TD_BATCH_STATE'])
-issues=json.loads(f.read_text()) if f.exists() else {str(n):{'number':n,'title':'Fixture','state':'open','body':'','labels':[]} for n in [1,2]}
+issues=json.loads(f.read_text()) if f.exists() else {str(n):{'number':n,'title':'Fixture','state':'open','updated_at':'2026-10-09T00:00:00Z','body':'','labels':[]} for n in [1,2]}
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
 elif '/comments?' in path:data=[[]]
 elif '/labels?' in path:data=[[{'name':'td:'+s} for s in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
@@ -48,10 +48,11 @@ else:
   if os.environ.get('TD_BATCH_FAIL')==n:sys.stderr.write('permission denied');sys.exit(1)
   patch=json.load(sys.stdin)
   if 'labels' in patch:patch['labels']=[{'name':name} for name in patch['labels']]
-  issues[n].update(patch);f.write_text(json.dumps(issues))
+  issues[n].update(patch);issues[n]['updated_at']=fixture_tick(issues[n]['updated_at']);f.write_text(json.dumps(issues))
  data=issues[n]
 sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(data))
 `
+	script = githubJournalFixtureScript(t, script)
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}
