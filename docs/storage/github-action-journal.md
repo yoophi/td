@@ -201,7 +201,7 @@ look like the old values.
 Current scope includes title, visible description, acceptance, type, priority,
 points, labels and minor/sprint/date scalar data when workflow/graph/review data
 remains unchanged. Native state changes, session/review/transition/history or
-parent/dependency/file changes, note/board entities and multi-target effects
+parent/dependency/file changes and multi-target effects
 still require coordinated undo integration. They return an explicit scope
 error before target writes. Legacy per-target journals also need separate-carrier
 migration before execution, avoiding receipt writes on the target itself.
@@ -324,8 +324,9 @@ scalar and comment inverse receipts. Comment witnesses must be absent by both
 native ID and logical operation in the same fresh bulk history, before intent
 and again before the target write. Ambiguous, edited, unfinished or foreign
 receipts never authorize a revision change; the issue clock is never ignored. Comment
-deletion journaling, note/board state, coordinated policy/graph inverse operations,
-HTTP/monitor writers and portable journal transport remain required work.
+deletion journaling, coordinated policy/graph inverse operations and portable
+journal transport remain required work. Auxiliary entity inverses and HTTP/monitor
+writers are implemented in the subsequent sections.
 
 ## HTTP and monitor actor integration
 
@@ -372,7 +373,17 @@ retain their existing no-write behavior. No SQLite fallback is introduced.
 
 `last`/`undo --list` display `note`/`board` with nt-gh-N/bd-gh-N (or the builtin
 board identity), retain target_issue_id and preserve native snapshot contracts.
-Entity inverses are still pending and refuse without a target write. Native
+Entity updates support guarded title/body inverses, including flags, logical
+deletion, board queries/view modes/positions and builtin settings. They require
+matching session/author and exact revision (or verified causal undo receipts),
+preserve native state/labels and recheck active board-name uniqueness before
+intent, before PATCH and after target/receipt verification. Original entity
+events remain in the separate action journal even when the restored body rolls
+back its embedded history. A later catalog conflict can occur after PATCH because
+GitHub supplies no atomic transaction; errors retain the uncertain outcome and
+never replay the write. Board position restoration changes configuration only,
+does not modify referenced tasks, and current query/filter semantics still
+determine visible rows. Native
 creation cannot be erased losslessly; explicit note/board logical deletion is
 the supported compensation for custom entities. Builtin board materialization
 cannot be logically deleted under the builtin policy; select another board or

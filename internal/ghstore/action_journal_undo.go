@@ -21,7 +21,7 @@ type ActionUndoResult struct {
 }
 
 // UndoAction rehydrates the remote receipt rather than trusting a caller's
-// snapshots. Scalar issue restoration is supported first; workflow/graph and
+// snapshots. Scalar issue and auxiliary configuration restoration are supported; workflow/graph and
 // multi-target operations require their own coordinated executor.
 func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionUndoResult, error) {
 	number, err := CommentNumber(id)
@@ -80,6 +80,14 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err := scalarUndoScope(action); err != nil {
 		return nil, err
 	}
+	if err := c.checkEntityUndoCatalog(ctx, action, false); err != nil {
+		return nil, err
+	}
+	if action.entityKind() != "" {
+		// Auxiliary writers restore configuration only, never native state/labels.
+		delete(plan.Payload, "state")
+		delete(plan.Payload, "labels")
+	}
 	pending := action.ActionJournal
 	pending.Phase = "undo_prepared"
 	pending.UndoOperationID = "td-op-" + rand.Text()
@@ -90,7 +98,10 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err := c.recheckUndoWitnesses(ctx, witnesses); err != nil {
 		return nil, err
 	}
-	latest, err := c.GetIncludingDeleted(ctx, current.ID)
+	if err := c.checkEntityUndoCatalog(ctx, action, false); err != nil {
+		return nil, err
+	}
+	latest, err := c.readJournalTarget(ctx, current.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +123,7 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 		return nil, err
 	}
 	restored.repository = c.repo
-	verified, err := c.GetIncludingDeleted(withReadbackCost(ctx), current.ID)
+	verified, err := c.readJournalTarget(withReadbackCost(ctx), current.ID)
 	if err != nil {
 		return nil, fmt.Errorf("undo was accepted but readback failed: %w", err)
 	}
@@ -123,6 +134,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err != nil {
 		return nil, err
 	}
+	if err := c.checkEntityUndoCatalog(ctx, action, true); err != nil {
+		return nil, fmt.Errorf("undo target was accepted but board catalog verification failed; inspect before retrying: %w", err)
+	}
 	done := prepared.ActionJournal
 	done.Phase = "undone"
 	done.Restored = &state
@@ -130,12 +144,15 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err != nil {
 		return nil, fmt.Errorf("undo target was verified but receipt is unverified; inspect %s before retrying: %w", pending.UndoOperationID, err)
 	}
-	latest, err = c.GetIncludingDeleted(withReadbackCost(ctx), current.ID)
+	latest, err = c.readJournalTarget(withReadbackCost(ctx), current.ID)
 	if err != nil {
 		return nil, err
 	}
 	if latest.revision != restored.revision {
 		return nil, &ConflictError{ID: current.ID, AfterWrite: true}
+	}
+	if err := c.checkEntityUndoCatalog(ctx, action, true); err != nil {
+		return nil, fmt.Errorf("undo receipt was verified but board catalog changed; inspect before retrying: %w", err)
 	}
 	return &ActionUndoResult{Issue: restored, Journal: receipt}, nil
 }
@@ -189,8 +206,11 @@ func (c *Client) rewriteActionJournal(ctx context.Context, old *ActionJournalRec
 }
 
 func scalarUndoScope(action *ActionJournalRecord) error {
+	if action.entityKind() != "" {
+		return entityUndoScope(action)
+	}
 	unsupported := func() error {
-		return &UndoScopeError{Reason: "workflow, graph, note/board and multi-target undo integration is still pending; no target write attempted"}
+		return &UndoScopeError{Reason: "workflow, graph and multi-target undo integration is still pending; no target write attempted"}
 	}
 	if action.Action != "update" || action.Before == nil || action.After == nil || action.Before.State != action.After.State {
 		return unsupported()

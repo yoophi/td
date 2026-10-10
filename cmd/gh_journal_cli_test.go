@@ -625,16 +625,58 @@ func TestGitHubJournalCLITracksAuxiliaryEntityChangesAndHistoryIdentity(t *testi
 			t.Fatal("auxiliary history leaked as task", row)
 		}
 	}
-	before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	out, stderr, err = run("undo", "--json")
-	if err == nil || !strings.Contains(out+stderr, "unsupported_operation") {
+	if err != nil {
 		t.Fatal(out, stderr, err)
 	}
-	after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
-	if err != nil || !bytes.Equal(before, after) {
-		t.Fatal("pending auxiliary inverse wrote", err)
+	actions = fixtureAllJournals(t)
+	if actions[13].Phase != "undone" || actions[13].Restored == nil {
+		t.Fatal(actions[13])
+	}
+
+}
+
+func TestGitHubJournalCLIAuxiliarySequentialUndo(t *testing.T) {
+	for _, kind := range []string{"note", "board"} {
+		t.Run(kind, func(t *testing.T) {
+			_, _, run := journalCLI(t)
+			commands := [][]string{{"note", "add", "Original note", "--content", "Original content"}, {"note", "edit", "nt-gh-6", "--title", "Changed note", "--content", "Changed content"}, {"note", "pin", "nt-gh-6"}, {"note", "archive", "nt-gh-6"}, {"note", "delete", "nt-gh-6"}}
+			if kind == "board" {
+				commands = [][]string{{"board", "create", "Original board", "--query", "status = open"}, {"board", "edit", "bd-gh-6", "--name", "Changed board"}, {"board", "edit", "bd-gh-6", "--view-mode", "backlog"}, {"board", "move", "bd-gh-6", "gh-1", "1"}, {"board", "delete", "bd-gh-6"}}
+			}
+			for _, args := range commands {
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil {
+					t.Fatal(args, out, stderr, err)
+				}
+			}
+			for range len(commands) - 1 {
+				out, stderr, err := run("undo", "--json")
+				if err != nil {
+					t.Fatal(out, stderr, err)
+				}
+			}
+			actions := fixtureAllJournals(t)
+			for _, a := range actions[1:] {
+				if a.Phase != "undone" {
+					t.Fatal(a)
+				}
+			}
+			out, stderr, err := run("undo", "--json")
+			if err == nil || !strings.Contains(out+stderr, "unsupported_operation") || !strings.Contains(out+stderr, "creation") {
+				t.Fatal("creation was erased", out, stderr, err)
+			}
+			if kind == "note" {
+				out, stderr, err = run("note", "show", "nt-gh-6", "--json")
+				if err != nil || !strings.Contains(out, "Original content") || !strings.Contains(out, "Original note") || strings.Contains(out, "Changed content") {
+					t.Fatal(out, stderr, err)
+				}
+			} else {
+				out, stderr, err = run("board", "list", "--json")
+				if err != nil || !strings.Contains(out, "Original board") || strings.Contains(out, "Changed board") || strings.Contains(out, "backlog") {
+					t.Fatal(out, stderr, err)
+				}
+			}
+		})
 	}
 }

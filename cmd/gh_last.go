@@ -158,12 +158,17 @@ func executeGitHubUndo(cmd *cobra.Command, client *ghstore.Client, actions []ghs
 		}
 		return err
 	}
+	kind, id := result.Journal.EntityIdentity()
 	if jsonMode(cmd) {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"action": "undone", "id": result.Issue.ID,
+		out := map[string]any{"action": "undone", "id": id,
 			"operation_id": result.Journal.OperationID, "undo_operation_id": result.Journal.UndoOperationID, "receipt_id": result.Journal.ID,
-			"already_undone": result.AlreadyUndone, "issue": result.Issue, "history_scope": "td-action-journal"})
+			"already_undone": result.AlreadyUndone, "issue": result.Issue, "history_scope": "td-action-journal"}
+		if kind != "issue" {
+			out["entity_type"], out["target_issue_id"] = kind, result.Issue.ID
+		}
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 	}
-	cmd.Printf("UNDONE: %s issue %s (%s)\n", result.Journal.Action, result.Issue.ID, result.Journal.UndoOperationID)
+	cmd.Printf("UNDONE: %s %s %s (%s)\n", result.Journal.Action, kind, id, result.Journal.UndoOperationID)
 	return nil
 }
 
