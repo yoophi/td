@@ -19,6 +19,7 @@ type journalWriteFixture struct {
 	mode                                                                   string
 	targetWrites, receiptWrites, intentWrites, carrierWrites, commentReads int
 	creationWrites                                                         int
+	creationCollectionReads                                                int
 	targetNumber                                                           int
 }
 
@@ -44,8 +45,17 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 			}
 			return encode(map[string]string{"login": login})
 		case path == "/issues?state=all&per_page=100":
+			if f.creationWrites > 0 {
+				f.creationCollectionReads++
+			}
+			if f.creationWrites > 0 && f.mode == "create-list-error" {
+				return nil, errors.New("HTTP 403 collection denied")
+			}
 			page := []apiIssue{}
 			for _, issue := range f.issues {
+				if issue.Number == 2 && (f.mode == "create-list-missing" || (f.mode == "create-list-delayed" && f.creationCollectionReads == 1)) {
+					continue
+				}
 				page = append(page, issue)
 			}
 			return encode([][]apiIssue{page})

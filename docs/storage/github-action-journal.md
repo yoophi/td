@@ -388,3 +388,17 @@ creation cannot be erased losslessly; explicit note/board logical deletion is
 the supported compensation for custom entities. Builtin board materialization
 cannot be logically deleted under the builtin policy; select another board or
 explicitly adjust its settings while retaining identity/history.
+
+
+### Creation collection visibility
+
+GitHub may return the new issue from POST and point GET before repository-wide
+issue listing observes it. Creation receipt verification therefore makes at most
+three fresh bulk observations, waiting two and then four seconds only when the
+operation has no matching result. It never repeats the creation POST. Duplicate
+or changed results, invalid history, read failures (including rate limits), and
+cancellation stop immediately. Persistent absence leaves the intent prepared and
+returns an explicit unverified-result error; inspect GitHub before retrying.
+Each observation uses paginated repository issue/comment collections, without
+per-issue activity queries. These additional reads apply only to tracked creation
+verification and do not change monitor polling intervals or normal cache policy.

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/marcus/td/internal/models"
 )
@@ -311,26 +312,42 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	return nil
 }
 
+// A newly created issue can be visible to a point read before GitHub's
+// repository collection observes it. Reobserve only absence, never replay POST.
 func (c *Client) verifyCreationJournalResult(ctx context.Context, after *Record, operationID string) error {
-	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
-	if err != nil {
-		return fmt.Errorf("creation operation %s uniqueness read failed: %w", operationID, err)
-	}
-	if _, err := snapshot.ActionHistory(""); err != nil {
-		return err
-	}
-	matches := 0
-	for _, record := range snapshot.records {
-		if record.meta.OperationID != operationID {
-			continue
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			timer := time.NewTimer(time.Duration(attempt*2) * time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return fmt.Errorf("creation operation %s observation canceled: %w", operationID, ctx.Err())
+			case <-timer.C:
+			}
 		}
-		matches++
-		if record.ID != after.ID || record.revision != after.revision {
-			return fmt.Errorf("creation operation %s identifies a changed or duplicate result; inspect GitHub before retrying", operationID)
+		snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+		if err != nil {
+			return fmt.Errorf("creation operation %s uniqueness read failed: %w", operationID, err)
+		}
+		if _, err := snapshot.ActionHistory(""); err != nil {
+			return err
+		}
+		matches := 0
+		for _, record := range snapshot.records {
+			if record.meta.OperationID != operationID {
+				continue
+			}
+			matches++
+			if record.ID != after.ID || record.revision != after.revision {
+				return fmt.Errorf("creation operation %s identifies a changed or duplicate result; inspect GitHub before retrying", operationID)
+			}
+		}
+		if matches == 1 {
+			return nil
+		}
+		if matches > 1 {
+			return fmt.Errorf("creation operation %s identifies duplicate results; inspect GitHub before retrying", operationID)
 		}
 	}
-	if matches != 1 {
-		return fmt.Errorf("creation operation %s has no unique observed result; inspect GitHub before retrying", operationID)
-	}
-	return nil
+	return fmt.Errorf("creation operation %s has no unique observed result after 3 fresh observations; inspect GitHub before retrying", operationID)
 }

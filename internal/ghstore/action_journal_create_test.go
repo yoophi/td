@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/marcus/td/internal/models"
 )
@@ -104,5 +105,56 @@ func TestCreationIntentCannotMasqueradeAsVerifiedState(t *testing.T) {
 		if _, err := renderActionJournal(a); err == nil {
 			t.Fatal("invalid creation intent accepted", a)
 		}
+	}
+}
+
+func TestJournalCreationReobservesDelayedCollectionWithoutReplayingWrite(t *testing.T) {
+	f := newJournalWriteFixture(t, "create-list-delayed")
+	f.client.stateLabels = fixtureStateLabels()
+	if err := f.client.EnableActionJournal(context.Background(), "ses_actor"); err != nil {
+		t.Fatal(err)
+	}
+	created, err := f.client.createWithOperationID(context.Background(), journalCreationFixtureIssue(), "td-op-delayed")
+	if err != nil || created == nil || created.ID != "gh-2" {
+		t.Fatalf("created issue missing from first collection must be reobserved: %v %v", created, err)
+	}
+	if f.creationCollectionReads != 2 || f.creationWrites != 1 || f.intentWrites != 1 || f.receiptWrites != 1 {
+		t.Fatal(f)
+	}
+}
+
+func TestJournalCreationObservationFailureNeverReplays(t *testing.T) {
+	for _, tc := range []struct {
+		mode   string
+		reads  int
+		cancel bool
+	}{
+		{"create-list-missing", 3, false}, {"create-list-error", 1, false}, {"create-duplicate", 1, false}, {"create-list-missing", 1, true},
+	} {
+		name := tc.mode
+		if tc.cancel {
+			name += "-canceled"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newJournalWriteFixture(t, tc.mode)
+			f.client.stateLabels = fixtureStateLabels()
+			if err := f.client.EnableActionJournal(context.Background(), "ses_actor"); err != nil {
+				t.Fatal(err)
+			}
+			ctx := context.Background()
+			if tc.cancel {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 50*time.Millisecond)
+				defer cancel()
+			}
+			created, err := f.client.createWithOperationID(ctx, journalCreationFixtureIssue(), "td-op-observation-failure")
+			if err == nil || created != nil || f.creationCollectionReads != tc.reads || f.creationWrites != 1 || f.receiptWrites != 0 {
+				t.Fatal(created, err, f)
+			}
+			a, err := decodeActionJournal(*f.comment, "gh-9")
+			if err != nil || a.Phase != "prepared" {
+				t.Fatal(a, err)
+			}
+		})
 	}
 }
