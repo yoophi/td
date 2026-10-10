@@ -96,7 +96,7 @@ func renderActivity(a activityData) (string, error) {
 		}
 		visible = strings.TrimSuffix(text.String(), "\n")
 	}
-	if strings.Contains(visible, activityPrefix) {
+	if strings.Contains(visible, activityPrefix) || strings.Contains(visible, actionJournalPrefix) || strings.Contains(visible, actionJournalPartPrefix) {
 		return "", fmt.Errorf("activity text contains reserved td metadata marker")
 	}
 	data, err := json.Marshal(a)
@@ -304,5 +304,8 @@ func prepareActivityInput(issueID string, input models.Activity) (activityData, 
 		data.Snapshot = &snapshot
 	}
 	body, err := renderActivity(data)
+	if err == nil && len(body) > actionCommentBudget {
+		return data, "", fmt.Errorf("activity exceeds the %d-byte native comment publication budget; multipart journal storage does not split user comments", actionCommentBudget)
+	}
 	return data, body, err
 }

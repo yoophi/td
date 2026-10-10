@@ -77,7 +77,7 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	if err != nil || native.ID != number {
 		return nil, fmt.Errorf("recovery receipt membership is unverified")
 	}
-	action, err := c.decodeJournalResponse(data, native.Body, fmt.Sprintf("gh-%d", carrier))
+	action, err := c.decodeJournalResponse(ctx, data, native.Body, fmt.Sprintf("gh-%d", carrier))
 	if err != nil {
 		return nil, err
 	}
@@ -163,18 +163,18 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 		resolved.IssueID = current.ID
 	}
 	resolved.Reconciliation = &ActionReconciliation{SessionID: sessionID, Actor: actor.Login, ObservedAt: time.Now().UTC(), State: &state}
-	body, err := renderWriteActionJournal(resolved)
+	publication, err := planActionJournalPublication(resolved)
 	if err != nil {
 		return nil, err
 	}
-	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, action.CarrierID)
+	written, err := c.publishJournal(ctx, path, publication, action, nil)
 	if err != nil {
 		return nil, fmt.Errorf("recovery receipt %s is unverified; inspect before retrying (no target write replayed): %w", action.ID, err)
 	}
 	if !sameJournalIdentity(action, written) {
 		return nil, fmt.Errorf("recovery receipt identity changed; inspect before retrying")
 	}
-	verified, err := c.journalComment(withReadbackCost(ctx), path, nil, body, action.CarrierID)
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
 	if err != nil {
 		return nil, fmt.Errorf("recovery receipt readback is unverified; inspect before retrying: %w", err)
 	}

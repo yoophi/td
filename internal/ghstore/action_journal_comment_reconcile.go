@@ -180,18 +180,18 @@ func (c *Client) reconcileForwardComment(ctx context.Context, a *ActionJournalRe
 	resolved := a.ActionJournal
 	resolved.Phase, resolved.After, resolved.CommentAfter = "applied", &state, comment
 	resolved.CommentObservation = &ActionCommentObservation{SessionID: session, Actor: actor, ObservedAt: time.Now().UTC(), Proof: commentObservationProof, State: &state}
-	body, err := renderWriteActionJournal(resolved)
+	publication, err := planActionJournalPublication(resolved)
 	if err != nil {
 		return nil, err
 	}
-	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, a.CarrierID)
+	written, err := c.publishJournal(ctx, path, publication, a, nil)
 	if err != nil {
 		return nil, fmt.Errorf("comment recovery receipt is unverified; inspect before retrying, no target replay: %w", err)
 	}
 	if !sameJournalIdentity(a, written) || !strings.EqualFold(written.Author, actor) {
 		return nil, fmt.Errorf("comment recovery receipt identity changed; no target replay")
 	}
-	verified, err := c.journalComment(withReadbackCost(ctx), path, nil, body, a.CarrierID)
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
 	if err != nil {
 		return nil, fmt.Errorf("comment recovery receipt readback is unverified; no target replay: %w", err)
 	}

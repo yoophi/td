@@ -176,18 +176,18 @@ func (c *Client) reconcileUndo(ctx context.Context, a *ActionJournalRecord, sess
 	resolved.Phase = "undone"
 	resolved.Restored = &state
 	resolved.UndoObservation = &ActionUndoObservation{SessionID: session, Actor: actor, ObservedAt: time.Now().UTC(), Proof: inverseObservationProof, State: &state}
-	body, err := renderWriteActionJournal(resolved)
+	publication, err := planActionJournalPublication(resolved)
 	if err != nil {
 		return nil, err
 	}
-	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, a.CarrierID)
+	written, err := c.publishJournal(ctx, path, publication, a, nil)
 	if err != nil {
 		return nil, fmt.Errorf("undo recovery receipt is unverified; no target write replayed: %w", err)
 	}
 	if !sameJournalIdentity(a, written) {
 		return nil, fmt.Errorf("undo recovery receipt identity changed; inspect before retrying")
 	}
-	verified, err := c.journalComment(withReadbackCost(ctx), path, nil, body, a.CarrierID)
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
 	if err != nil {
 		return nil, fmt.Errorf("undo recovery receipt readback is unverified; inspect before retrying: %w", err)
 	}

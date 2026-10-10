@@ -1001,7 +1001,7 @@ this activity-only integration does not complete #65. A monitor or server must
 run a v19-capable build before reading these groups; restart already-running
 processes after upgrading the executable.
 
-## Multipart transport reader and publication plan (#67, in progress)
+## Multipart transport (#67)
 
 The v20 transport wraps the existing action schemas. A pure publication plan
 retains inline/plain or v9 compressed bytes when they fit. Larger valid archives
@@ -1026,9 +1026,30 @@ change-token and receipt checks. Physical deletion still requires a fresh/full
 collection under the existing incremental-cache policy. Well-formed parts that
 have no published manifest do not become actions or user activity.
 
-This stage implements the bounded codec, pure publication plan and collection
-readers. Remote multipart publication, point-read write guards, reconciliation
-and inverse capacity integration are still pending; current writers retain the
-single-comment limit. It does not complete #67 or unblock #64 yet. Portable
-export/restore (#66) will consume this transport and is not a prerequisite for
-implementing it.
+Journal intent, completion, reconciliation and inverse writers share the same
+publication path. It checks the authenticated author, reads the fresh carrier
+collection, uploads missing parts once, and verifies every part in another
+complete collection before publishing the manifest. Existing root identity,
+native clocks and contents are checked again after the upload. Group execution
+fences run again before a multipart root rewrite. Each receipt readback resolves
+the manifest from a fresh collection; cached UI data never authorizes writes.
+Point reads add a paginated carrier collection for multipart receipts, not one
+request per part. Small inline publications retain their previous request path.
+
+An upload or manifest failure returns its original diagnostic and operation
+identity; it never automatically retries the failed write. A failure before the
+prepared manifest is verified cannot start the target mutation. If a later
+completion fails, the earlier prepared journal remains available for explicit
+`undo --reconcile`; recovery observes the existing result and never replays the
+target. An explicit publication attempt can reuse exact, unedited partial
+uploads with the same transfer identity. Duplicate or foreign parts are rejected.
+Unreferenced parts remain inert storage records; publication does not delete old
+parts or another actor's history.
+
+Multipart storage increases journal capacity, not the size of one user-facing
+GitHub comment. Oversized activity bodies fail the conservative native comment
+budget before journal bootstrap. Decoded archive limits and completion headroom
+remain preflight checks. Portable export/restore (#66) is a later consumer of
+this transport. Running monitors and servers must use a v20-capable executable
+before reading newly published multipart records; upgrading the installed binary
+does not replace an already-running process.

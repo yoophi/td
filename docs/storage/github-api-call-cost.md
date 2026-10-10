@@ -305,3 +305,31 @@ native smoke is a separate mutation-path performance investigation (#55);
 mutation safety reads have not been replaced by display snapshots.
 See [cache and coordination policy](github-snapshot-cache.md) for cursor,
 physical deletion delay, fresh export, versioning and process limitations.
+
+### #67 multipart native acceptance (2026-10-10 UTC)
+
+Two disposable sample issues each contained 28,000 random bytes encoded as
+base64. Their combined journal exceeded one comment. The test injected one
+group-completion PATCH rejection, explicitly reconciled the existing results,
+undid the group, and logically deleted the test issues. Every command disabled
+display caching. HTTP counts include native pagination and Open preflight;
+the injected rejection produced no HTTP response from GitHub.
+
+| Command | API invocations | Observed HTTP responses |
+| --- | ---: | ---: |
+| Create each sample issue | 19 | 32 |
+| Start both, completion receipt rejected | 96 | 162 |
+| `last` for the prepared group | 3 | 7 |
+| Reconciliation preview | 7 | 13 |
+| Apply reconciliation without target replay | 27 | 55 |
+| Undo both | 134 | 250 |
+| `last` after undo | 3 | 8 |
+
+The final undone manifest referenced five parts. Display/history reads use the
+existing bulk collections and no per-part GETs. Mutation paths are substantially
+more expensive: original-receipt checks, publication verification and subsequent
+readbacks repeatedly sweep the carrier's paginated comments. These measurements
+are evidence for a separate mutation-path optimization, not a claim of low write
+cost or a budget for ordinary small issues. Any reuse must stay within a verified
+mutation boundary and preserve rejection of changed parts, roots and watched
+targets; reusable display snapshots cannot replace those checks.

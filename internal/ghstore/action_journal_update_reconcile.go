@@ -263,23 +263,24 @@ func (c *Client) reconcileForwardUpdate(ctx context.Context, a *ActionJournalRec
 	}
 	resolved := a.ActionJournal
 	resolved.Phase, resolved.After, resolved.UpdateObservation = "applied", &state, observation
-	body, err := renderWriteActionJournal(resolved)
+	publication, err := planActionJournalPublication(resolved)
 	if err != nil {
 		return nil, err
 	}
-	if fence, ok := ctx.Value(orderedReceiptFenceContextKey{}).(func() error); ok {
+	fence, _ := ctx.Value(orderedReceiptFenceContextKey{}).(func() error)
+	if fence != nil {
 		if err := fence(); err != nil {
 			return nil, err
 		}
 	}
-	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, a.CarrierID)
+	written, err := c.publishJournal(ctx, path, publication, a, fence)
 	if err != nil {
 		return nil, fmt.Errorf("forward recovery receipt is unverified; inspect before retrying, no target replay: %w", err)
 	}
 	if !sameJournalIdentity(a, written) || !strings.EqualFold(written.Author, actor) {
 		return nil, fmt.Errorf("forward recovery receipt identity changed; no target replay")
 	}
-	verified, err := c.journalComment(withReadbackCost(ctx), path, nil, body, a.CarrierID)
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
 	if err != nil {
 		return nil, fmt.Errorf("forward recovery receipt readback is unverified; no target replay: %w", err)
 	}

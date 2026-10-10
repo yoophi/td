@@ -122,7 +122,7 @@ func (c *Client) beginBasicActionGroup(ctx context.Context, command string, ids 
 }
 
 func checkGroupArchiveCapacity(a ActionJournal, expected map[string]ActionIssueState) error {
-	if _, err := renderWriteActionJournal(a); err != nil {
+	if _, err := planActionJournalPublication(a); err != nil {
 		return err
 	}
 	group := *a.Group

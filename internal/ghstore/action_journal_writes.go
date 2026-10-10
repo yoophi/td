@@ -140,10 +140,10 @@ func (c *Client) journalComment(ctx context.Context, path string, payload any, e
 	if err != nil {
 		return nil, err
 	}
-	return c.decodeJournalResponse(data, expectedBody, carrierID)
+	return c.decodeJournalResponse(ctx, data, expectedBody, carrierID)
 }
 
-func (c *Client) decodeJournalResponse(data []byte, expectedBody, carrierID string) (*ActionJournalRecord, error) {
+func (c *Client) decodeJournalResponse(ctx context.Context, data []byte, expectedBody, carrierID string) (*ActionJournalRecord, error) {
 	var comment apiComment
 	if err := json.Unmarshal(data, &comment); err != nil {
 		return nil, fmt.Errorf("journal comment response unreadable: %w", err)
@@ -151,6 +151,16 @@ func (c *Client) decodeJournalResponse(data []byte, expectedBody, carrierID stri
 	number, err := c.commentIssueNumber(comment.IssueURL)
 	if err != nil || fmt.Sprintf("gh-%d", number) != carrierID || comment.Body != expectedBody || comment.User.Login == "" || comment.CreatedAt.IsZero() || comment.UpdatedAt.IsZero() {
 		return nil, fmt.Errorf("journal comment response identity, content or author is unverified")
+	}
+	if strings.Contains(comment.Body, actionMultipartJournalStart) {
+		parts, err := c.readJournalParts(ctx, carrierID)
+		if err != nil {
+			return nil, err
+		}
+		if observed, ok := parts.byID[comment.ID]; !ok || !reflect.DeepEqual(observed, comment) {
+			return nil, fmt.Errorf("multipart manifest changed or is absent from collection readback")
+		}
+		return decodeJournalFromCollection(comment, carrierID, parts)
 	}
 	return decodeActionJournal(comment, carrierID)
 }
@@ -225,24 +235,20 @@ func (c *Client) writePreparedJournal(ctx context.Context, a ActionJournal) (*Ac
 	if _, err := c.journalCarrier(ctx, c.journal.Carrier.ID); err != nil {
 		return nil, fmt.Errorf("verify journal carrier before intent (no target write attempted): %w", err)
 	}
-	body, err := renderWriteActionJournal(a)
+	publication, err := planActionJournalPublication(a)
 	if err != nil {
 		return nil, err
 	}
 	path := fmt.Sprintf("/issues/%d/comments", c.journal.Carrier.Number)
-	data, err := c.request(ctx, "POST", path, map[string]string{"body": body}, false)
+	written, err := c.publishJournal(ctx, path, publication, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("journal intent %s is uncertain; no target write attempted: %w", a.OperationID, err)
-	}
-	written, err := c.decodeJournalResponse(data, body, a.CarrierID)
-	if err != nil {
-		return nil, fmt.Errorf("journal intent %s is unverified; no target write attempted: %w", a.OperationID, err)
 	}
 	number, err := CommentNumber(written.ID)
 	if err != nil {
 		return nil, err
 	}
-	verified, err := c.journalComment(withReadbackCost(ctx), fmt.Sprintf("/issues/comments/%d", number), nil, body, a.CarrierID)
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), fmt.Sprintf("/issues/comments/%d", number), written)
 	if err != nil {
 		return nil, fmt.Errorf("journal intent %s readback failed; no target write attempted: %w", a.OperationID, err)
 	}
@@ -317,7 +323,7 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 		}
 		applied.IssueID = after.ID
 	}
-	body, err := renderWriteActionJournal(applied)
+	publication, err := planActionJournalPublication(applied)
 	if err != nil {
 		return err
 	}
@@ -331,14 +337,28 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	if err := c.verifyPlannedUpdateGroup(ctx, after); err != nil {
 		return err
 	}
-	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, prepared.CarrierID)
+	written, err := c.publishJournal(ctx, path, publication, prepared, func() error {
+		if err := c.verifyPlannedUpdateGroup(ctx, after); err != nil {
+			return err
+		}
+		if c.journal != nil && c.journal.Group != nil && c.journal.Group.Journal.Group.Ordered != nil && prepared.GroupOperationID == c.journal.Group.Journal.OperationID {
+			events, err := c.verifyOrderedForwardProgress(ctx, prepared, after)
+			if err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(events, orderedEvents) {
+				return fmt.Errorf("ordered native events changed during multipart publication")
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 	if !sameJournalIdentity(prepared, written) {
 		return fmt.Errorf("journal receipt identity changed")
 	}
-	verified, err := c.journalComment(withReadbackCost(ctx), path, nil, body, prepared.CarrierID)
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
 	if err != nil {
 		return err
 	}

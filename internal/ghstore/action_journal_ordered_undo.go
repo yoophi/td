@@ -131,19 +131,8 @@ func checkOrderedInverseCapacity(a *ActionJournalRecord, observed *orderedGroupO
 		}
 	}
 	probe.Phase, probe.Group.Inverse = "undone", &inverse
-	body, err := renderWriteActionJournal(probe)
-	if err != nil {
-		return err
-	}
-	raw, err := json.Marshal(probe)
-	if err != nil {
-		return err
-	}
 	headroom := 512 * (remaining + 1)
-	if len(body)+headroom > actionCommentBudget || len(raw)+headroom > actionDecodedBudget {
-		return fmt.Errorf("ordered inverse lacks completion headroom; multipart transport is required")
-	}
-	return nil
+	return checkJournalSizingHeadroom(probe, headroom)
 }
 
 func (c *Client) undoOrderedGroup(ctx context.Context, a *ActionJournalRecord, session string) (*ActionUndoResult, error) {

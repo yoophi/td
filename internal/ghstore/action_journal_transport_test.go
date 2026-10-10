@@ -153,13 +153,10 @@ func TestLargeForwardRecoveryCompressedWithoutTargetReplay(t *testing.T) {
 	}
 }
 
-func TestIncompressibleUpdateRejectedBeforeAnyWrite(t *testing.T) {
+func TestDecodedBudgetUpdateRejectedBeforeAnyWrite(t *testing.T) {
 	f := newJournalWriteFixture(t, "")
-	random := rand.New(rand.NewSource(9))
-	data := make([]byte, 80000)
-	random.Read(data)
 	issue := f.issues[1]
-	issue.Body = base64.StdEncoding.EncodeToString(data)
+	issue.Body = strings.Repeat("x", actionDecodedBudget+1)
 	f.issues[1] = issue
 	if err := f.client.TrackActions("ses_actor"); err != nil {
 		t.Fatal(err)

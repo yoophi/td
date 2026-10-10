@@ -58,7 +58,7 @@ func (c *Client) pointOrderedEffect(ctx context.Context, expected OrderedGroupEf
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	actual, err := decodeActionJournal(raw, expected.Record.CarrierID)
+	actual, err := c.decodeJournalResponse(ctx, data, raw.Body, expected.Record.CarrierID)
 	if err != nil {
 		return fmt.Errorf("ordered original receipt is missing or invalid: %w", err)
 	}

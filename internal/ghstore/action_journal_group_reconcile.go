@@ -255,7 +255,7 @@ func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, 
 	if err != nil {
 		return nil, err
 	}
-	body, err := renderWriteActionJournal(next)
+	publication, err := planActionJournalPublication(next)
 	if err != nil {
 		return nil, err
 	}
@@ -276,11 +276,11 @@ func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, 
 			return nil, err
 		}
 	}
-	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, a.CarrierID)
+	written, err := c.publishJournal(ctx, path, publication, a, fence)
 	if err != nil {
 		return nil, fmt.Errorf("group receipt unverified; inspect before retrying, no target replay: %w", err)
 	}
-	verified, err := c.journalComment(withReadbackCost(ctx), path, nil, body, a.CarrierID)
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
 	if err != nil {
 		return nil, err
 	}

@@ -183,12 +183,20 @@ func checkUpdateArchiveCapacity(a ActionJournal) error {
 // Reserve transport headroom for the eventual carrier ID, observer session,
 // native clocks and compression overhead. This is a private sizing estimate.
 func checkJournalSizingProbe(a ActionJournal) error {
-	body, err := renderWriteActionJournal(a)
+	return checkJournalSizingHeadroom(a, 512)
+}
+
+func checkJournalSizingHeadroom(a ActionJournal, headroom int) error {
+	publication, err := planActionJournalPublication(a)
 	if err != nil {
 		return err
 	}
-	if len(body) > actionCommentBudget-512 {
-		return fmt.Errorf("action journal lacks completion headroom within the single-comment transport budget; multipart transport is required")
+	raw, err := json.Marshal(a)
+	if err != nil {
+		return err
+	}
+	if headroom < 0 || headroom > actionDecodedBudget || len(raw) > actionDecodedBudget-headroom || publication.manifest.Envelope.Size > actionDecodedBudget-headroom {
+		return fmt.Errorf("action journal lacks completion headroom within the decoded transport budget")
 	}
 	return nil
 }

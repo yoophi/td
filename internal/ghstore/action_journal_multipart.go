@@ -48,10 +48,12 @@ type actionJournalManifest struct {
 // journalPublication separates pure capacity planning from native publication.
 // Multipart parts must be verified before a manifest can authorize a write.
 type journalPublication struct {
-	body       string
-	partBodies []string
-	summary    string
-	manifest   actionJournalManifest
+	operationID string
+	carrierID   string
+	body        string
+	partBodies  []string
+	summary     string
+	manifest    actionJournalManifest
 }
 
 func planActionJournalPublication(a ActionJournal) (*journalPublication, error) {
@@ -59,8 +61,12 @@ func planActionJournalPublication(a ActionJournal) (*journalPublication, error) 
 	if err != nil {
 		return nil, err
 	}
+	carrier := a.CarrierID
+	if carrier == "" {
+		carrier = a.IssueID
+	}
 	if len(body) <= actionCommentBudget {
-		return &journalPublication{body: body}, nil
+		return &journalPublication{body: body, operationID: a.OperationID, carrierID: carrier}, nil
 	}
 	index := strings.Index(body, actionCompressedJournalStart)
 	if index < 0 {
@@ -74,14 +80,10 @@ func planActionJournalPublication(a ActionJournal) (*journalPublication, error) 
 	if count < 1 || count > actionJournalMaxParts {
 		return nil, fmt.Errorf("multipart journal exceeds the encoded transport budget")
 	}
-	carrier := a.CarrierID
-	if carrier == "" {
-		carrier = a.IssueID
-	}
 	if _, err := Number(carrier); err != nil {
 		return nil, fmt.Errorf("multipart journal requires a carrier identity: %w", err)
 	}
-	plan := &journalPublication{summary: body[:index], manifest: actionJournalManifest{
+	plan := &journalPublication{operationID: a.OperationID, carrierID: carrier, summary: body[:index], manifest: actionJournalManifest{
 		OperationID: a.OperationID, CarrierID: carrier, Transfer: journalTransportHash(body),
 		EncodedSize: len(envelope.Data), Envelope: envelope, Parts: make([]actionJournalPartRef, count),
 	}}

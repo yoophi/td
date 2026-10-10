@@ -44,7 +44,7 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err != nil || comment.ID != number {
 		return nil, fmt.Errorf("undo journal response identity is invalid")
 	}
-	action, err := c.decodeJournalResponse(data, comment.Body, fmt.Sprintf("gh-%d", carrier))
+	action, err := c.decodeJournalResponse(ctx, data, comment.Body, fmt.Sprintf("gh-%d", carrier))
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +246,7 @@ func (c *Client) rewriteActionJournalGuarded(ctx context.Context, old *ActionJou
 	if err != nil {
 		return nil, err
 	}
-	newBody, err := renderWriteActionJournal(next)
+	publication, err := planActionJournalPublication(next)
 	if err != nil {
 		return nil, err
 	}
@@ -286,14 +286,14 @@ func (c *Client) rewriteActionJournalGuarded(ctx context.Context, old *ActionJou
 			return nil, err
 		}
 	}
-	written, err := c.journalComment(ctx, path, map[string]string{"body": newBody}, newBody, old.CarrierID)
+	written, err := c.publishJournal(ctx, path, publication, old, fence)
 	if err != nil {
 		return nil, err
 	}
 	if !sameJournalIdentity(old, written) {
 		return nil, fmt.Errorf("journal rewrite identity changed")
 	}
-	verified, err := c.journalComment(withReadbackCost(ctx), path, nil, newBody, old.CarrierID)
+	verified, err := c.readJournalReceipt(withReadbackCost(ctx), path, written)
 	if err != nil {
 		return nil, err
 	}
