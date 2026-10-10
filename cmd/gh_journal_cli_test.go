@@ -806,3 +806,52 @@ func TestGitHubJournalCLIAuxiliarySequentialUndo(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubJournalCLIUndoesBasicWorkflow(t *testing.T) {
+	for _, enabled := range []string{"false", "true"} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil || !json.Valid([]byte(out)) {
+					t.Fatal(args, out, stderr, err)
+				}
+			}
+			body := func() string {
+				t.Helper()
+				data, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var state struct {
+					Issues map[string]struct{ Body string }
+				}
+				if err := json.Unmarshal(data, &state); err != nil {
+					t.Fatal(err)
+				}
+				return state.Issues["6"].Body
+			}
+			execute("create", "Workflow undo CLI fixture")
+			for _, action := range []string{"start", "unstart", "block", "unblock"} {
+				if action == "unstart" {
+					execute("start", "gh-6")
+				}
+				if action == "unblock" {
+					execute("block", "gh-6", "--reason", "Setup")
+				}
+				original := body()
+				args := []string{action, "gh-6", "--reason", "Undo fixture"}
+				execute(args...)
+				execute("undo")
+				if body() != original {
+					t.Fatal(action, "inverse lost original workflow body")
+				}
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite fallback", err)
+			}
+		})
+	}
+}

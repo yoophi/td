@@ -47,8 +47,14 @@ func (c *Client) checkUndoOriginalReview(ctx context.Context, action *ActionJour
 	}
 	if !fileChange {
 		relationChange, err := relationUndoScope(action)
-		if err != nil || !relationChange {
+		if err != nil {
 			return err
+		}
+		if !relationChange {
+			workflowChange, err := workflowUndoScope(action)
+			if err != nil || !workflowChange {
+				return err
+			}
 		}
 	}
 	_, meta, _, err := decodeBody(action.Before.Body)

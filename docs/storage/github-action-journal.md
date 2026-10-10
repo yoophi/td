@@ -554,3 +554,31 @@ This completes explicit result recovery for issue/auxiliary creation and native
 comment deletion. Scalar/workflow/graph partial-write and inverse reconciliation
 need their own proofs and remain #9 implementation work; they are refused rather
 than passed through this result-only executor.
+
+## Basic workflow inverse
+
+Single-source `start`, `unstart`, `block`, and `unblock` receipts can now be
+undone while the issue's native GitHub state remains open. The inverse restores
+the exact original body/state/labels, including the original claim, session and
+transition history, review pointers and review rows. The original before/after
+snapshots remain in the journal; removing the new transition from the current
+issue does not erase the audit receipt.
+
+The scope checker recognizes the entire normal transition writer effect. It
+requires one attributed transition, an unchanged history prefix, the expected
+claim and participation delta, matching reason/time, exact review invalidation,
+and unchanged task content/relations/files. Arbitrary status edits or additional
+actors/reviews cannot be included in that inverse. A restart of an in-review
+issue may restore its original review only when the original content basis,
+native event digest and handoff remain valid. These proofs are read before
+intent, before the target write, after readback and after the receipt; the final
+source revision check follows the proof reads. Existing undone receipts also
+recheck the original review and source revision without writing again.
+
+This is single-source restoration, not a coordinated undo of a multi-ID command
+or cascade. Review/approve/reject/close/reopen, native state changes, logical
+deletion, and coordinated multi-target inverse planning still require dedicated
+policies. In particular, a new GitHub close/reopen event cannot be removed or
+represented as an old review event. Partial/undo-prepared recovery and portable
+journal history also remain work under #9. Failures preserve the existing
+uncertain-result diagnostics and do not automatically repeat the target PATCH.
