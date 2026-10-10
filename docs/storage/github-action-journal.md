@@ -147,3 +147,38 @@ Creation undo still cannot erase an issue safely; the planner describes logical
 delete compensation. These library tests do not prove creation is already
 journaled by the CLI/HTTP paths. Import/export transport of the new creation
 intent/receipt and high-volume write cost validation also remain pending.
+
+## Scalar undo executor
+
+`Client.UndoAction` executes a checked inverse for single-issue scalar updates.
+It rehydrates the comment by ID, validates its repository/carrier and original
+identity, reads the authenticated GitHub `/user` login, and requires matching
+session/author attribution. It verifies the current target against the recorded
+after-state. An already-undone receipt returns a no-op only if the target still
+matches its verified restored-state. Later edits remain conflicts.
+
+The executor records/readbacks `undo_prepared` with a distinct operation ID,
+rechecks the original target revision, PATCHes the exact before values, verifies
+response fields/labels and target readback, records/readbacks `undone` with
+restored state, and rechecks the target after recording the receipt. Receipt
+updates cannot alter original snapshots/identity or skip the expected phase
+transition. Failures never cause automatic target retries or success without a
+verified receipt. A lost receipt response can be reconciled by reading an
+existing valid undone receipt; a still-prepared result requires explicit
+inspection/reconciliation and cannot be declared done merely because fields
+look like the old values.
+
+Current scope includes title, visible description, acceptance, type, priority,
+points, labels and minor/sprint/date scalar data when workflow/graph/review data
+remains unchanged. Native state changes, session/review/transition/history or
+parent/dependency/file changes, note/board entities and multi-target effects
+still require coordinated undo integration. They return an explicit scope
+error before target writes. Legacy per-target journals also need separate-carrier
+migration before execution, avoiding receipt writes on the target itself.
+Creation retains the explicit logical-delete alternative. These are pending
+implementation boundaries, not SQLite-only exemptions or proof of #9 completion.
+
+The executor is currently a library API: CLI `undo` still reports unsupported
+execution until selection, scope-error mapping and command tests are connected.
+Default CLI/HTTP write journaling, workflows/cascades, recovery tooling and
+portable journal transport remain required work.

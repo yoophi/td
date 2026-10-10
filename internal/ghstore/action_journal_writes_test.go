@@ -36,6 +36,12 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 		method, path := args[4], strings.TrimPrefix(args[5], "repos/owner/repo")
 		encode := func(value any) ([]byte, error) { return json.Marshal(value) }
 		switch {
+		case path == "user":
+			login := "github-author"
+			if f.mode == "undo-actor" {
+				login = "other-author"
+			}
+			return encode(map[string]string{"login": login})
 		case path == "/issues?state=all&per_page=100":
 			page := []apiIssue{}
 			for _, issue := range f.issues {
@@ -143,7 +149,7 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 				return encode(f.comment)
 			}
 			f.receiptWrites++
-			if f.mode == "receipt-denied" {
+			if f.mode == "receipt-denied" || (f.mode == "undo-receipt-denied" && f.receiptWrites == 3) {
 				return nil, errors.New("HTTP 403 receipt denied")
 			}
 			var value struct{ Body string }
@@ -155,7 +161,7 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 			carrier := f.issues[9]
 			carrier.UpdatedAt = clock.Add(3 * time.Second)
 			f.issues[9] = carrier
-			if f.mode == "receipt-uncertain" {
+			if f.mode == "receipt-uncertain" || (f.mode == "undo-receipt-uncertain" && f.receiptWrites == 3) {
 				return nil, errors.New("connection lost after receipt write")
 			}
 			return encode(f.comment)
@@ -180,19 +186,38 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 				if f.mode == "target-denied" {
 					return nil, errors.New("HTTP 403 target permission denied")
 				}
-				var values map[string]string
+				var values struct {
+					Title, Body, State *string
+					Labels             *[]string
+				}
 				if err := json.Unmarshal(payload, &values); err != nil {
 					return nil, err
 				}
 				target := f.issues[n]
-				target.Body = values["body"]
-				target.UpdatedAt = clock.Add(2 * time.Second)
+				if values.Title != nil {
+					target.Title = *values.Title
+				}
+				if values.Body != nil {
+					target.Body = *values.Body
+				}
+				if values.State != nil {
+					target.State = *values.State
+				}
+				if values.Labels != nil {
+					target.Labels = nil
+					for _, label := range *values.Labels {
+						target.Labels = append(target.Labels, struct {
+							Name string `json:"name"`
+						}{label})
+					}
+				}
+				target.UpdatedAt = target.UpdatedAt.Add(2 * time.Second)
 				f.issues[n] = target
 				if f.mode == "target-uncertain" {
 					return nil, errors.New("connection lost after target write")
 				}
 			}
-			if f.mode == "target-later" && n == 1 && f.commentReads >= 3 {
+			if n == 1 && ((f.mode == "target-later" && f.commentReads >= 3) || (f.mode == "undo-later" && f.commentReads >= 5)) {
 				target := f.issues[1]
 				target.Body = "Later edit"
 				target.UpdatedAt = clock.Add(4 * time.Second)
