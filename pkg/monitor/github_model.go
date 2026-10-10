@@ -67,6 +67,24 @@ func NewGitHubModelForWorktree(ctx context.Context, baseDir, worktreeDir string,
 	requestCtx, cancel := context.WithCancel(ctx)
 	preferences.ctx = requestCtx
 	focus := func(ctx context.Context) (*string, error) {
+		currentConfig, err := config.Load(baseDir)
+		if err != nil {
+			return nil, err
+		}
+		currentStore, err := config.Store(currentConfig)
+		if err != nil {
+			return nil, err
+		}
+		if currentStore != config.StoreGitHub || currentConfig.GitHub == nil || *currentConfig.GitHub != *cfg.GitHub {
+			return nil, fmt.Errorf("configured store changed; restart the monitor")
+		}
+		currentScope, err := ghcontext.Resolve(ctx, worktreeDir, cfg.GitHub.Repo)
+		if err != nil {
+			return nil, err
+		}
+		if currentScope.Path != scope.Path {
+			return nil, fmt.Errorf("monitor worktree or branch changed; restart the monitor")
+		}
 		current, err := scope.Update(ctx, nil)
 		if err != nil {
 			return nil, err
@@ -88,19 +106,18 @@ func NewGitHubModelForWorktree(ctx context.Context, baseDir, worktreeDir string,
 	m.notesLifetimeCancel = cancel
 	m.NotesContext = requestCtx
 	m.NotesFactory = func(ctx context.Context) (MonitorNoteStore, error) {
-		current, err := scope.Update(ctx, nil)
-		if err != nil {
+		if _, err := focus(ctx); err != nil {
 			return nil, err
-		}
-		if current.Session.ID != actor {
-			return nil, fmt.Errorf("monitor session changed; restart the monitor before notes requests")
 		}
 		return notes.OpenGitHubWithContext(ctx, worktreeDir, cfg.GitHub.Remote, cfg.GitHub.Repo)
 	}
 	m.preferences = preferences
 	m.PaneHeights = prefs.PaneHeights
 	m.DataSource = NewGitHubDataSource(requestCtx, baseDir, *cfg.GitHub, actor, scope.Branch, focus)
-	boards := NewGitHubBoardSource(requestCtx, baseDir, *cfg.GitHub, actor)
+	boards := NewGitHubBoardSource(requestCtx, baseDir, *cfg.GitHub, actor, func(ctx context.Context) error {
+		_, err := focus(ctx)
+		return err
+	})
 	boards.preferences = preferences
 	m.BoardSource = boards
 	m.syncRuntime = newSyncRuntime(nil, SyncOptions{Disabled: true}, func() error { cancel(); return nil })

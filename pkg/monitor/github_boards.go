@@ -36,8 +36,22 @@ type GitHubBoardSource struct {
 	open           func(context.Context) (githubBoardClient, error)
 }
 
-func NewGitHubBoardSource(ctx context.Context, dir string, selected models.GitHubStoreConfig, actor string) *GitHubBoardSource {
-	return &GitHubBoardSource{ctx: ctx, baseDir: dir, actor: actor, open: func(ctx context.Context) (githubBoardClient, error) { return ghstore.Open(ctx, dir, &selected) }}
+func NewGitHubBoardSource(ctx context.Context, dir string, selected models.GitHubStoreConfig, actor string, guards ...func(context.Context) error) *GitHubBoardSource {
+	return &GitHubBoardSource{ctx: ctx, baseDir: dir, actor: actor, open: func(ctx context.Context) (githubBoardClient, error) {
+		for _, guard := range guards {
+			if err := guard(ctx); err != nil {
+				return nil, err
+			}
+		}
+		client, err := ghstore.Open(ctx, dir, &selected)
+		if err != nil {
+			return nil, err
+		}
+		if err := client.TrackActions(actor); err != nil {
+			return nil, err
+		}
+		return client, nil
+	}}
 }
 func (s *GitHubBoardSource) ListBoards() ([]models.Board, error) {
 	c, err := s.open(s.ctx)

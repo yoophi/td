@@ -7,8 +7,9 @@ now request action tracking with the real device-local td session. Their issue
 writes use durable intent and verified result protocols; carrier bootstrap is
 lazy, after input and target validation. CLI transition, logical deletion,
 dependency, schedule, file and label-repair writers also request tracking.
-Tracked activity creation now records v2 receipts. HTTP/monitor writers,
-comment deletion/note/board write protocols and coordinated
+Tracked activity creation now records v2 receipts. HTTP and monitor client
+factories now enable the same issue/activity protocols with their actual scoped
+actors. Comment deletion/note/board write protocols and coordinated
 workflow/graph undo remain pending.
 `td undo` executes supported scalar and own comment-creation inverses. This document is
 an implementation boundary, not an acceptance or completion declaration.
@@ -283,8 +284,8 @@ CLI direct comment, comments add, log and handoff commands request tracking with
 the actual context actor. Existing tracked schedule, file, update/review and
 work-session activity paths share the same protocol. Local-only work-session
 entries do not create remote records. Untracked library clients retain the
-existing behavior until their writer integration supplies an actor; HTTP/monitor
-integration remains pending. Any lost/denied/unverified POST or receipt returns
+existing behavior until their writer integration supplies an actor. HTTP and
+monitor issue/activity clients now supply their actual scoped actor. Any lost/denied/unverified POST or receipt returns
 an explicit error with operation, target and journal identity, retaining raw
 errors. Prepared uncertainty is never success or an automatic retry. A verified
 receipt can precede an external later edit; the final conflict still returns an
@@ -325,3 +326,25 @@ and again before the target write. Ambiguous, edited, unfinished or foreign
 receipts never authorize a revision change; the issue clock is never ignored. Comment
 deletion journaling, note/board state, coordinated policy/graph inverse operations,
 HTTP/monitor writers and portable journal transport remain required work.
+
+## HTTP and monitor actor integration
+
+The production HTTP writer factory checks the selected store, web worktree/branch
+and current web session before enabling tracking. HTTP issue creation, updates,
+workflow changes, logical deletion and activity creation share the established
+journal protocols; no new SQLite fallback or automatic retry is introduced.
+
+Monitor data/board factories enable tracking without remote writes. The real
+model revalidates configuration, worktree/branch and session before opening
+clients for issue, board or notes operations. Retired context requests fail
+before reaching GitHub. Board/note entity writers still need their own journal
+protocols; merely enabling tracking does not journal their direct raw requests.
+
+Production-factory subprocess tests cover HTTP creation/update/comment/workflow
+and monitor creation/edit/workflow/deletion, including automatic handoff activity.
+They assert durable applied receipts with actual actors. Intent denial, target
+denial, receipt denial and lost native comment responses remain errors and do
+not invent applied receipts. Session rotation blocks old HTTP writers; session,
+branch and store replacement block monitor issue/board/notes clients. Aggregate
+read request-count tests remain applicable: enabling tracking itself makes no
+GitHub request and creates no carrier or receipt on reads.

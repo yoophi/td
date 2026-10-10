@@ -41,7 +41,22 @@ type GitHubDataSource struct {
 }
 
 func NewGitHubDataSource(ctx context.Context, baseDir string, selected models.GitHubStoreConfig, actor, branch string, focus func(context.Context) (*string, error)) *GitHubDataSource {
-	return &GitHubDataSource{ctx: ctx, baseDir: baseDir, actor: actor, branch: branch, focus: focus, open: func(ctx context.Context) (GitHubMonitorReader, error) { return ghstore.Open(ctx, baseDir, &selected) }}
+	return &GitHubDataSource{ctx: ctx, baseDir: baseDir, actor: actor, branch: branch, focus: focus, open: func(ctx context.Context) (GitHubMonitorReader, error) {
+		if focus == nil {
+			return nil, fmt.Errorf("GitHub monitor requires actual session and focus reader")
+		}
+		if _, err := focus(ctx); err != nil {
+			return nil, err
+		}
+		client, err := ghstore.Open(ctx, baseDir, &selected)
+		if err != nil {
+			return nil, err
+		}
+		if err := client.TrackActions(actor); err != nil {
+			return nil, err
+		}
+		return client, nil
+	}}
 }
 func (s *GitHubDataSource) Fetch(search string, includeClosed bool, sort SortMode) (result RefreshDataMsg) {
 	// A slow GitHub refresh must not queue a new API sweep every poll tick.

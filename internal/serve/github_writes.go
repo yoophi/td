@@ -43,6 +43,9 @@ func NewGitHubWriteStore(dir string, selected models.GitHubStoreConfig, scope gh
 		if err := state.update(ctx, nil); err != nil {
 			return nil, err
 		}
+		if err := client.TrackActions(sessionID); err != nil {
+			return nil, err
+		}
 		return client, nil
 	}}
 }
