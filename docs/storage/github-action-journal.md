@@ -855,10 +855,11 @@ need integration; this group support does not declare the whole undo task done.
 
 The v14 group and v15 member formats provide the storage and planning contract
 for repeated effects on one issue. They are not yet emitted by command writers;
-ordered execution and recovery currently fail explicitly before any write.
+the ordered target executor still rejects before any target write.
 The installed, verified command behavior remains the v10/v12/v13 integration.
 
-The source implementation supports read-only reconciliation of v14 records.
+The source implementation supports observation and receipt-only reconciliation
+of v14 records.
 It reads one fresh bulk history and actual watched states, compares every frozen
 original receipt including its native clock and body digest, and reads native
 events for affected targets and any additional frozen watched observations.
@@ -866,7 +867,18 @@ It distinguishes an applied but unrecorded forward attempt, an unapplied tail
 after earlier effects, a completed inverse step and an uncertain inverse input.
 Observation never replays a target write or invents a completed receipt. The
 point-read helper also checks the original native comment body and identity;
-the future executor still needs to invoke it before each write.
+the future target executor still needs to invoke it before each target write.
+
+Explicit reconciliation can freeze actual forward outcomes and recover a
+terminal applied-but-unrecorded member receipt before freezing the group. Every
+receipt PATCH checks all original native bodies, current watched revisions and
+events. An unapplied terminal input preserves earlier successful effects.
+Recovery records its separate observer session without replacing the original
+operation, actor or intent session. A pending inverse is completed only if its
+requested contents and required events are actually observed; an unapplied
+inverse rejects without replay. Completed inverse plans remain immutable and
+their original proof is retained at final group completion. Lost completion
+responses can be confirmed read-only from the actual saved original receipt.
 
 An ordered member declares its sequence and actual preceding receipt on the
 same target. The group freezes original receipt snapshots, native comment body
@@ -888,5 +900,6 @@ they do not authorize an ordinary causal undo chain.
 The remaining executor must freeze and point-read actual receipts and hashes,
 reserve completion capacity before writes, fence all watched revisions,
 relationships, native events and historical handoffs before each PATCH, and
-implement receipt-only partial recovery and no-replay continuation. Planning
-and format tests alone do not establish that this command integration works.
+connect the target writer and no-replay continuation to the receipt-only
+recovery path. Format, observation and receipt-recovery fixture tests alone do
+not establish that the compound command integration works on GitHub.

@@ -208,6 +208,9 @@ func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, 
 		return nil, fmt.Errorf("group identity is immutable")
 	}
 	valid := (a.Phase == "prepared" && next.Phase == "applied") || (a.Phase == "applied" && next.Phase == "undo_prepared") || (a.Phase == "undo_prepared" && next.Phase == "undone" && a.UndoOperationID == next.UndoOperationID)
+	if a.Group.Ordered != nil && a.Phase == "undo_prepared" && next.Phase == "undo_prepared" && a.UndoOperationID == next.UndoOperationID && !reflect.DeepEqual(a.Group.Ordered.Steps, next.Group.Ordered.Steps) {
+		valid = true // append-only intent or receipt completion; validated above
+	}
 	if !valid {
 		return nil, fmt.Errorf("invalid group phase transition")
 	}
@@ -252,24 +255,7 @@ func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, 
 
 func (c *Client) reconcileActionGroup(ctx context.Context, a *ActionJournalRecord, session, actor string, apply, normal bool) (*ActionReconcileResult, error) {
 	if a.Group != nil && a.Group.Ordered != nil {
-		if apply {
-			return nil, &UndoScopeError{Reason: "ordered group recovery integration is incomplete; no target or receipt write attempted"}
-		}
-		if !strings.EqualFold(a.Author, actor) {
-			return nil, fmt.Errorf("ordered inspection requires its native author")
-		}
-		observed, err := c.observeOrderedGroup(ctx, a, false)
-		if err != nil {
-			return nil, err
-		}
-		root := observed.Records[a.IssueID]
-		result := &ActionReconcileResult{Journal: a, Issue: &root, GroupMembers: observed.Members, AlreadyReconciled: a.Phase == "applied" || a.Phase == "undone", TargetWriteReplayed: false}
-		if a.Phase == "undo_prepared" || a.Phase == "undone" {
-			result.UndoOutcome = groupResultOutcome(a, true)
-		} else {
-			result.ForwardOutcome = groupResultOutcome(a, false)
-		}
-		return result, nil
+		return c.reconcileOrderedGroup(ctx, a, session, actor, apply, normal)
 	}
 	if a.Group == nil || !strings.EqualFold(a.Author, actor) {
 		return nil, fmt.Errorf("group recovery requires its native author")

@@ -257,9 +257,6 @@ func TestOrderedGroupUnconnectedExecutorCannotWrite(t *testing.T) {
 	if _, err := f.client.undoActionGroup(context.Background(), group, a.SessionID); err == nil {
 		t.Fatal("incomplete ordered executor accepted a target write")
 	}
-	if _, err := f.client.reconcileActionGroup(context.Background(), group, a.SessionID, group.Author, true, false); err == nil {
-		t.Fatal("incomplete ordered recovery accepted a write")
-	}
 	if f.targetWrites != 0 || f.receiptWrites != 0 || f.intentWrites != 0 || f.carrierWrites != 0 {
 		t.Fatal("incomplete integration reached a writer")
 	}

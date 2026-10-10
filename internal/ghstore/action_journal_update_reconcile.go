@@ -267,6 +267,11 @@ func (c *Client) reconcileForwardUpdate(ctx context.Context, a *ActionJournalRec
 	if err != nil {
 		return nil, err
 	}
+	if fence, ok := ctx.Value(orderedReceiptFenceContextKey{}).(func() error); ok {
+		if err := fence(); err != nil {
+			return nil, err
+		}
+	}
 	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, a.CarrierID)
 	if err != nil {
 		return nil, fmt.Errorf("forward recovery receipt is unverified; inspect before retrying, no target replay: %w", err)

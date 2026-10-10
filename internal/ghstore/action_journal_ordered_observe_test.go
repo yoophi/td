@@ -10,11 +10,14 @@ import (
 )
 
 type orderedObservationFixture struct {
-	client   *Client
-	group    *ActionJournalRecord
-	comments map[int64]apiComment
-	issues   map[int]apiIssue
-	events   map[string][]nativeStateEvent
+	client                *Client
+	group                 *ActionJournalRecord
+	comments              map[int64]apiComment
+	issues                map[int]apiIssue
+	events                map[string][]nativeStateEvent
+	allowReceiptWrites    bool
+	receiptWrites         int
+	failReceiptAfterWrite bool
 }
 
 func observedFixtureIssue(t *testing.T, id string, state ActionIssueState) apiIssue {
@@ -79,6 +82,25 @@ func newOrderedObservationFixture(t *testing.T, a ActionJournal) *orderedObserva
 	base := f.client.run
 	f.client.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
 		method, path := args[4], strings.TrimPrefix(args[5], "repos/owner/repo")
+		if o.allowReceiptWrites && method == "PATCH" && strings.HasPrefix(path, "/issues/comments/") {
+			var n int64
+			_, _ = fmt.Sscanf(path, "/issues/comments/%d", &n)
+			var input struct{ Body string }
+			if err := json.Unmarshal(payload, &input); err != nil {
+				return nil, err
+			}
+			c, found := o.comments[n]
+			if !found {
+				return nil, fmt.Errorf("missing native receipt")
+			}
+			c.Body, c.UpdatedAt = input.Body, c.UpdatedAt.Add(time.Second)
+			o.comments[n] = c
+			o.receiptWrites++
+			if o.failReceiptAfterWrite {
+				return nil, fmt.Errorf("synthetic reply lost after native receipt PATCH")
+			}
+			return json.Marshal(c)
+		}
 		if method != "GET" {
 			t.Fatalf("readonly observation reached %s %s", method, path)
 		}
@@ -199,9 +221,6 @@ func TestOrderedGroupObservationPendingInverseNeverReplays(t *testing.T) {
 			}
 			if step.Result != nil && !applied {
 				t.Fatal("observer invented a result")
-			}
-			if _, err := o.client.reconcileActionGroup(context.Background(), o.group, o.group.SessionID, o.group.Author, true, false); err == nil {
-				t.Fatal("unconnected recovery attempted a write")
 			}
 		})
 	}
