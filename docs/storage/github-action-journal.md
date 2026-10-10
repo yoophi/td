@@ -318,7 +318,10 @@ recreation changes its native ID, author attribution and timestamps. GitHub
 DELETE has no atomic compare-and-delete contract here; checks detect observed
 changes but cannot prevent an edit in the gap between the final read and DELETE.
 
-Sequential field undo after activity creation still requires comment inverse
-receipts with exact causal links; the issue clock is never ignored. Comment
+Sequential scalar/comment undo now follows exact causal links through verified
+scalar and comment inverse receipts. Comment witnesses must be absent by both
+native ID and logical operation in the same fresh bulk history, before intent
+and again before the target write. Ambiguous, edited, unfinished or foreign
+receipts never authorize a revision change; the issue clock is never ignored. Comment
 deletion journaling, note/board state, coordinated policy/graph inverse operations,
 HTTP/monitor writers and portable journal transport remain required work.

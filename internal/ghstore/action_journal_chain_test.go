@@ -89,9 +89,24 @@ func TestActionUndoReceiptChainRequiresExactUnambiguousProof(t *testing.T) {
 }
 
 func TestActionUndoReceiptChainExecutesAndRechecksBeforeTargetWrite(t *testing.T) {
-	for _, mode := range []string{"success", "external-clock", "witness-edited", "ambiguous-after-intent", "history-denied"} {
+	for _, mode := range []string{"success", "external-clock", "witness-edited", "ambiguous-after-intent", "history-denied", "comment-success", "comment-present", "comment-restored-after-intent"} {
 		t.Run(mode, func(t *testing.T) {
 			a, current, history := undoChainFixture(t)
+			if strings.HasPrefix(mode, "comment-") {
+				b := &history[1]
+				b.Action = "comment_create"
+				after := *b.Before
+				after.UpdatedAt = b.After.UpdatedAt
+				after.Revision, _ = after.checksum()
+				b.After = &after
+				body, err := renderActivity(activityData{Kind: "comment", OperationID: b.OperationID, SessionID: b.SessionID, Message: "Owned comment"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				b.CommentInput = &ActionCommentInput{Body: body}
+				b.CommentAfter = &ActionCommentState{ID: "ghc-201", IssueID: b.IssueID, Body: body, Author: b.Author, CreatedAt: after.UpdatedAt, UpdatedAt: after.UpdatedAt}
+				b.CommentAfter.Revision, _ = b.CommentAfter.checksum()
+			}
 			comments := map[int]apiComment{}
 			for _, record := range history {
 				body, err := renderActionJournal(record.ActionJournal)
@@ -102,6 +117,15 @@ func TestActionUndoReceiptChainExecutesAndRechecksBeforeTargetWrite(t *testing.T
 				c := apiComment{ID: n, Body: body, IssueURL: "https://api.github.com/repos/owner/repo/issues/9", CreatedAt: current.UpdatedAt, UpdatedAt: current.UpdatedAt}
 				c.User.Login = record.Author
 				comments[int(n)] = c
+			}
+			restoreNativeComment := func() {
+				b := history[1].CommentAfter
+				comment := apiComment{ID: 201, IssueURL: "https://api.github.com/repos/owner/repo/issues/1", Body: b.Body, CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt}
+				comment.User.Login = b.Author
+				comments[201] = comment
+			}
+			if mode == "comment-present" {
+				restoreNativeComment()
 			}
 			body, err := encodeBody("Journal", metadata{EntityKind: "journal", Type: models.TypeTask, Priority: models.PriorityP2})
 			if err != nil {
@@ -150,6 +174,9 @@ func TestActionUndoReceiptChainExecutesAndRechecksBeforeTargetWrite(t *testing.T
 						c.Body, c.UpdatedAt = p.Body, c.UpdatedAt.Add(time.Second)
 						comments[n] = c
 						intents++
+						if intents == 1 && mode == "comment-restored-after-intent" {
+							restoreNativeComment()
+						}
 						if intents == 1 && mode == "witness-edited" {
 							w := comments[102]
 							w.User.Login = "other"
@@ -196,7 +223,7 @@ func TestActionUndoReceiptChainExecutesAndRechecksBeforeTargetWrite(t *testing.T
 				}
 			}}
 			result, err := client.UndoAction(context.Background(), a.ID, "ses_actor")
-			if mode != "success" {
+			if mode != "success" && mode != "comment-success" {
 				if err == nil || result != nil || writes != 0 {
 					t.Fatal("unsafe target write", result, err, writes)
 				}

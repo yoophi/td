@@ -47,8 +47,8 @@ comment deletion/note/board journaling and coordinated cascade undo remain work.
 These writer hooks do not make workflow, relationship, file or deletion undo
 supported: their policy and graph checks still require dedicated inverse planning.
 Activity comments appended after a field receipt may also advance the native
-issue revision; comment-aware causal receipts remain necessary before those
-changes can safely participate in sequential undo. The subprocess fixture now
+issue revision; verified scalar and comment inverse receipts now provide exact
+causal links for supported sequential undo. Workflow inverses remain pending. The subprocess fixture now
 advances the target clock on activity creation;
 `TestGitHubJournalCLIUndoRejectsUnjournaledCommentClock` verifies that a schedule
 write followed by its activity comment fails undo with a conflict, without

@@ -551,3 +551,27 @@ func TestGitHubJournalCLICommentReceiptFailurePreservesNativeComment(t *testing.
 		t.Fatal("partial activity skipped", out, stderr, err)
 	}
 }
+
+func TestGitHubJournalCLIUndoThroughCommentReceipts(t *testing.T) {
+	_, _, run := journalCLI(t)
+	for _, args := range [][]string{
+		{"create", "Sequential comment target"},
+		{"update", "gh-6", "--title", "Scalar change"},
+		{"comment", "gh-6", "First comment"},
+		{"comment", "gh-6", "Second comment"},
+		{"undo"}, {"undo"}, {"undo"},
+	} {
+		out, stderr, err := run(append(args, "--json")...)
+		if err != nil || !json.Valid([]byte(out)) {
+			t.Fatal(args, out, stderr, err)
+		}
+	}
+	actions := fixtureAllJournals(t)
+	if len(actions) != 4 || actions[1].Phase != "undone" || actions[2].Phase != "undone" || actions[3].Phase != "undone" {
+		t.Fatal(actions)
+	}
+	out, stderr, err := run("show", "gh-6", "--json")
+	if err != nil || !strings.Contains(out, "Sequential comment target") || strings.Contains(out, "Scalar change") {
+		t.Fatal(out, stderr, err)
+	}
+}

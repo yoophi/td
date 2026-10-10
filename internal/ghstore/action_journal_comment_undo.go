@@ -10,30 +10,15 @@ import (
 // The original native comment remains in the immutable journal even when its
 // creation is undone. Generic comment deletion still protects audit activities.
 func (c *Client) undoCommentAction(ctx context.Context, action *ActionJournalRecord, current *Record, sessionID, author string) (*ActionUndoResult, error) {
-	if err := action.validate(); err != nil {
+	plan, witnesses, err := c.planUndo(ctx, action, current, sessionID, author)
+	if err != nil {
 		return nil, err
-	}
-	if sessionID == "" || author == "" || action.SessionID != sessionID || !strings.EqualFold(action.Author, author) {
-		return nil, fmt.Errorf("action is not attributed to the current session and GitHub author")
-	}
-	if current.ID != action.IssueID {
-		return nil, fmt.Errorf("undo target identity differs from action history")
-	}
-	if action.Phase == "prepared" || action.Phase == "undo_prepared" {
-		return nil, fmt.Errorf("action %s is %s with an unverified outcome; inspect GitHub before any retry", action.OperationID, action.Phase)
 	}
 	state, err := actionIssueState(current)
 	if err != nil {
 		return nil, err
 	}
-	expected := action.After
-	if action.Phase == "undone" {
-		expected = action.Restored
-	}
-	if state.Revision != expected.Revision {
-		return nil, &ConflictError{ID: current.ID}
-	}
-	if action.Phase == "undone" {
+	if plan.AlreadyUndone {
 		if err := c.verifyDeletedComment(ctx, action); err != nil {
 			return nil, err
 		}
@@ -57,6 +42,9 @@ func (c *Client) undoCommentAction(ctx context.Context, action *ActionJournalRec
 	prepared, err := c.rewriteActionJournal(ctx, action, pending)
 	if err != nil {
 		return nil, fmt.Errorf("undo intent is unverified; no comment DELETE attempted: %w", err)
+	}
+	if err := c.recheckUndoWitnesses(ctx, witnesses); err != nil {
+		return nil, err
 	}
 	// Recheck both mutable objects after persisting intent and before DELETE.
 	if err := c.readNativeComment(ctx, action.CommentAfter); err != nil {

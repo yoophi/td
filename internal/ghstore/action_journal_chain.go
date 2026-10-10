@@ -1,6 +1,9 @@
 package ghstore
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 )
@@ -55,7 +58,7 @@ func planUndoThroughReceipts(action *ActionJournalRecord, current *Record, sessi
 			if edge != nil || a.Phase != "undone" || a.SessionID != sessionID || !strings.EqualFold(a.Author, author) || a.CarrierID != action.CarrierID {
 				return fail()
 			}
-			if a.validate() != nil || scalarUndoScope(a) != nil || !sameActionContents(*a.Before, *a.Restored) || a.Restored.UpdatedAt.Before(a.After.UpdatedAt) {
+			if a.validate() != nil || (a.Action != "comment_create" && scalarUndoScope(a) != nil) || !sameActionContents(*a.Before, *a.Restored) || a.Restored.UpdatedAt.Before(a.After.UpdatedAt) {
 				return fail()
 			}
 			edge = a
@@ -76,7 +79,7 @@ func planUndoThroughReceipts(action *ActionJournalRecord, current *Record, sessi
 		return nil, nil, err
 	}
 	proven.After = &after
-	plan, err := proven.PlanIssueUndo(current, sessionID, author)
+	plan, err := proven.planActionUndo(current, sessionID, author)
 	return plan, witnesses, err
 }
 
@@ -106,4 +109,91 @@ func verifyUndoWitnesses(witnesses, history []ActionJournalRecord) error {
 		}
 	}
 	return nil
+}
+
+// planActionUndo never turns a comment inverse into an issue PATCH.
+func (a ActionJournalRecord) planActionUndo(current *Record, sessionID, author string) (*IssueUndoPlan, error) {
+	if a.Action != "comment_create" {
+		return a.PlanIssueUndo(current, sessionID, author)
+	}
+	if err := a.validate(); err != nil {
+		return nil, err
+	}
+	if sessionID == "" || author == "" || a.SessionID != sessionID || !strings.EqualFold(a.Author, author) {
+		return nil, fmt.Errorf("action is not attributed to the current session and GitHub author")
+	}
+	if current == nil || current.ID != a.IssueID {
+		return nil, fmt.Errorf("undo target identity differs from action history")
+	}
+	if a.Phase == "prepared" || a.Phase == "undo_prepared" {
+		return nil, fmt.Errorf("action %s is %s with an unverified outcome; inspect GitHub before any retry", a.OperationID, a.Phase)
+	}
+	state, err := actionIssueState(current)
+	if err != nil {
+		return nil, err
+	}
+	expected := a.After
+	if a.Phase == "undone" {
+		expected = a.Restored
+	}
+	if state.Revision != expected.Revision {
+		return nil, &ConflictError{ID: a.IssueID}
+	}
+	if !strings.EqualFold(a.CommentAfter.Author, author) {
+		return nil, fmt.Errorf("native comment is not attributed to the current GitHub author")
+	}
+	return &IssueUndoPlan{AlreadyUndone: a.Phase == "undone"}, nil
+}
+
+func (c *Client) planUndo(ctx context.Context, action *ActionJournalRecord, current *Record, sessionID, author string) (*IssueUndoPlan, []ActionJournalRecord, error) {
+	plan, err := action.planActionUndo(current, sessionID, author)
+	var conflict *ConflictError
+	if !errors.As(err, &conflict) || action.Phase != "applied" {
+		return plan, nil, err
+	}
+	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+	if err != nil {
+		return nil, nil, err
+	}
+	history, err := snapshot.ActionHistory("")
+	if err != nil {
+		return nil, nil, err
+	}
+	plan, witnesses, err := planUndoThroughReceipts(action, current, sessionID, author, history)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := verifyCommentUndoWitnesses(snapshot, witnesses); err != nil {
+		return nil, nil, err
+	}
+	return plan, witnesses, nil
+}
+
+func verifyCommentUndoWitnesses(snapshot *Snapshot, witnesses []ActionJournalRecord) error {
+	for i := range witnesses {
+		if witnesses[i].Action == "comment_create" {
+			if err := deletedCommentInSnapshot(snapshot, &witnesses[i]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (c *Client) recheckUndoWitnesses(ctx context.Context, witnesses []ActionJournalRecord) error {
+	if len(witnesses) == 0 {
+		return nil
+	}
+	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+	if err != nil {
+		return err
+	}
+	history, err := snapshot.ActionHistory("")
+	if err != nil {
+		return err
+	}
+	if err := verifyUndoWitnesses(witnesses, history); err != nil {
+		return err
+	}
+	return verifyCommentUndoWitnesses(snapshot, witnesses)
 }
