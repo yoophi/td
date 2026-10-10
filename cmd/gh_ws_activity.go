@@ -15,14 +15,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type githubWorkSessionReader interface {
-	GetIncludingDeleted(context.Context, string) (*ghstore.Record, error)
-	ListActivityIncludingDeleted(context.Context, string) ([]models.Activity, error)
-}
-
-// Shared activity is always read from GitHub, including previously untagged
+// Shared activity comes from GitHub observations, including previously untagged
 // issues. Only entries made without any issue target remain device-local.
-func readGitHubWorkSessionActivity(ctx context.Context, client githubWorkSessionReader, ws *ghcontext.WorkSession) ([]models.Activity, error) {
+// Details and history come from the same validated repository observation.
+func readGitHubWorkSession(ctx context.Context, client ghstore.SnapshotReader, ws *ghcontext.WorkSession) ([]ghstore.Record, []models.Activity, error) {
 	ids := slices.Clone(ws.HistoryIssues)
 	for _, id := range ws.Issues {
 		if !slices.Contains(ids, id) {
@@ -30,31 +26,51 @@ func readGitHubWorkSessionActivity(ctx context.Context, client githubWorkSession
 		}
 	}
 	activities := slices.Clone(ws.LocalActivities)
-	for _, id := range ids {
-		rows, err := client.ListActivityIncludingDeleted(ctx, id)
+	issues := make([]ghstore.Record, 0, len(ws.Issues))
+	if len(ids) > 0 {
+		snapshot, err := client.ReadSnapshot(ctx, true)
 		if err != nil {
-			return nil, fmt.Errorf("read work-session history on %s: %w", id, err)
+			return nil, nil, fmt.Errorf("read work-session snapshot: %w", err)
 		}
-		for _, a := range rows {
-			if a.WorkSessionID == ws.ID {
-				activities = append(activities, a)
+		byID := make(map[string]ghstore.Record)
+		for _, record := range snapshot.Issues(true) {
+			byID[record.ID] = record
+		}
+		for _, id := range ws.Issues {
+			record, found := byID[id]
+			if !found {
+				return nil, nil, fmt.Errorf("read tagged issue %s: task is absent from the work-session snapshot", id)
+			}
+			issues = append(issues, record)
+		}
+		for _, id := range ids {
+			if _, found := byID[id]; !found {
+				return nil, nil, fmt.Errorf("read work-session history on %s: task is absent from the snapshot", id)
+			}
+			rows, err := snapshot.Activity(id)
+			if err != nil {
+				return nil, nil, fmt.Errorf("read work-session history on %s: %w", id, err)
+			}
+			for _, a := range rows {
+				if a.WorkSessionID == ws.ID {
+					activities = append(activities, a)
+				}
 			}
 		}
 	}
 	slices.SortStableFunc(activities, func(a, b models.Activity) int { return a.CreatedAt.Compare(b.CreatedAt) })
-	return jsonList(activities), nil
+	return issues, jsonList(activities), nil
 }
 
-func showGitHubWorkSession(cmd *cobra.Command, client githubWorkSessionReader, ws *ghcontext.WorkSession, past bool) error {
-	issues := make([]ghstore.Record, 0, len(ws.Issues))
-	for _, id := range ws.Issues {
-		r, err := client.GetIncludingDeleted(cmd.Context(), id)
-		if err != nil {
-			return fmt.Errorf("read tagged issue %s: %w", id, err)
-		}
-		issues = append(issues, *r)
-	}
-	activities, err := readGitHubWorkSessionActivity(cmd.Context(), client, ws)
+func readGitHubWorkSessionActivity(ctx context.Context, client ghstore.SnapshotReader, ws *ghcontext.WorkSession) ([]models.Activity, error) {
+	// An automatically composed handoff uses fresh history. The later mutation
+	// still obtains and checks its own target observations.
+	_, activities, err := readGitHubWorkSession(ghstore.WithFreshSnapshot(ctx), client, ws)
+	return activities, err
+}
+
+func showGitHubWorkSession(cmd *cobra.Command, client ghstore.SnapshotReader, ws *ghcontext.WorkSession, past bool) error {
+	issues, activities, err := readGitHubWorkSession(cmd.Context(), client, ws)
 	if err != nil {
 		return err
 	}

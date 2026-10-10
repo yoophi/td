@@ -1,5 +1,41 @@
 # GitHub API call cost investigation
 
+## Work-session reads (#69)
+
+`ws current` and `ws show` now read selected task details and activity from one
+validated repository snapshot. Their former path performed one detail GET and
+another issue GET plus a comments listing for every tagged task, with more
+history reads for formerly tagged tasks. Two tagged tasks reproduced six
+individual data requests. The regression now requires one paginated issue
+collection and one paginated repository comment collection for both 2 and 145
+tagged tasks; it rejects individual issue/comment endpoints.
+
+The snapshot covers the union of current tags and retained history membership,
+including logically deleted tasks, and merges matching work-session activities
+with local-only entries in chronological order. Missing selected tasks and
+failed collection reads return an error without a partial successful view.
+An entirely local work session does not fetch issue or comment collections. Existing cache
+and `--refresh` controls apply to display reads; automatic handoff composition
+requests fresh history. Later write eligibility and conflict checks retain
+their own fresh observations.
+
+Two collection invocations cost I+C HTTP requests when uncached, where I and C
+are the repository's issue and comment page counts; repository preflight is
+additional. This removes growth per tagged task, not pagination or all other
+requests. A cold full repository scan can cost more than targeted reads for a
+small selection in a large repository. Shared snapshot reuse avoids repeating
+that scan while its cache is valid. Mutation verification is not skipped to
+reduce this read budget.
+
+Native acceptance on `yoophi/td-sample` compared the same two-target active and
+ended work sessions. Public JSON was identical before and after. Both uncached
+versions observed seven HTTP responses including repository preflight: the new
+collection calls paginated, so fewer gh invocations did not mean fewer cold HTTP
+requests for this small selection. An immediately repeated cached `ws current`
+used no issue/comment calls and one HTTP response for repository preflight.
+All six native commands were guarded against remote writes and created no
+SQLite database.
+
 On 2026-10-09 at 15:08 UTC, the same authenticated account could run
 `gh issue list --repo yoophi/td --limit 1 --json number`, while
 `gh api 'repos/yoophi/td/issues?state=open&per_page=1'` returned HTTP 403.
