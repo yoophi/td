@@ -265,6 +265,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		if a.Group.Ordered != nil {
 			start = actionOrderedGroupJournalStart
 		}
+		if a.Group.Command == "update" {
+			start = actionPlannedUpdateGroupJournalStart
+		}
 	} else if a.GroupOperationID != "" {
 		start = actionGroupMemberJournalStart
 		if a.GroupSequence > 0 {
@@ -306,7 +309,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionOrderedGroupJournalStart) {
+	if strings.HasPrefix(block, actionPlannedUpdateGroupJournalStart) {
+		start = actionPlannedUpdateGroupJournalStart
+	} else if strings.HasPrefix(block, actionOrderedGroupJournalStart) {
 		start = actionOrderedGroupJournalStart
 	} else if strings.HasPrefix(block, actionOrderedGroupMemberJournalStart) {
 		start = actionOrderedGroupMemberJournalStart
@@ -349,7 +354,7 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	if (a.Group != nil) != (start == actionGroupJournalStart || start == actionReviewGroupJournalStart || start == actionNativeGroupJournalStart || start == actionOrderedGroupJournalStart) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart) || !groupNativeAuthor(a, comment.User.Login) {
+	if (a.Group != nil) != (start == actionGroupJournalStart || start == actionReviewGroupJournalStart || start == actionNativeGroupJournalStart || start == actionOrderedGroupJournalStart || start == actionPlannedUpdateGroupJournalStart) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart) || !groupNativeAuthor(a, comment.User.Login) {
 		return nil, fmt.Errorf("group version or native attribution differs from payload")
 	}
 	if (a.Group != nil && a.Group.Ordered == nil && a.Group.Command == "review") != (start == actionReviewGroupJournalStart) {
@@ -360,6 +365,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	}
 	if (a.Group != nil && a.Group.Ordered != nil) != (start == actionOrderedGroupJournalStart) || (a.GroupSequence > 0) != (start == actionOrderedGroupMemberJournalStart) {
 		return nil, fmt.Errorf("ordered group version differs from payload")
+	}
+	if (a.Group != nil && a.Group.Command == "update") != (start == actionPlannedUpdateGroupJournalStart) {
+		return nil, fmt.Errorf("planned update group version differs from payload")
 	}
 	planned := start == actionUpdateIntentJournalStart || start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart
 	if a.UpdateObservation != nil && !strings.EqualFold(a.UpdateObservation.Actor, comment.User.Login) {

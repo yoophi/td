@@ -328,6 +328,9 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 			return err
 		}
 	}
+	if err := c.verifyPlannedUpdateGroup(ctx, after); err != nil {
+		return err
+	}
 	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, prepared.CarrierID)
 	if err != nil {
 		return err

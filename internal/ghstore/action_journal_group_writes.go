@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -219,6 +220,17 @@ func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJourna
 	}
 	probe := *member
 	probe.After = &after
+	if group.Group.Command == "update" {
+		for _, m := range group.Group.Members {
+			if m.IssueID == member.IssueID {
+				if m.Input == nil || !reflect.DeepEqual(m.Input, member.UpdateIntent) {
+					return fmt.Errorf("member input differs from immutable planned group input")
+				}
+				return scalarFieldUndoScope(&probe)
+			}
+		}
+		return fmt.Errorf("planned update is not a declared group member")
+	}
 	matched, err := workflowUndoScope(&probe)
 	if group.Group.Command == "review" {
 		matched, err = reviewGroupMemberScope(group.Group, &probe)

@@ -848,8 +848,9 @@ Repeated completed verification is read-only. The API still supplies no atomic
 transaction or CAS over this hierarchy.
 
 The v13 format permits one effect per issue. The ordered format below supports
-repeated native compound effects. Remaining writers, claim sweeps/work-session
-fanout, portable history and multipart transport still need integration; this
+repeated native compound effects. Claim sweeps and work-session auto-start are
+connected; the remaining mixed writers are listed in
+[the compound writer inventory](github-batch-writers.md). Portable history and multipart transport still need integration; this
 group support does not declare the whole undo task done.
 
 ### Ordered compound effects (#64)

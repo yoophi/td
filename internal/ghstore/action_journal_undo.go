@@ -322,6 +322,12 @@ func scalarUndoScope(action *ActionJournalRecord) error {
 	if supported, err := deletionUndoScope(action); err != nil || supported {
 		return err
 	}
+	return scalarFieldUndoScope(action)
+}
+
+// Scalar batches do not inherit the separately integrated workflow, relation,
+// deletion or auxiliary-entity scopes above.
+func scalarFieldUndoScope(action *ActionJournalRecord) error {
 	unsupported := func() error {
 		return &UndoScopeError{Reason: "workflow and coordinated multi-target undo integration is still pending; no target write attempted"}
 	}

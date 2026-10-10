@@ -15,18 +15,33 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | Close/approve/reopen and closure cascades | Ordered v14/v15 effects (#64) | Existing focus rules |
 | Forced `unstart --session` / `--stale` with multiple selected claims | Basic unstart group, bound to original selected revisions | Local liveness rechecked; focus cleared on actual release |
 | `ws tag` auto-starting multiple open tasks | Basic start group, bound to original selected revisions; one captured Git snapshot | Tags remain device-local, including after remote undo |
+| Multi-ID `update` with scalar fields only | v16 group with every member's complete input fixed before the first write; existing v11 effect receipts | No focus change |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
 paths retain the existing standalone journal. A later failure leaves earlier
 actual effects and the group intent available for explicit reconciliation.
 
+Scalar update batches select tasks from one fresh bulk issue read and prepare
+all payloads before journal bootstrap, label creation or task writes. They
+support open and closed tasks, including per-task `--append` results. Missing,
+deleted, duplicate or stale selections fail before any write. The group and
+each member are sized before the first write. The immutable group, watched
+task revisions and required native event baselines are rechecked after each
+member intent, before PATCH and before completion. A partial result identifies
+the original group receipt; reconciliation never replays an update.
+
+The v16 inputs are requested contents, not fabricated future observations.
+Existing monitors/servers must run a v16-capable build before reading a
+repository with these new records. Activating a new executable does not replace
+the decoder already loaded by a running process.
+
 ## Remaining writer integration
 
 | Writer | Current effects requiring an aggregate |
 |---|---|
 | Multi-ID reject | Individually journaled review rejection |
-| Multi-ID update | Task fields, relationships, status and optional comments |
+| Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 | Multi-edge dependency add/remove | Repeated updates to the same source task |
 | Multi-ID delete/restore | Individual logical deletion/restoration updates |

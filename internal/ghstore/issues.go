@@ -462,6 +462,25 @@ func (c *Client) Update(ctx context.Context, id string, change Changes) (*Record
 // It cannot make GitHub PATCH atomic, but never refreshes away a known stale
 // policy decision. Callers must not edit observed before passing it back.
 func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Changes) (*Record, error) {
+	plan, err := c.prepareIssueUpdate(ctx, observed, change)
+	if err != nil {
+		return nil, err
+	}
+	return c.writeIssueUpdate(ctx, plan)
+}
+
+// Preparing an update performs validation and reads only. A batch can freeze
+// every payload before journal bootstrap, label creation or the first PATCH.
+type issueUpdatePlan struct {
+	observed      *Record
+	payload       map[string]any
+	parents       []Record
+	change        Changes
+	stateLabel    string
+	priorityLabel models.Priority
+}
+
+func (c *Client) prepareIssueUpdate(ctx context.Context, observed *Record, change Changes) (*issueUpdatePlan, error) {
 	if observed == nil || observed.repository != c.repo || observed.revision == ([32]byte{}) {
 		return nil, fmt.Errorf("an observed issue from this repository is required")
 	}
@@ -470,7 +489,7 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	}
 	copy := *observed
 	record := &copy
-	id := record.ID
+	plan := &issueUpdatePlan{observed: observed}
 	var err error
 	if change.Details != nil {
 		if change.Minor != nil || change.Sprint != nil || change.ParentID != nil || change.DueDate != nil || change.DeferUntil != nil {
@@ -632,16 +651,31 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 			labels = mirroredPriorityLabels(labels, record.Priority)
 		}
 		if !sameLabels(labels, record.Labels) || change.Labels != nil {
-			if err := c.ensureStateLabel(ctx, "td:"+string(status)); err != nil {
-				return nil, err
-			}
+			plan.stateLabel = "td:" + string(status)
 			if mirrorPriority {
-				if err := c.ensurePriorityLabel(ctx, record.Priority); err != nil {
-					return nil, err
-				}
+				plan.priorityLabel = record.Priority
 			}
 			payload["labels"] = labels
 			change.Labels = &labels
+		}
+	}
+	plan.payload, plan.parents, plan.change = payload, parents, change
+	return plan, nil
+}
+
+func (c *Client) writeIssueUpdate(ctx context.Context, plan *issueUpdatePlan) (*Record, error) {
+	observed := plan.observed
+	record := observed
+	id := record.ID
+	payload, parents, change := plan.payload, plan.parents, plan.change
+	if plan.stateLabel != "" {
+		if err := c.ensureStateLabel(ctx, plan.stateLabel); err != nil {
+			return nil, err
+		}
+	}
+	if plan.priorityLabel != "" {
+		if err := c.ensurePriorityLabel(ctx, plan.priorityLabel); err != nil {
+			return nil, err
 		}
 	}
 	// This is best-effort detection, not conditional PATCH or a distributed lock.
@@ -679,6 +713,9 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 				return nil, err
 			}
 		}
+	}
+	if err := c.verifyPlannedUpdateGroup(ctx, nil); err != nil {
+		return nil, err
 	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", record.Number), payload, false)
 	if err != nil {

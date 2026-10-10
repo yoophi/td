@@ -13,11 +13,13 @@ const actionReviewGroupJournalStart = actionJournalPrefix + "v12\n"
 const actionNativeGroupJournalStart = actionJournalPrefix + "v13\n"
 const actionOrderedGroupJournalStart = actionJournalPrefix + "v14\n"
 const actionOrderedGroupMemberJournalStart = actionJournalPrefix + "v15\n"
+const actionPlannedUpdateGroupJournalStart = actionJournalPrefix + "v16\n"
 const actionGroupMemberJournalStart = actionJournalPrefix + "v11\n"
 
 type ActionGroupMember struct {
-	IssueID string           `json:"issue_id"`
-	Before  ActionIssueState `json:"before"`
+	IssueID string              `json:"issue_id"`
+	Before  ActionIssueState    `json:"before"`
+	Input   *ActionUpdateIntent `json:"input,omitempty"`
 }
 
 type ActionGroupResultMember struct {
@@ -60,7 +62,7 @@ func canonicalGroupID(id string) bool {
 
 func (a ActionJournal) validateGroupAction() error {
 	g := a.Group
-	if g == nil || a.Action != "group" || a.GroupOperationID != "" || a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" || (!groupBasicCommand(g.Command) && g.Command != "review" && !nativeGroupCommand(g.Command)) || len(g.Members) < 2 || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
+	if g == nil || a.Action != "group" || a.GroupOperationID != "" || a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" || (!groupBasicCommand(g.Command) && g.Command != "review" && g.Command != "update" && !nativeGroupCommand(g.Command)) || len(g.Members) < 2 || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
 		return fmt.Errorf("group requires its immutable explicit command membership and separate carrier")
 	}
 	if a.Before != nil || a.After != nil || a.Restored != nil || a.CreateInput != nil || a.UpdateIntent != nil || a.UpdateObservation != nil || a.NativeUndo != nil || a.CommentInput != nil || a.CommentAfter != nil || a.CommentBefore != nil || a.UndoObservation != nil || a.Reconciliation != nil {
@@ -78,6 +80,26 @@ func (a ActionJournal) validateGroupAction() error {
 		record, err := actionStateRecord(&m.Before, m.IssueID)
 		if err != nil || record.meta.EntityKind != "" && record.meta.EntityKind != "issue" || record.DeletedAt != nil {
 			return fmt.Errorf("group member must be an observed live task")
+		}
+		if (g.Command == "update") != (m.Input != nil) {
+			return fmt.Errorf("planned update group requires every complete input; other groups cannot claim planned inputs")
+		}
+		if m.Input != nil {
+			if g.Ordered != nil || len(m.Input.Related) != 0 {
+				return fmt.Errorf("planned scalar updates cannot declare ordered or related effects")
+			}
+			probe := ActionJournal{Action: "update", IssueID: m.IssueID, CarrierID: a.CarrierID, Before: &m.Before, UpdateIntent: m.Input}
+			if err := probe.validateUpdateIntent(); err != nil {
+				return err
+			}
+			after, err := m.Input.Target.contents()
+			if err != nil {
+				return err
+			}
+			probe.After = &after
+			if err := scalarFieldUndoScope(&ActionJournalRecord{ActionJournal: probe}); err != nil {
+				return err
+			}
 		}
 	}
 	if g.Command == "review" || nativeGroupCommand(g.Command) {

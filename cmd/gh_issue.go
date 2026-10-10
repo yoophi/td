@@ -193,6 +193,15 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		activity = models.Activity{Kind: "comment", SessionID: local.Session.ID, Message: comment}
 	}
 	completedIssues := []string{}
+	if len(args) > 1 && !relations.changed() && change.Status == nil && comment == "" && hasGitHubChanges(change) {
+		completed, updateErr := client.UpdateMany(cmd.Context(), args, change)
+		for i := range completed {
+			if err := emitGitHubMutation(cmd, action, &completed[i]); err != nil {
+				return fmt.Errorf("update results could not be printed (inspect GitHub; do not repeat the update): %w; batch result: %v", err, updateErr)
+			}
+		}
+		return updateErr
+	}
 	for _, id := range args {
 		batchError := func(err error) error {
 			if len(completedIssues) == 0 {
