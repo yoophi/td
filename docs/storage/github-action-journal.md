@@ -788,3 +788,31 @@ Cascades, native-state groups, other explicit command batches, claim sweeps,
 work-session fanout and portable history still require their grouping/inverse
 integration. Their existing single-member receipts do not claim whole-command
 rollback. Large incompressible groups still require multipart transport.
+
+### Review cascade groups
+
+Tracked `TransitionWithCascades` / `TransitionObservedWithCascades` calls
+(including HTTP and monitor) freeze a single review root automatically. CLI
+`review` also freezes multiple explicit roots plus all descendants, ancestors and
+siblings used to decide epic completion in a v12 group before the first issue
+write. A single isolated task retains the existing single-target receipt.
+Every changed task links its complete v11 member input to the group; blocked,
+already reviewed or closed watched tasks keep their original native revision.
+The original hierarchy membership is checked from fresh bulk listings before
+member writes, during recovery, and immediately before inverse writes. New
+children, deleted/reparented nodes and edits to watched siblings fail explicitly.
+
+Ordinary requests and automatic epic requests have separate complete writer
+validators. An automatic request keeps its actual implementer, clears its
+handoff checkpoint and records an event/basis checkpoint without inventing an
+approval or reviewer. Group undo validates all original review proofs first,
+then cancels the actual member writes in reverse native receipt order, which
+also covers overlapping explicit roots. Future explicit roots are deferred
+to their own callbacks so their options are preserved. Recovery retains original roots,
+membership, member inputs and undo identity and writes receipts only. Successful
+confirmation is read-only; group witnesses remain ineligible for causal undo
+chains. This is optimistic compensation, not a GitHub transaction.
+
+Close/approve cascades, native-state groups, other batch writers, sweeps,
+work-session fanout, portable history and multipart transport still require
+integration; this review support does not claim those operations are complete.

@@ -124,13 +124,40 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 		if !reflect.DeepEqual(receipt, a) {
 			return fmt.Errorf("group inverse intent changed")
 		}
+		if a.Group.Command == "review" {
+			return c.verifyReviewGroupExpected(ctx, a.Group, expected)
+		}
 		return c.verifyGroupExpected(ctx, expected)
 	}
 	gated := context.WithValue(ctx, groupUndoContextKey{}, &groupUndoGate{OperationID: a.OperationID, Fence: fence})
 	// Reverse the declared command order. A failure retains all member receipts
 	// and the original group undo identity; no automatic write retry is made.
-	for i := len(observed.Members) - 1; i >= 0; i-- {
-		m := observed.Members[i]
+	ordered := slices.Clone(observed.Members)
+	if a.Group.Command == "review" {
+		slices.SortStableFunc(ordered, func(x, y ActionGroupResultMember) int {
+			xr, yr := observed.Receipts[x.IssueID], observed.Receipts[y.IssueID]
+			if xr == nil && yr == nil {
+				return 0
+			}
+			if xr == nil {
+				return -1
+			}
+			if yr == nil {
+				return 1
+			}
+			xn, _ := CommentNumber(xr.ID)
+			yn, _ := CommentNumber(yr.ID)
+			if xn < yn {
+				return -1
+			}
+			if xn > yn {
+				return 1
+			}
+			return 0
+		})
+	}
+	for i := len(ordered) - 1; i >= 0; i-- {
+		m := ordered[i]
 		if m.Status == "noop" || m.Status == "unattempted" || m.Status == "unapplied" || m.Status == "undone" {
 			continue
 		}

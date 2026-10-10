@@ -1448,3 +1448,128 @@ func TestGitHubJournalCLIGroupedBlockUnblockAndUnstart(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubJournalCLIReviewCascadeGroupUndoAndHierarchyFence(t *testing.T) {
+	for _, mode := range []string{"descendants", "parents", "new-child", "partial", "overlap", "overlap-parent"} {
+		t.Run(mode, func(t *testing.T) {
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) string {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil {
+					t.Fatal(args, out, stderr, err)
+				}
+				return out
+			}
+			execute("create", "Root epic", "--type", "epic", "--minor")
+			if mode == "overlap" || mode == "overlap-parent" {
+				execute("create", "Child task", "--parent", "gh-6")
+			} else {
+				execute("create", "Child task", "--parent", "gh-6", "--minor")
+			}
+			execute("create", "Blocked sibling", "--parent", "gh-6")
+			execute("block", "gh-8")
+			root := "gh-6"
+			if mode == "parents" || mode == "overlap-parent" {
+				execute("delete", "gh-8", "--force")
+			}
+			if mode == "parents" {
+				root = "gh-7"
+			}
+			before, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if mode == "partial" {
+				t.Setenv("TD_GH_JOURNAL_FAIL", "receipt-denied")
+			}
+			reviewArgs := []string{"review", root, "--json"}
+			if mode == "overlap" {
+				reviewArgs = []string{"review", root, "gh-7", "--minor", "--json"}
+			}
+			if mode == "overlap-parent" {
+				reviewArgs = []string{"review", "gh-7", root, "--minor", "--json"}
+			}
+			out, stderr, err := run(reviewArgs...)
+			if (err != nil) != (mode == "partial") {
+				t.Fatal(out, stderr, err)
+			}
+			t.Setenv("TD_GH_JOURNAL_FAIL", "")
+			if mode == "overlap" || mode == "overlap-parent" {
+				var child struct{ Minor bool }
+				out := execute("show", "gh-7")
+				if json.Unmarshal([]byte(out), &child) != nil || !child.Minor {
+					t.Fatal("explicit root minor option was lost", out)
+				}
+			}
+			var rows []struct {
+				ID    string
+				Group *ghstore.ActionGroup
+			}
+			latest := execute("last", "--n", "1")
+			if json.Unmarshal([]byte(latest), &rows) != nil || len(rows) != 1 || rows[0].Group == nil || rows[0].Group.Command != "review" {
+				t.Fatal(latest)
+			}
+			rid := rows[0].ID
+			if mode == "partial" {
+				current, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				recovered := execute("undo", "--reconcile", rid, "--apply")
+				after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if !bytes.Equal(current, after) || !strings.Contains(recovered, `"partial":true`) {
+					t.Fatal(recovered)
+				}
+			}
+			if mode == "new-child" {
+				var external struct{ Issues map[string]map[string]any }
+				if json.Unmarshal(before, &external) != nil {
+					t.Fatal("fixture")
+				}
+				child := external.Issues["7"]
+				child["number"] = 9
+				child["title"] = "New externally added child"
+				data, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				var live map[string]any
+				_ = json.Unmarshal(data, &live)
+				live["issues"].(map[string]any)["9"] = child
+				data, _ = json.Marshal(live)
+				if err := os.WriteFile(os.Getenv("TD_SCHEDULE_STATE"), data, 0600); err != nil {
+					t.Fatal(err)
+				}
+				current, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				out, stderr, err := run("undo", "--json")
+				if err == nil || !strings.Contains(out+stderr, "membership") {
+					t.Fatal(stderr, err)
+				}
+				after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if !bytes.Equal(current, after) {
+					t.Fatal("hierarchy conflict wrote targets")
+				}
+				return
+			}
+			inverse := execute("undo")
+			if !strings.Contains(inverse, `"group_members":`) {
+				t.Fatal(inverse)
+			}
+			after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			var a, b struct{ Issues map[string]map[string]any }
+			if json.Unmarshal(before, &a) != nil || json.Unmarshal(after, &b) != nil {
+				t.Fatal("fixture")
+			}
+			for _, id := range []string{"6", "7", "8"} {
+				for _, field := range []string{"body", "title", "state", "labels"} {
+					x, _ := json.Marshal(a.Issues[id][field])
+					y, _ := json.Marshal(b.Issues[id][field])
+					if !bytes.Equal(x, y) {
+						t.Fatal("cascade inverse differs", mode, id, field)
+					}
+				}
+			}
+			current, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			execute("undo", "--reconcile", rid, "--apply")
+			after, _ = os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if !bytes.Equal(current, after) {
+				t.Fatal("repeat changed clocks")
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite", err)
+			}
+		})
+	}
+}

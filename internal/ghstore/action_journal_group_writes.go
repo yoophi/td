@@ -17,6 +17,9 @@ type activeActionGroup struct {
 // BeginActionGroup declares explicit membership before any target changes.
 // Calls with one ID keep the existing single-target receipt contract.
 func (c *Client) BeginActionGroup(ctx context.Context, command string, ids []string) error {
+	if command == "review" {
+		return c.beginReviewActionGroup(ctx, ids)
+	}
 	if len(ids) < 2 {
 		return nil
 	}
@@ -168,6 +171,9 @@ func validateGroupMember(group *ActionJournalRecord, member *ActionJournalRecord
 	probe := *member
 	probe.After = &after
 	matched, err := workflowUndoScope(&probe)
+	if group.Group.Command == "review" {
+		matched, err = reviewGroupMemberScope(group.Group, &probe)
+	}
 	if err != nil || !matched {
 		return &UndoScopeError{Reason: "member input is not the complete declared basic transition effect; no target write attempted"}
 	}
@@ -208,6 +214,9 @@ func (c *Client) attachActionGroupMember(ctx context.Context, a *ActionJournal) 
 	sizing[a.IssueID] = state
 	if err := checkGroupArchiveCapacity(active.Journal.ActionJournal, sizing); err != nil {
 		return fmt.Errorf("group completion capacity preflight (no target write attempted): %w", err)
+	}
+	if active.Journal.Group.Command == "review" {
+		return c.verifyReviewGroupExpected(ctx, active.Journal.Group, active.Expected)
 	}
 	return c.verifyGroupExpected(ctx, active.Expected)
 }

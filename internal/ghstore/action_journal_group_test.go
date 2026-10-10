@@ -61,3 +61,39 @@ func TestGroupJournalStrictMembershipAndLegacyTransport(t *testing.T) {
 		t.Fatal("v10 envelope round trip", err)
 	}
 }
+
+func TestReviewGroupVersionRootsAndImmutableMembership(t *testing.T) {
+	a := groupModelFixture(t)
+	a.Group.Command = "review"
+	a.Group.Roots = []string{"gh-1"}
+	body, err := renderWriteActionJournal(a)
+	if err != nil || !strings.Contains(body, actionReviewGroupJournalStart) {
+		t.Fatal(body, err)
+	}
+	c := journalCommentFixture(t, a)
+	c.Body = body
+	decoded, err := decodeActionJournal(c, "gh-9")
+	if err != nil || !reflect.DeepEqual(decoded.ActionJournal, a) {
+		t.Fatal(decoded, err)
+	}
+	c.Body = strings.Replace(body, actionReviewGroupJournalStart, actionGroupJournalStart, 1)
+	if _, err := decodeActionJournal(c, "gh-9"); err == nil {
+		t.Fatal("v10 silently accepted review hierarchy")
+	}
+	for _, roots := range [][]string{nil, {"gh-1", "gh-1"}, {"gh-3"}, {"gh-2"}} {
+		b := a
+		g := *a.Group
+		g.Roots = roots
+		b.Group = &g
+		if _, err := renderWriteActionJournal(b); err == nil {
+			t.Fatal("invalid roots", roots)
+		}
+	}
+	b := a
+	g := *a.Group
+	g.Roots = []string{"gh-1", "gh-2"}
+	b.Group = &g
+	if err := validateGroupRewrite(a, b); err == nil {
+		t.Fatal("roots rewritten")
+	}
+}

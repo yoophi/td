@@ -24,6 +24,9 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 	if err != nil {
 		return nil, err
 	}
+	if err := verifyReviewGroupMembership(a.Group, snapshot.Issues(true)); err != nil {
+		return nil, err
+	}
 	history, err := snapshot.ActionHistory("")
 	if err != nil {
 		return nil, err

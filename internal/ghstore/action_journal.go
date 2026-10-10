@@ -247,6 +247,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 	start := actionJournalStart
 	if a.Group != nil {
 		start = actionGroupJournalStart
+		if a.Group.Command == "review" {
+			start = actionReviewGroupJournalStart
+		}
 	} else if a.GroupOperationID != "" {
 		start = actionGroupMemberJournalStart
 	} else if a.UpdateIntent != nil {
@@ -285,7 +288,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionGroupJournalStart) {
+	if strings.HasPrefix(block, actionReviewGroupJournalStart) {
+		start = actionReviewGroupJournalStart
+	} else if strings.HasPrefix(block, actionGroupJournalStart) {
 		start = actionGroupJournalStart
 	} else if strings.HasPrefix(block, actionGroupMemberJournalStart) {
 		start = actionGroupMemberJournalStart
@@ -320,8 +325,11 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	if (a.Group != nil) != (start == actionGroupJournalStart) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart) || !groupNativeAuthor(a, comment.User.Login) {
+	if (a.Group != nil) != (start == actionGroupJournalStart || start == actionReviewGroupJournalStart) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart) || !groupNativeAuthor(a, comment.User.Login) {
 		return nil, fmt.Errorf("group version or native attribution differs from payload")
+	}
+	if (a.Group != nil && a.Group.Command == "review") != (start == actionReviewGroupJournalStart) {
+		return nil, fmt.Errorf("review group version differs")
 	}
 	planned := start == actionUpdateIntentJournalStart || start == actionGroupMemberJournalStart
 	if a.UpdateObservation != nil && !strings.EqualFold(a.UpdateObservation.Actor, comment.User.Login) {

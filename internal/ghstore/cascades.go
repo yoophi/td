@@ -22,6 +22,35 @@ func (c *Client) TransitionObservedWithCascades(ctx context.Context, observed *R
 // TransitionWithCascades is the command-level transition entry point. Individual
 // writes remain optimistic: GitHub provides no transaction over a hierarchy.
 func (c *Client) TransitionWithCascades(ctx context.Context, id, action string, o TransitionOptions) (*Record, bool, error) {
+	owned := action == "review" && c.journal != nil && c.journal.Group == nil
+	if owned {
+		if c.journal.SessionID != o.SessionID {
+			return nil, false, fmt.Errorf("review actor differs from tracked session; no target write attempted")
+		}
+		n, err := Number(id)
+		if err != nil {
+			return nil, false, err
+		}
+		if err := c.BeginActionGroup(ctx, "review", []string{fmt.Sprintf("gh-%d", n)}); err != nil {
+			return nil, false, err
+		}
+	}
+	result, noop, err := c.transitionWithCascades(ctx, id, action, o)
+	if err != nil {
+		if owned && c.journal.Group != nil {
+			return nil, false, fmt.Errorf("review group %s stopped; inspect and reconcile before retrying (earlier changes remain): %w", c.journal.Group.Journal.ID, err)
+		}
+		return nil, false, err
+	}
+	if owned {
+		if _, err := c.CompleteActionGroup(ctx); err != nil {
+			return nil, false, err
+		}
+	}
+	return result, noop, nil
+}
+
+func (c *Client) transitionWithCascades(ctx context.Context, id, action string, o TransitionOptions) (*Record, bool, error) {
 	if action == "review" || action == "close" || (action == "approve" && !o.RecordOnly) {
 		return c.transitionWithParents(ctx, id, action, o)
 	}
@@ -80,6 +109,9 @@ func (c *Client) transitionReviewWithRecords(ctx context.Context, id string, o T
 		return fail(err)
 	}
 	for _, child := range descendants {
+		if c.deferredReviewGroupRoot(child.ID, rootID) {
+			continue
+		}
 		if child.Status != models.StatusOpen && child.Status != models.StatusInProgress {
 			continue
 		}

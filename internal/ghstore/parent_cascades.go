@@ -140,6 +140,9 @@ func (c *Client) transitionWithParents(ctx context.Context, id, action string, o
 		return result, noop, nil
 	}
 	for _, id := range parents {
+		if action == "review" && c.deferredReviewGroupRoot(id, rootID) {
+			break
+		}
 		parent := graph[id]
 		if parent.Type != models.TypeEpic || parent.Status == target || parent.Status == models.StatusClosed {
 			break

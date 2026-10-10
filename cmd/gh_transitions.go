@@ -152,7 +152,7 @@ func init() {
 					return fmt.Errorf("capture start snapshot: %w", err)
 				}
 			}
-			grouped := len(args) > 1 && slices.Contains([]string{"start", "unstart", "block", "unblock"}, command.Name())
+			grouped := len(args) > 1 && (command == reviewCmd || slices.Contains([]string{"start", "unstart", "block", "unblock"}, command.Name()))
 			if grouped {
 				if err := client.BeginActionGroup(cmd.Context(), command.Name(), args); err != nil {
 					return err
