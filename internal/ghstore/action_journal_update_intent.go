@@ -129,14 +129,12 @@ func (a ActionJournal) validateUpdateIntent() error {
 	return nil
 }
 
-func (c *Client) plannedUpdateIntent(ctx context.Context, before *Record, payload map[string]any, parents []Record) (*ActionUpdateIntent, error) {
-	state, err := actionIssueState(before)
-	if err != nil {
-		return nil, err
-	}
+// updateInputFromPayload derives requested contents without remote reads. It
+// is shared by execution and private capacity probes using an existing baseline.
+func updateInputFromPayload(state ActionIssueState, payload map[string]any) (ActionUpdateInput, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return ActionUpdateInput{}, err
 	}
 	var patch struct {
 		Title, Body, State *string
@@ -145,7 +143,7 @@ func (c *Client) plannedUpdateIntent(ctx context.Context, before *Record, payloa
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&patch); err != nil {
-		return nil, fmt.Errorf("update input is invalid: %w", err)
+		return ActionUpdateInput{}, fmt.Errorf("update input is invalid: %w", err)
 	}
 	input := ActionUpdateInput{Title: state.Title, Body: state.Body, State: state.State, Labels: append([]string{}, state.Labels...)}
 	if patch.Title != nil {
@@ -159,6 +157,18 @@ func (c *Client) plannedUpdateIntent(ctx context.Context, before *Record, payloa
 	}
 	if patch.Labels != nil {
 		input.Labels = append([]string{}, (*patch.Labels)...)
+	}
+	return input, nil
+}
+
+func (c *Client) plannedUpdateIntent(ctx context.Context, before *Record, payload map[string]any, parents []Record) (*ActionUpdateIntent, error) {
+	state, err := actionIssueState(before)
+	if err != nil {
+		return nil, err
+	}
+	input, err := updateInputFromPayload(state, payload)
+	if err != nil {
+		return nil, err
 	}
 	intent := &ActionUpdateIntent{Target: input}
 	want, err := input.contents()

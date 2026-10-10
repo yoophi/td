@@ -90,7 +90,23 @@ func (c *Client) verifyCommentOperation(ctx context.Context, issueID, operationI
 	return nil
 }
 
+type journaledActivityResult struct {
+	Activity *models.Activity
+	Issue    *Record
+	Comment  *ActionCommentState
+}
+
 func (c *Client) appendJournaledActivity(ctx context.Context, issue *Record, data activityData, body string) (*models.Activity, error) {
+	result, err := c.appendJournaledActivityResult(ctx, issue, data, body)
+	if err != nil {
+		return nil, err
+	}
+	return result.Activity, nil
+}
+
+// Retain the actual verified issue/comment observations for a following effect.
+// A caller must not replace this revision with a fresh unrelated observation.
+func (c *Client) appendJournaledActivityResult(ctx context.Context, issue *Record, data activityData, body string) (*journaledActivityResult, error) {
 	if data.SessionID != c.journal.SessionID {
 		return nil, fmt.Errorf("activity session differs from journal scope; no comment write attempted")
 	}
@@ -132,7 +148,7 @@ func (c *Client) appendJournaledActivity(ctx context.Context, issue *Record, dat
 	if err := c.verifyPlannedUpdateGroup(ctx, nil); err != nil {
 		return nil, err
 	}
-	uncertain := func(err error) (*models.Activity, error) {
+	uncertain := func(err error) (*journaledActivityResult, error) {
 		return nil, fmt.Errorf("activity outcome for %s is unverified; inspect target %s and journal %s before retrying: %w", intent.OperationID, issue.ID, prepared.ID, err)
 	}
 	response, err := c.request(ctx, "POST", fmt.Sprintf("/issues/%d/comments", issue.Number), map[string]string{"body": body}, false)
@@ -177,5 +193,5 @@ func (c *Client) appendJournaledActivity(ctx context.Context, issue *Record, dat
 	if err != nil {
 		return uncertain(err)
 	}
-	return &result, nil
+	return &journaledActivityResult{Activity: &result, Issue: after, Comment: state}, nil
 }

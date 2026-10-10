@@ -342,6 +342,9 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		result, err := c.writeIssueUpdate(ctx, plan)
 		return result, false, err
 	}
+	if action == "review" {
+		return c.submitReview(ctx, observed, o)
+	}
 	d, err := observed.CopyDetails()
 	if err != nil {
 		return nil, false, err
@@ -370,41 +373,6 @@ func (c *Client) reviewTransition(ctx context.Context, id, action string, o Tran
 		}
 	}
 	switch action {
-	case "review":
-		target = models.StatusInReview
-		if !workflow.DefaultMachine().IsValidTransition(from, target) {
-			return nil, false, workflowStateError("cannot review %s from %s; start a new review cycle explicitly", id, from)
-		}
-		if o.Minor {
-			d.Minor = true
-		}
-		if !d.Minor && !o.skipReviewHandoff {
-			var handoff *models.Activity
-			observed, handoff, err = c.reviewHandoff(ctx, observed, o)
-			if err != nil {
-				return nil, false, err
-			}
-			d.ReviewHandoffID = handoff.ID
-			d.ReviewHandoffUpdatedAt = handoff.UpdatedAt
-		} else {
-			d.ReviewHandoffID = ""
-			d.ReviewHandoffUpdatedAt = time.Time{}
-		}
-		supersedeReviews(&d, now)
-		if observed.ImplementerSession == "" {
-			d.ImplementerSession = o.SessionID
-			history(o.SessionID, models.ActionSessionStarted)
-		} else {
-			d.ImplementerSession = observed.ImplementerSession
-		}
-		d.ReviewRequestedBySession = o.SessionID
-		d.ClosedBySession = ""
-		checkedEvents, err = c.stateEvents(ctx, id)
-		if err != nil {
-			return nil, false, err
-		}
-		d.ReviewBasis = reviewBasis(observed, d)
-		d.ReviewEvents = checkedEvents
 	case "approve":
 		if o.RecordOnly && observed.Minor {
 			return nil, false, &WorkflowInputError{Reason: fmt.Sprintf("minor issues do not require reviews: %s", id)}

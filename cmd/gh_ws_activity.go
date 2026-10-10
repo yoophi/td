@@ -223,15 +223,25 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 	}
 	completed := []string{}
 	grouped := len(records) > 1 && !review
-	if grouped {
-		inputs := make([]ghstore.ActivityGroupInput, 0, len(records))
-		for _, record := range records {
-			entry := activity
-			if entry.Kind == "handoff" {
-				entry.Remaining = filterGitHubWSRemaining(entry.Remaining, record.ID)
-			}
-			inputs = append(inputs, ghstore.ActivityGroupInput{Issue: record, Activity: entry})
+	inputs := make([]ghstore.ActivityGroupInput, 0, len(records))
+	for _, record := range records {
+		entry := activity
+		if entry.Kind == "handoff" {
+			entry.Remaining = filterGitHubWSRemaining(entry.Remaining, record.ID)
 		}
+		inputs = append(inputs, ghstore.ActivityGroupInput{Issue: record, Activity: entry})
+	}
+	var reviewPlans []*ghstore.PreparedHandoffReview
+	if review {
+		reviewPlans, err = client.PrepareHandoffReview(cmd.Context(), inputs, ghstore.TransitionOptions{
+			SessionID: state.Session.ID, AgentType: state.Session.AgentType, Mode: mode,
+			Reason: "Submitted for review via ws handoff --review", Snapshot: activity.Snapshot,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	if grouped {
 		_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
 			if _, err := checkActive(current); err != nil {
 				return err
@@ -261,11 +271,7 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 			return err
 		}
 	} else {
-		for _, record := range records {
-			entry := activity
-			if entry.Kind == "handoff" {
-				entry.Remaining = filterGitHubWSRemaining(entry.Remaining, record.ID)
-			}
+		for i, record := range records {
 			_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
 				active, err := checkActive(current)
 				if err != nil {
@@ -274,8 +280,14 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 				if err := client.TrackActions(current.Session.ID); err != nil {
 					return err
 				}
-				if _, err := client.AppendActivity(cmd.Context(), record.ID, entry); err != nil {
-					return err
+				if review {
+					if err := client.AppendPreparedHandoff(cmd.Context(), reviewPlans[i]); err != nil {
+						return err
+					}
+				} else {
+					if _, err := client.AppendActivity(cmd.Context(), record.ID, inputs[i].Activity); err != nil {
+						return err
+					}
 				}
 				if !slices.Contains(active.HistoryIssues, record.ID) {
 					active.HistoryIssues = append(active.HistoryIssues, record.ID)
@@ -295,25 +307,18 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 		}
 	}
 	if review {
-		for _, record := range records {
+		for i, record := range records {
 			requested := false
 			_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
 				if _, err := checkActive(current); err != nil {
 					return err
 				}
-				observed, err := client.Get(cmd.Context(), record.ID)
-				if err != nil {
-					return err
-				}
-				if observed.Status != models.StatusInProgress {
-					return nil
-				}
 				if err := client.TrackActions(current.Session.ID); err != nil {
 					return err
 				}
-				requested = true
-				_, _, err = client.TransitionObserved(cmd.Context(), observed, "review", ghstore.TransitionOptions{SessionID: state.Session.ID, AgentType: state.Session.AgentType, Mode: mode, Reason: "Submitted for review via ws handoff --review", Snapshot: activity.Snapshot})
-				return err
+				var submitErr error
+				requested, submitErr = client.SubmitPreparedHandoffReview(cmd.Context(), reviewPlans[i])
+				return submitErr
 			})
 			if err != nil {
 				return fmt.Errorf("handoffs recorded on %v; review failed on %s after %v (work session remains active, no automatic retry): %w", completed, record.ID, reviewed, err)

@@ -124,6 +124,21 @@ full command/flag audit remain separate verification gates.
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 | `ws handoff --review` | Activity fanout followed by task review requests |
 
+`ws handoff --review` now preflights all handoff bodies and review inputs before
+the first comment or journal write. It freezes review selection from the
+original tagged-task observations, including tasks that receive only a handoff.
+Review inputs fix attribution, transition identity, contents and native event
+baselines. The new handoff's real comment ID and timestamp are bound only after
+its journaled publication has been verified; a later handoff is not substituted.
+Changed source revisions, edited/deleted handoffs and changed native state
+events stop submission. A failed or uncertain effect is never replayed by the
+same in-memory plan, and the work session stays active on partial failure.
+Capacity probes reuse the captured event baseline without additional API calls;
+execution still reads fresh evidence before a review write.
+This preparation is a prerequisite for the remaining persistent mixed-effect
+group: the command still has individual receipts and does **not** yet provide
+command-wide recovery or undo. Device-local work-session state remains separate.
+
 These remaining paths need a shared mixed-effect contract, including complete
 command inputs fixed before the first write, original target identity, partial
 completion, inverse conflict checks and no replay of completed effects. Their
