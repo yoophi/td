@@ -156,6 +156,12 @@ are rejected with a quoting hint instead of being discarded. The existing
 explicit/fixed type fails rather than silently dropping the positional type.
 Shortcuts retain `--title` directly instead of synthesizing a positional title
 that would obscure which input was provided.
+GitHub issue construction now uses that same resolver, not a second positional
+parser. Positional type matching is case-insensitive and accepts the existing
+story→feature alias on both stores. Once a positional/explicit type is selected,
+an embedded title prefix does not replace it; title-prefix inference applies
+only when no type was selected. Tests compare persisted SQLite fields with the
+GitHub creation model and read fake-gh-created issues back to verify metadata.
 
 `list` TDQ selection (`--filter` or positional query, including `ls`) is separate
 from ordinary selection flags. Explicit ordinary filters such as status/type,

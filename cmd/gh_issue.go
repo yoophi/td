@@ -277,19 +277,15 @@ func emitGitHubMutation(cmd *cobra.Command, action string, record *ghstore.Recor
 }
 
 func newGitHubIssue(cmd *cobra.Command, args []string) (*models.Issue, error) {
+	title, typ, err := resolveCreateInput(cmd, args, "")
+	if err != nil {
+		return nil, err
+	}
 	issue := &models.Issue{Type: models.TypeTask, Priority: models.PriorityP2, Status: models.StatusOpen}
 	issue.Minor, _ = cmd.Flags().GetBool("minor")
-	// Preserve the existing `td new task "Title"` shorthand.
-	if len(args) == 2 && models.IsValidType(models.NormalizeType(args[0])) {
-		issue.Type = models.NormalizeType(args[0])
-		args = args[1:]
-	}
-	if len(args) > 1 {
-		return nil, fmt.Errorf("expected one title; quote titles containing spaces")
-	}
-	issue.Title, _ = cmd.Flags().GetString("title")
-	if len(args) == 1 {
-		issue.Title = args[0]
+	issue.Title = title
+	if typ != "" {
+		issue.Type = models.NormalizeType(typ)
 	}
 	change, err := gitHubChanges(cmd, true)
 	if err != nil {
@@ -297,7 +293,7 @@ func newGitHubIssue(cmd *cobra.Command, args []string) (*models.Issue, error) {
 	}
 	if change.Type != nil {
 		issue.Type = *change.Type
-	} else {
+	} else if typ == "" {
 		if extracted, title := parseTypeFromTitle(issue.Title); extracted != "" {
 			issue.Type, issue.Title = extracted, title
 		}
