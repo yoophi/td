@@ -18,6 +18,7 @@ const actionJournalStart = actionJournalPrefix + "v1\n"
 const actionCommentJournalStart = actionJournalPrefix + "v2\n"
 const actionEntityJournalStart = actionJournalPrefix + "v3\n"
 const actionDeletedCommentJournalStart = actionJournalPrefix + "v4\n"
+const actionReconciledJournalStart = actionJournalPrefix + "v5\n"
 
 // ActionIssueState preserves native values, including the complete metadata
 // body. UpdatedAt detects later edits even when content has returned to the
@@ -85,20 +86,21 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
-	OperationID     string              `json:"operation_id"`
-	SessionID       string              `json:"session_id"`
-	IssueID         string              `json:"issue_id"`
-	CarrierID       string              `json:"carrier_id,omitempty"`
-	Action          string              `json:"action"`
-	Phase           string              `json:"phase"`
-	Before          *ActionIssueState   `json:"before,omitempty"`
-	After           *ActionIssueState   `json:"after,omitempty"`
-	Restored        *ActionIssueState   `json:"restored,omitempty"`
-	UndoOperationID string              `json:"undo_operation_id,omitempty"`
-	CreateInput     *ActionCreateInput  `json:"create_input,omitempty"`
-	CommentInput    *ActionCommentInput `json:"comment_input,omitempty"`
-	CommentAfter    *ActionCommentState `json:"comment_after,omitempty"`
-	CommentBefore   *ActionCommentState `json:"comment_before,omitempty"`
+	OperationID     string                `json:"operation_id"`
+	SessionID       string                `json:"session_id"`
+	IssueID         string                `json:"issue_id"`
+	CarrierID       string                `json:"carrier_id,omitempty"`
+	Action          string                `json:"action"`
+	Phase           string                `json:"phase"`
+	Before          *ActionIssueState     `json:"before,omitempty"`
+	After           *ActionIssueState     `json:"after,omitempty"`
+	Restored        *ActionIssueState     `json:"restored,omitempty"`
+	UndoOperationID string                `json:"undo_operation_id,omitempty"`
+	CreateInput     *ActionCreateInput    `json:"create_input,omitempty"`
+	CommentInput    *ActionCommentInput   `json:"comment_input,omitempty"`
+	CommentAfter    *ActionCommentState   `json:"comment_after,omitempty"`
+	CommentBefore   *ActionCommentState   `json:"comment_before,omitempty"`
+	Reconciliation  *ActionReconciliation `json:"reconciliation,omitempty"`
 }
 
 // Creation intent has no allocated issue number or observed server clock yet.
@@ -198,7 +200,10 @@ func (a ActionJournal) validate() error {
 	if err := a.validateEntityAction(); err != nil {
 		return err
 	}
-	return a.validateCommentAction()
+	if err := a.validateCommentAction(); err != nil {
+		return err
+	}
+	return a.validateReconciliation()
 }
 
 func renderActionJournal(a ActionJournal) (string, error) {
@@ -214,7 +219,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		target = "new issue"
 	}
 	start := actionJournalStart
-	if a.Action == "comment_delete" {
+	if a.Reconciliation != nil {
+		start = actionReconciledJournalStart
+	} else if a.Action == "comment_delete" {
 		start = actionDeletedCommentJournalStart
 	} else if a.Action == "comment_create" {
 		start = actionCommentJournalStart
@@ -231,7 +238,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	}
 	block := strings.TrimSpace(comment.Body[index:])
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionDeletedCommentJournalStart) {
+	if strings.HasPrefix(block, actionReconciledJournalStart) {
+		start = actionReconciledJournalStart
+	} else if strings.HasPrefix(block, actionDeletedCommentJournalStart) {
 		start = actionDeletedCommentJournalStart
 	} else if strings.HasPrefix(block, actionCommentJournalStart) {
 		start = actionCommentJournalStart
@@ -254,14 +263,20 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	if (a.entityKind() != "") != (start == actionEntityJournalStart) {
+	if (a.Reconciliation != nil) != (start == actionReconciledJournalStart) {
+		return nil, fmt.Errorf("reconciliation journal version does not match its payload")
+	}
+	if a.Reconciliation == nil && (a.entityKind() != "") != (start == actionEntityJournalStart) {
 		return nil, fmt.Errorf("entity journal version does not match its payload")
 	}
-	if (a.Action == "comment_delete") != (start == actionDeletedCommentJournalStart) {
+	if a.Reconciliation == nil && (a.Action == "comment_delete") != (start == actionDeletedCommentJournalStart) {
 		return nil, fmt.Errorf("deleted comment journal version does not match its payload")
 	}
-	if (a.Action == "comment_create") != (start == actionCommentJournalStart) {
+	if a.Reconciliation == nil && (a.Action == "comment_create") != (start == actionCommentJournalStart) {
 		return nil, fmt.Errorf("action journal version does not match its payload")
+	}
+	if a.Reconciliation != nil && !strings.EqualFold(a.Reconciliation.Actor, comment.User.Login) {
+		return nil, fmt.Errorf("reconciliation actor differs from native journal author")
 	}
 	if a.CommentAfter != nil && !strings.EqualFold(a.CommentAfter.Author, comment.User.Login) {
 		return nil, fmt.Errorf("comment result author differs from native journal author")

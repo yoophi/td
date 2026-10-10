@@ -424,5 +424,7 @@ func init() {
 	rootCmd.AddCommand(undoCmd)
 	rootCmd.AddCommand(lastCmd)
 	undoCmd.Flags().Bool("list", false, "List recent undoable actions")
+	undoCmd.Flags().String("reconcile", "", "Inspect an uncertain GitHub action receipt (ghc-ID); --apply records a verified result without replaying the target write")
+	undoCmd.Flags().Bool("apply", false, "Save the verified --reconcile result; default only previews")
 	lastCmd.Flags().IntP("n", "n", 1, "Number of actions to show")
 }

@@ -14,19 +14,20 @@ import (
 
 type githubActionHistoryRow struct {
 	models.ActionLog
-	OperationID       string                      `json:"operation_id"`
-	Phase             string                      `json:"phase"`
-	CarrierID         string                      `json:"carrier_id,omitempty"`
-	Author            string                      `json:"author"`
-	URL               string                      `json:"url"`
-	DataFormat        string                      `json:"data_format"`
-	HistoryScope      string                      `json:"history_scope"`
-	CreateInput       *ghstore.ActionCreateInput  `json:"create_input,omitempty"`
-	TargetIssueID     string                      `json:"target_issue_id,omitempty"`
-	CommentInput      *ghstore.ActionCommentInput `json:"comment_input,omitempty"`
-	CommentAfter      *ghstore.ActionCommentState `json:"comment_after,omitempty"`
-	CommentBefore     *ghstore.ActionCommentState `json:"comment_before,omitempty"`
-	CommentDataFormat string                      `json:"comment_data_format,omitempty"`
+	OperationID       string                        `json:"operation_id"`
+	Phase             string                        `json:"phase"`
+	CarrierID         string                        `json:"carrier_id,omitempty"`
+	Author            string                        `json:"author"`
+	URL               string                        `json:"url"`
+	DataFormat        string                        `json:"data_format"`
+	HistoryScope      string                        `json:"history_scope"`
+	CreateInput       *ghstore.ActionCreateInput    `json:"create_input,omitempty"`
+	TargetIssueID     string                        `json:"target_issue_id,omitempty"`
+	CommentInput      *ghstore.ActionCommentInput   `json:"comment_input,omitempty"`
+	CommentAfter      *ghstore.ActionCommentState   `json:"comment_after,omitempty"`
+	CommentBefore     *ghstore.ActionCommentState   `json:"comment_before,omitempty"`
+	Reconciliation    *ghstore.ActionReconciliation `json:"reconciliation,omitempty"`
+	CommentDataFormat string                        `json:"comment_data_format,omitempty"`
 }
 
 func init() {
@@ -51,7 +52,19 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 	if err != nil {
 		return true, err
 	}
+	reconcile, _ := cmd.Flags().GetString("reconcile")
+	apply, _ := cmd.Flags().GetBool("apply")
+	list, _ := cmd.Flags().GetBool("list")
+	if apply && reconcile == "" {
+		return true, fmt.Errorf("--apply requires --reconcile ghc-ID")
+	}
+	if reconcile != "" && list {
+		return true, fmt.Errorf("--reconcile and --list cannot be combined")
+	}
 	if kind == config.StoreSQLite {
+		if reconcile != "" {
+			return true, fmt.Errorf("--reconcile requires store=gh-issue; no SQLite write attempted")
+		}
 		return false, nil
 	}
 	cmd.SetOut(cmd.OutOrStdout())
@@ -82,6 +95,25 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 	state, err := scope.Update(cmd.Context(), nil)
 	if err != nil {
 		return true, err
+	}
+	if reconcile != "" {
+		result, err := client.ReconcileAction(cmd.Context(), reconcile, state.Session.ID, apply)
+		if err != nil {
+			var unsupported *ghstore.UndoScopeError
+			var conflict *ghstore.ConflictError
+			if errors.As(err, &unsupported) {
+				return true, withErrorCode("unsupported_operation", err)
+			}
+			if errors.As(err, &conflict) {
+				return true, withErrorCode("conflict", err)
+			}
+			return true, err
+		}
+		if jsonMode(cmd) {
+			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+		}
+		cmd.Printf("%s: target %s observed; target write replayed=false, receipt saved=%t, already reconciled=%t\n", result.Journal.ID, result.Issue.ID, result.Applied, result.AlreadyReconciled)
+		return true, nil
 	}
 	ctx := cmd.Context()
 	if executeUndo {
@@ -209,7 +241,7 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 			PreviousData: before, NewData: after, Timestamp: action.CreatedAt, Undone: action.Phase == "undone"},
 			OperationID: action.OperationID, Phase: action.Phase, CarrierID: action.CarrierID, Author: action.Author, URL: action.URL,
 			DataFormat: "github-native-issue-state-v1", HistoryScope: "td-action-journal", CreateInput: action.CreateInput,
-			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, CommentDataFormat: commentFormat})
+			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, Reconciliation: action.Reconciliation, CommentDataFormat: commentFormat})
 	}
 	return rows, nil
 }

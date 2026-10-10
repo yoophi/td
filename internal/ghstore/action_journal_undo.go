@@ -169,7 +169,7 @@ func (c *Client) rewriteActionJournal(ctx context.Context, old *ActionJournalRec
 	if old.OperationID != next.OperationID || old.SessionID != next.SessionID || old.IssueID != next.IssueID || old.CarrierID != next.CarrierID {
 		return nil, fmt.Errorf("journal rewrite cannot change action identity")
 	}
-	if old.Action != next.Action || !reflect.DeepEqual(old.Before, next.Before) || !reflect.DeepEqual(old.After, next.After) || !reflect.DeepEqual(old.CreateInput, next.CreateInput) || !reflect.DeepEqual(old.CommentInput, next.CommentInput) || !reflect.DeepEqual(old.CommentAfter, next.CommentAfter) || !reflect.DeepEqual(old.CommentBefore, next.CommentBefore) {
+	if old.Action != next.Action || !reflect.DeepEqual(old.Before, next.Before) || !reflect.DeepEqual(old.After, next.After) || !reflect.DeepEqual(old.CreateInput, next.CreateInput) || !reflect.DeepEqual(old.CommentInput, next.CommentInput) || !reflect.DeepEqual(old.CommentAfter, next.CommentAfter) || !reflect.DeepEqual(old.CommentBefore, next.CommentBefore) || !reflect.DeepEqual(old.Reconciliation, next.Reconciliation) {
 		return nil, fmt.Errorf("undo receipt cannot rewrite original action snapshots")
 	}
 	allowedPhase := (old.Phase == "applied" && next.Phase == "undo_prepared") || (old.Phase == "undo_prepared" && next.Phase == "undone" && old.UndoOperationID == next.UndoOperationID)

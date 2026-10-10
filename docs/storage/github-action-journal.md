@@ -169,9 +169,9 @@ prepared intent can outlive an issue POST that reached GitHub. A retry with the
 same explicit/deterministic operation identity is rejected without another
 intent or issue POST. Ordinary `create` generates a new identity, so manually
 repeating the command is a new operation, not an automatic reconciliation of
-the previous one. Inspect the failed attempt's printed identity first. Explicit
-reconciliation and persistent CLI retry identity are still implementation work;
-this protocol does not claim safe retry of arbitrary repeated command text.
+the previous one. Inspect the failed attempt's printed identity first. Explicit result reconciliation is provided by `undo --reconcile`, described
+below. Persistent retry identity for arbitrary repeated command text is not
+inferred; repeating command text still starts a new operation.
 
 Creation undo still cannot erase an issue safely; the planner describes logical
 delete compensation. These library tests do not prove creation is already
@@ -441,3 +441,40 @@ and never creates an `undone` receipt for a deleted original identity.
 This adds native deletion history; workflow/relation inverses, explicit
 prepared-creation reconciliation and portable journal transport remain #9
 work. It does not close the whole task.
+## Explicit result reconciliation (v5)
+
+Use `td undo --reconcile ghc-ID` to inspect an uncertain action by its printed
+receipt ID. The default is read-only. Add `--apply` to record a verified result
+in that existing journal; the command never replays the original issue POST,
+target PATCH or comment DELETE. It requires GitHub storage and cannot open a
+SQLite fallback. `--list` and `--reconcile` are mutually exclusive; `--apply`
+requires a receipt ID.
+
+The authenticated GitHub author must own the original journal. Recovery may be
+requested from another real CLI/web session; the original session and snapshots
+stay intact. A v5 `reconciliation` records the recovery session, native actor,
+observation time and verified current issue state separately. A prepared
+creation gets its uniquely verified allocated issue number/after-state. An
+already applied receipt preserves its original after-state even if the current
+native clock has advanced. Old v1–v4 envelopes remain readable; v5 under an old
+header and mismatched native recovery authors are rejected.
+
+Creation proof requires one complete repository result with the original
+operation ID, native creator, exact title/body/state/labels, matching point read
+and the original journal. Missing or duplicate results stop without POST.
+Comment-deletion proof requires the exact original comment absent from complete
+fresh comments, unchanged target fields and a matching point observation. A
+still-present comment stops without DELETE. Missing pages, changed receipts,
+foreign actors, target edits and ambiguous carriers remain explicit failures.
+
+Apply rechecks the target and old receipt, PATCHes only the existing journal,
+verifies its canonical response/readback and repeats the full result proof.
+A lost receipt response is unverified; reobserve before retrying. An already
+reconciled receipt returns a no-op only while the verified state still matches,
+and cannot rewrite the original attempted action. Creation reconciliation is
+not creation undo; native comment deletion remains irreversible.
+
+This completes explicit result recovery for issue/auxiliary creation and native
+comment deletion. Scalar/workflow/graph partial-write and inverse reconciliation
+need their own proofs and remain #9 implementation work; they are refused rather
+than passed through this result-only executor.
