@@ -144,7 +144,7 @@ func (c *Client) reconcileUndo(ctx context.Context, a *ActionJournalRecord, sess
 	}
 	result := &ActionReconcileResult{Issue: current, Journal: a, AlreadyReconciled: a.Phase == "undone", UndoOutcome: &ActionUndoOutcome{Proof: inverseObservationProof}}
 	if a.Phase == "undone" && a.UndoObservation == nil {
-		result.UndoOutcome = &ActionUndoOutcome{Proof: "verified-undo-receipt", TargetWriteVerified: true, CausalUndoChainEligible: a.UpdateObservation == nil}
+		result.UndoOutcome = &ActionUndoOutcome{Proof: "verified-undo-receipt", TargetWriteVerified: true, CausalUndoChainEligible: a.UpdateObservation == nil && a.CommentObservation == nil}
 	}
 	if a.Phase == "undone" || !apply {
 		return result, nil

@@ -69,6 +69,9 @@ func groupCommandSupported(g *ActionGroup) bool {
 
 func (a ActionJournal) validateGroupAction() error {
 	g := a.Group
+	if a.CommentObservation != nil {
+		return fmt.Errorf("task group cannot carry a comment observation")
+	}
 	if g == nil || a.Action != "group" || a.GroupOperationID != "" || a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" || !groupCommandSupported(g) || len(g.Members) < 2 || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
 		return fmt.Errorf("group requires its immutable explicit command membership and separate carrier")
 	}

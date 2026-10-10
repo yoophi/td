@@ -110,6 +110,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	if action.UpdateIntent != nil {
 		return c.reconcileForwardUpdate(ctx, action, sessionID, actor.Login, apply)
 	}
+	if action.Action == "comment_create" {
+		return c.reconcileForwardComment(ctx, action, sessionID, actor.Login, apply)
+	}
 	if action.Phase != "prepared" && action.Phase != "applied" {
 		return nil, &UndoScopeError{Reason: "undo recovery needs its own inverse proof; no write attempted"}
 	}

@@ -954,3 +954,24 @@ preserve native GitHub open/closed state; logical deletion changes visibility.
 See [compound writer coverage](github-batch-writers.md) for connected and
 remaining paths. Running monitors and servers need a v17-capable executable
 and must be restarted before reading a repository containing v17 groups.
+
+## Uncertain activity creation (#65 prerequisite)
+
+If a comment/log/handoff was created but its completion receipt was not saved,
+`td undo --reconcile ghc-ID` previews the existing result. `--apply` records that
+observation without posting the activity again. The complete fresh history must
+contain the original journal and exactly one matching activity on the original
+task, with the recorded contents, native author and creation clocks. Changed
+task contents, edited/duplicate activities, missing results and conflicting
+point reads stop recovery without target writes. Absence never triggers a POST.
+
+Recovered receipts use v18 and preserve the original intent session alongside
+`comment_observation`. Their `comment-contents-observed` proof does not claim
+that the original client performed the uncertain POST. Checked undo can remove
+the original native comment; subsequent inverse recovery preserves both
+observers. Neither an observed creation nor its later undo authorizes a causal
+undo chain for earlier actions. Completed confirmations are read-only.
+
+This recovery is a prerequisite for work-session activity groups and mixed
+writers; it does not by itself connect those command-wide groups. Running
+monitors/servers must use a v18-capable build to read the new observations.

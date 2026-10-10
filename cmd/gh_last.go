@@ -13,10 +13,11 @@ import (
 )
 
 type githubActionHistoryRow struct {
-	Group             *ghstore.ActionGroup             `json:"group,omitempty"`
-	UpdateObservation *ghstore.ActionUpdateObservation `json:"update_observation,omitempty"`
-	UpdateIntent      *ghstore.ActionUpdateIntent      `json:"update_intent,omitempty"`
-	NativeUndo        *ghstore.ActionNativeUndo        `json:"native_undo,omitempty"`
+	CommentObservation *ghstore.ActionCommentObservation `json:"comment_observation,omitempty"`
+	Group              *ghstore.ActionGroup              `json:"group,omitempty"`
+	UpdateObservation  *ghstore.ActionUpdateObservation  `json:"update_observation,omitempty"`
+	UpdateIntent       *ghstore.ActionUpdateIntent       `json:"update_intent,omitempty"`
+	NativeUndo         *ghstore.ActionNativeUndo         `json:"native_undo,omitempty"`
 	models.ActionLog
 	OperationID       string                         `json:"operation_id"`
 	UndoOperationID   string                         `json:"undo_operation_id,omitempty"`
@@ -276,7 +277,7 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 			ActionType: models.ActionType(action.Action), EntityType: entityType, EntityID: entityID,
 			PreviousData: before, NewData: after, Timestamp: action.CreatedAt, Undone: action.Phase == "undone"},
 			OperationID: action.OperationID, UndoOperationID: action.UndoOperationID, Phase: action.Phase, CarrierID: action.CarrierID, Author: action.Author, URL: action.URL,
-			DataFormat: dataFormat, HistoryScope: "td-action-journal", CreateInput: action.CreateInput,
+			DataFormat: dataFormat, HistoryScope: "td-action-journal", CreateInput: action.CreateInput, CommentObservation: action.CommentObservation,
 			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, Reconciliation: action.Reconciliation, NativeUndo: action.NativeUndo, Group: action.Group, UpdateIntent: action.UpdateIntent, UpdateObservation: action.UpdateObservation, UndoObservation: action.UndoObservation, CommentDataFormat: commentFormat})
 	}
 	return rows, nil

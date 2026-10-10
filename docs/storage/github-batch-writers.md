@@ -69,6 +69,11 @@ individual receipts are not evidence of command-wide undo support. HTTP/monitor
 adapter coverage and the complete command/flag inventory must be checked against
 #31 before closing #65/#68.
 
+Individual uncertain activity creations now support receipt-only reconciliation
+with explicit v18 observer provenance. This supplies the missing recovery proof
+for a future activity group; the work-session and mixed writers above still
+need their aggregate membership, execution and inverse checks.
+
 Board/note operations currently mutate one entity per command; rendering and
 filter loops do not constitute batch writes. Session cleanup and work-session
 start/end/tag removal change device-local JSON; remote journal undo must not

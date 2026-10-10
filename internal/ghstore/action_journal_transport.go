@@ -29,7 +29,7 @@ type actionJournalEnvelope struct {
 
 func actionSchemaStart(schema string) (string, bool) {
 	switch schema {
-	case "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17":
+	case "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18":
 		return actionJournalPrefix + schema + "\n", true
 	default:
 		return "", false

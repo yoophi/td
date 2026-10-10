@@ -87,29 +87,30 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
-	GroupSequence          int                      `json:"group_sequence,omitempty"`
-	GroupPreviousReceiptID string                   `json:"group_previous_receipt_id,omitempty"`
-	Group                  *ActionGroup             `json:"group,omitempty"`
-	GroupOperationID       string                   `json:"group_operation_id,omitempty"`
-	UpdateObservation      *ActionUpdateObservation `json:"update_observation,omitempty"`
-	UpdateIntent           *ActionUpdateIntent      `json:"update_intent,omitempty"`
-	NativeUndo             *ActionNativeUndo        `json:"native_undo,omitempty"`
-	OperationID            string                   `json:"operation_id"`
-	SessionID              string                   `json:"session_id"`
-	IssueID                string                   `json:"issue_id"`
-	CarrierID              string                   `json:"carrier_id,omitempty"`
-	Action                 string                   `json:"action"`
-	Phase                  string                   `json:"phase"`
-	Before                 *ActionIssueState        `json:"before,omitempty"`
-	After                  *ActionIssueState        `json:"after,omitempty"`
-	Restored               *ActionIssueState        `json:"restored,omitempty"`
-	UndoOperationID        string                   `json:"undo_operation_id,omitempty"`
-	CreateInput            *ActionCreateInput       `json:"create_input,omitempty"`
-	CommentInput           *ActionCommentInput      `json:"comment_input,omitempty"`
-	CommentAfter           *ActionCommentState      `json:"comment_after,omitempty"`
-	CommentBefore          *ActionCommentState      `json:"comment_before,omitempty"`
-	UndoObservation        *ActionUndoObservation   `json:"undo_observation,omitempty"`
-	Reconciliation         *ActionReconciliation    `json:"reconciliation,omitempty"`
+	CommentObservation     *ActionCommentObservation `json:"comment_observation,omitempty"`
+	GroupSequence          int                       `json:"group_sequence,omitempty"`
+	GroupPreviousReceiptID string                    `json:"group_previous_receipt_id,omitempty"`
+	Group                  *ActionGroup              `json:"group,omitempty"`
+	GroupOperationID       string                    `json:"group_operation_id,omitempty"`
+	UpdateObservation      *ActionUpdateObservation  `json:"update_observation,omitempty"`
+	UpdateIntent           *ActionUpdateIntent       `json:"update_intent,omitempty"`
+	NativeUndo             *ActionNativeUndo         `json:"native_undo,omitempty"`
+	OperationID            string                    `json:"operation_id"`
+	SessionID              string                    `json:"session_id"`
+	IssueID                string                    `json:"issue_id"`
+	CarrierID              string                    `json:"carrier_id,omitempty"`
+	Action                 string                    `json:"action"`
+	Phase                  string                    `json:"phase"`
+	Before                 *ActionIssueState         `json:"before,omitempty"`
+	After                  *ActionIssueState         `json:"after,omitempty"`
+	Restored               *ActionIssueState         `json:"restored,omitempty"`
+	UndoOperationID        string                    `json:"undo_operation_id,omitempty"`
+	CreateInput            *ActionCreateInput        `json:"create_input,omitempty"`
+	CommentInput           *ActionCommentInput       `json:"comment_input,omitempty"`
+	CommentAfter           *ActionCommentState       `json:"comment_after,omitempty"`
+	CommentBefore          *ActionCommentState       `json:"comment_before,omitempty"`
+	UndoObservation        *ActionUndoObservation    `json:"undo_observation,omitempty"`
+	Reconciliation         *ActionReconciliation     `json:"reconciliation,omitempty"`
 }
 
 // Creation intent has no allocated issue number or observed server clock yet.
@@ -233,6 +234,9 @@ func (a ActionJournal) validate() error {
 	if err := a.validateUpdateObservation(); err != nil {
 		return err
 	}
+	if err := a.validateCommentObservation(); err != nil {
+		return err
+	}
 	if err := a.validateUpdateIntent(); err != nil {
 		return err
 	}
@@ -276,6 +280,8 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		if a.GroupSequence > 0 {
 			start = actionOrderedGroupMemberJournalStart
 		}
+	} else if a.CommentObservation != nil {
+		start = actionCommentObservedJournalStart
 	} else if a.UpdateIntent != nil {
 		start = actionUpdateIntentJournalStart
 	} else if a.NativeUndo != nil {
@@ -312,7 +318,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionPlannedTaskGroupJournalStart) {
+	if strings.HasPrefix(block, actionCommentObservedJournalStart) {
+		start = actionCommentObservedJournalStart
+	} else if strings.HasPrefix(block, actionPlannedTaskGroupJournalStart) {
 		start = actionPlannedTaskGroupJournalStart
 	} else if strings.HasPrefix(block, actionPlannedUpdateGroupJournalStart) {
 		start = actionPlannedUpdateGroupJournalStart
@@ -378,6 +386,10 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		return nil, fmt.Errorf("planned task group version differs from payload")
 	}
 	planned := start == actionUpdateIntentJournalStart || start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart
+	commentObserved := start == actionCommentObservedJournalStart
+	if (a.CommentObservation != nil) != commentObserved || a.CommentObservation != nil && !strings.EqualFold(a.CommentObservation.Actor, comment.User.Login) {
+		return nil, fmt.Errorf("comment observation version or native author differs from payload")
+	}
 	if a.UpdateObservation != nil && !strings.EqualFold(a.UpdateObservation.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("update observer differs from native journal author")
 	}
@@ -387,7 +399,7 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if !planned && (a.NativeUndo != nil) != (start == actionNativeUndoJournalStart) || a.NativeUndo != nil && !strings.EqualFold(a.NativeUndo.Plan.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("native undo version or actor differs from native receipt")
 	}
-	if !planned && (a.UndoObservation != nil) != (start == actionUndoObservedJournalStart) || a.UndoObservation != nil && !strings.EqualFold(a.UndoObservation.Actor, comment.User.Login) {
+	if !planned && !commentObserved && (a.UndoObservation != nil) != (start == actionUndoObservedJournalStart) || a.UndoObservation != nil && !strings.EqualFold(a.UndoObservation.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("undo observation version or native author does not match its payload")
 	}
 	if !planned && (a.Reconciliation != nil) != (start == actionReconciledJournalStart) {
@@ -399,7 +411,7 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if !planned && a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_delete") != (start == actionDeletedCommentJournalStart) {
 		return nil, fmt.Errorf("deleted comment journal version does not match its payload")
 	}
-	if !planned && a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_create") != (start == actionCommentJournalStart) {
+	if !planned && !commentObserved && a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_create") != (start == actionCommentJournalStart) {
 		return nil, fmt.Errorf("action journal version does not match its payload")
 	}
 	if a.Reconciliation != nil && !strings.EqualFold(a.Reconciliation.Actor, comment.User.Login) {

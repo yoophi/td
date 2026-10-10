@@ -253,6 +253,9 @@ func (c *Client) rewriteActionJournalGuarded(ctx context.Context, old *ActionJou
 	if old.OperationID != next.OperationID || old.SessionID != next.SessionID || old.IssueID != next.IssueID || old.CarrierID != next.CarrierID {
 		return nil, fmt.Errorf("journal rewrite cannot change action identity")
 	}
+	if !reflect.DeepEqual(old.CommentObservation, next.CommentObservation) {
+		return nil, fmt.Errorf("undo cannot rewrite the original comment observation")
+	}
 	if old.Action != next.Action || !reflect.DeepEqual(old.Before, next.Before) || !reflect.DeepEqual(old.After, next.After) || !reflect.DeepEqual(old.CreateInput, next.CreateInput) || !reflect.DeepEqual(old.CommentInput, next.CommentInput) || !reflect.DeepEqual(old.CommentAfter, next.CommentAfter) || !reflect.DeepEqual(old.CommentBefore, next.CommentBefore) || !reflect.DeepEqual(old.UpdateObservation, next.UpdateObservation) || !reflect.DeepEqual(old.UpdateIntent, next.UpdateIntent) || !reflect.DeepEqual(old.Reconciliation, next.Reconciliation) || !reflect.DeepEqual(old.UndoObservation, next.UndoObservation) {
 		return nil, fmt.Errorf("undo receipt cannot rewrite original action snapshots")
 	}
@@ -369,7 +372,7 @@ func scalarFieldUndoScope(action *ActionJournalRecord) error {
 // A new inverse can be verified even when the original forward write was only
 // observed. It must not become a causal bridge for an earlier action.
 func observedForwardInverseOutcome(a *ActionJournalRecord) *ActionUndoOutcome {
-	if a.UpdateObservation == nil {
+	if a.UpdateObservation == nil && a.CommentObservation == nil {
 		return nil
 	}
 	if a.UndoObservation != nil {

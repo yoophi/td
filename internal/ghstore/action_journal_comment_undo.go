@@ -29,7 +29,7 @@ func (c *Client) undoCommentAction(ctx context.Context, action *ActionJournalRec
 		if latest.revision != current.revision {
 			return nil, &ConflictError{ID: current.ID}
 		}
-		return &ActionUndoResult{Issue: current, Journal: action, AlreadyUndone: true}, nil
+		return &ActionUndoResult{Issue: current, Journal: action, AlreadyUndone: true, UndoOutcome: observedForwardInverseOutcome(action)}, nil
 	}
 	if !strings.EqualFold(action.CommentAfter.Author, author) {
 		return nil, fmt.Errorf("native comment is not attributed to the current GitHub author")
@@ -97,7 +97,7 @@ func (c *Client) undoCommentAction(ctx context.Context, action *ActionJournalRec
 	if latest.revision != restored.revision {
 		return uncertain(&ConflictError{ID: current.ID, AfterWrite: true})
 	}
-	return &ActionUndoResult{Issue: restored, Journal: receipt}, nil
+	return &ActionUndoResult{Issue: restored, Journal: receipt, UndoOutcome: observedForwardInverseOutcome(receipt)}, nil
 }
 
 func (c *Client) verifyDeletedComment(ctx context.Context, action *ActionJournalRecord) error {
