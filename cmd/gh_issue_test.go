@@ -161,7 +161,7 @@ func TestGitHubInlineCommentAndPartialFailure(t *testing.T) {
 			if err := config.SetStore(dir, "gh-issue", &models.GitHubStoreConfig{Repo: "owner/repo", Remote: "origin"}); err != nil {
 				t.Fatal(err)
 			}
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("TD_GH_CONTEXT_ROOT", t.TempDir())
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 			bin := t.TempDir()
 			statePath := filepath.Join(bin, "issue.json")
@@ -176,30 +176,7 @@ func TestGitHubInlineCommentAndPartialFailure(t *testing.T) {
 			} else {
 				t.Setenv("TD_TEST_COMMENT_FAIL", "")
 			}
-			script := `#!/bin/sh
-if [ "$1" = auth ]; then exit 0; fi
-for arg in "$@"; do
- if [ "$arg" = --include ]; then printf 'HTTP/2.0 200 OK\nContent-Type: application/json\r\n\r\n'; break; fi
-done
-if [ "$4" = repos/owner/repo ]; then
- printf '%s' '{"full_name":"owner/repo","has_issues":true}'
- exit 0
-fi
-printf '%s\n' "$5 $6" >> "$TD_TEST_REQUESTS"
-if [ "$5" = PATCH ]; then
- input=$(cat)
- printf '{"number":1,"state":"open",%s' "${input#?}" > "$TD_TEST_ISSUE"
- cat "$TD_TEST_ISSUE"
-elif [ "$5" = POST ]; then
- if [ "$TD_TEST_COMMENT_FAIL" = yes ]; then echo forbidden >&2; exit 1; fi
- input=$(cat)
- printf '{"id":99,%s' "${input#?}"
-elif [ "$5" = GET ]; then
- cat "$TD_TEST_ISSUE"
-else
- exit 1
-fi
-`
+			script := githubSingleIssueJournalScript(t)
 			if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 				t.Fatal(err)
 			}
@@ -224,7 +201,7 @@ fi
 			if tc.change {
 				wantPatch = 1
 			}
-			if strings.Count(string(calls), "PATCH ") != wantPatch || strings.Count(string(calls), "POST ") != 1 {
+			if strings.Count(string(calls), "PATCH repos/owner/repo/issues/1\n") != wantPatch || strings.Count(string(calls), "POST repos/owner/repo/issues/1/comments\n") != 1 {
 				t.Fatalf("unexpected calls: %s", calls)
 			}
 			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {

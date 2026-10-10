@@ -130,6 +130,9 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 				copy.Body = "Unverified"
 				return encode(copy)
 			}
+			if f.mode == "intent-uncertain" {
+				return nil, errors.New("connection lost after intent write")
+			}
 			return encode(f.comment)
 		case path == "/issues/comments/101":
 			if method == "GET" {

@@ -102,9 +102,9 @@ func githubScheduleTestDir(t *testing.T) string {
 import os,sys,json,pathlib
 args=sys.argv[1:]
 if args[0]=='auth':sys.exit(0)
-path=next(a for a in args if a.startswith('repos/owner/repo'));method=args[args.index('--method')+1] if '--method' in args else 'GET'
+path=next(a for a in args if a.startswith('repos/owner/repo') or a=='user');method=args[args.index('--method')+1] if '--method' in args else 'GET'
 f=pathlib.Path(os.environ['TD_SCHEDULE_STATE'])
-def issue(n,details={}):return {'number':n,'title':'Schedule fixture '+str(n),'state':'closed' if n==3 else 'open','labels':[{'name':'td:closed' if n==3 else 'td:open'}],'body':'<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P0' if n==2 else 'P2','points':0,'details':details})+'\n-->'}
+def issue(n,details={}):return {'number':n,'title':'Schedule fixture '+str(n),'state':'closed' if n==3 else 'open','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'},'labels':[{'name':'td:closed' if n==3 else 'td:open'}],'body':'<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P0' if n==2 else 'P2','points':0,'details':details})+'\n-->'}
 state=json.loads(f.read_text()) if f.exists() else {'issues':{'1':issue(1),'2':issue(2,{'defer_until':'2099-01-01'}),'3':issue(3,{'due_date':'2020-01-01','defer_until':'2099-01-01'}),'4':issue(4,{'deleted_at':'2026-01-01T00:00:00Z'}),'5':dict(issue(5),pull_request={})},'comments':[]}
 issues=state['issues']
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
@@ -125,10 +125,12 @@ else:
   if os.environ.get('TD_SCHEDULE_FAIL_WRITE'):sys.stderr.write('HTTP 403 write denied');sys.exit(1)
   patch=json.load(sys.stdin)
   if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]
-  issues[n].update(patch);f.write_text(json.dumps(state))
+  issues[n].update(patch);issues[n]['updated_at']=fixture_tick(issues[n]['updated_at']);f.write_text(json.dumps(state))
+  if os.environ.get('TD_GH_JOURNAL_FAIL')=='target-lost':sys.stderr.write('connection lost after target');sys.exit(1)
  data=issues[n]
 sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(data))
 `
+	script = githubJournalFixtureScript(t, script)
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}

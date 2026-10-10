@@ -39,7 +39,7 @@ func TestGitHubTransitionRoutingAndFocus(t *testing.T) {
 	if err := config.SetStore(dir, "gh-issue", &models.GitHubStoreConfig{Repo: "owner/repo", Remote: "origin"}); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("TD_GH_CONTEXT_ROOT", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("TD_CONTEXT_ID", "claim-fixture")
 	bin := t.TempDir()
@@ -48,33 +48,7 @@ func TestGitHubTransitionRoutingAndFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("TD_TEST_ISSUE", path)
-	script := `#!/bin/sh
-if [ "$1" = auth ]; then exit 0; fi
-for arg in "$@"; do
- if [ "$arg" = --include ]; then printf 'HTTP/2.0 200 OK\nContent-Type: application/json\r\n\r\n'; break; fi
-done
-if [ "$4" = repos/owner/repo ]; then
- printf '%s' '{"full_name":"owner/repo","has_issues":true}'
-elif [ "$6" = "repos/owner/repo/issues?state=open&per_page=100" ] || [ "$6" = "repos/owner/repo/issues?state=all&per_page=100" ]; then
- printf '[['
- cat "$TD_TEST_ISSUE"
- printf ']]'
-elif [ "$6" = "repos/owner/repo/labels?per_page=100" ]; then
- printf '%s' '[[{"name":"td:open"},{"name":"td:in_progress"},{"name":"td:blocked"},{"name":"td:in_review"},{"name":"td:closed"},{"name":"td:priority:P0"},{"name":"td:priority:P1"},{"name":"td:priority:P2"},{"name":"td:priority:P3"},{"name":"td:priority:P4"}]]'
-elif [ "$6" = "repos/owner/repo/issues/1/events?per_page=100" ]; then
- if grep -q '"state":"closed"' "$TD_TEST_ISSUE"; then
-  printf '%s' '[[{"id":1,"event":"closed"}]]'
- else printf '%s' '[[]]'; fi
-elif [ "$5" = PATCH ]; then
- input=$(python3 -c 'import sys,json; p=json.load(sys.stdin); p.update({"labels":[{"name":v} for v in p["labels"]]} if "labels" in p else {}); print(json.dumps(p,separators=(",",":")))')
- printf '{"number":1,"title":"Fixture",%s' "${input#?}" > "$TD_TEST_ISSUE"
- cat "$TD_TEST_ISSUE"
-elif [ "$5" = GET ]; then
- cat "$TD_TEST_ISSUE"
-else
- exit 1
-fi
-`
+	script := githubSingleIssueJournalScript(t)
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}

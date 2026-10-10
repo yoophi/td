@@ -2,10 +2,11 @@
 
 This work belongs to #9. The codec, bulk reader, inverse planner and an opt-in
 issue-update write protocol are present. `last` and `undo --list` have GitHub
-dispatch; default write integration, multi-target/note/board journaling and
-coordinated workflow/graph undo remain pending. Issue
-creation also has an opt-in intent/result protocol; actual command writers have
-not yet been switched to either protocol.
+dispatch. CLI create/update (including creation shortcuts and the edit alias)
+now request action tracking with the real device-local td session. Their issue
+writes use durable intent and verified result protocols; carrier bootstrap is
+lazy, after input and target validation. HTTP/monitor/other command writers,
+note/board journaling and coordinated workflow/graph undo remain pending.
 `td undo` executes the supported scalar inverse. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
@@ -52,8 +53,8 @@ undone fields plus operation, phase, carrier, GitHub author/URL and explicit
 history/data scope. Before/after data is native issue state JSON, not a SQLite
 Issue snapshot; `data_format=github-native-issue-state-v1` identifies it.
 Prepared results have no verified after snapshot. A scope note on stderr
-explains that legacy/native changes are not reconstructed and default CLI
-journaling/undo execution is incomplete. Empty history must not imply that no
+explains that legacy/native changes are not reconstructed and coverage across
+all writers and workflow/multi-target undo is incomplete. Empty history must not imply that no
 older actions occurred. Actual undo selects the newest current-session action
 that is not already undone from a fresh bulk observation. A prepared or
 undo-prepared action stops execution with a conflict error; it is never skipped
@@ -205,5 +206,27 @@ implementation boundaries, not SQLite-only exemptions or proof of #9 completion.
 
 The scalar executor is connected to CLI `undo`, with latest-action selection,
 scope/conflict error mapping and subprocess command tests in both feature modes.
-Default CLI/HTTP write journaling, workflows/cascades, recovery tooling and
-portable journal transport remain required work.
+HTTP/monitor/remaining CLI write journaling, workflows/cascades, recovery tooling
+and portable journal transport remain required work.
+
+## Default create/update command tracking
+
+`Client.TrackActions(sessionID)` assigns a validated real actor session without
+remote calls. `EnableActionJournal` then initializes the carrier when a validated
+issue create/update reaches intent preparation. Invalid input and stale target
+observations cannot bootstrap a carrier. No read-only command requests tracking.
+
+CLI create/update now resolve the local td session even for scalar edits. They
+request tracking once per invocation, so root edits and creation shortcuts share
+the same protocol. Underlying issue updates during relation/status changes also
+leave individual before/after receipts, but this does not make a multi-target
+operation atomic or enable its coordinated undo. Comment-only updates still
+produce activity comments rather than action journals; this remains required
+work, together with other command and HTTP/monitor writers.
+
+Failed intents stop before a target write. Denied/lost target or result receipt
+operations retain their error and never report a verified success or retry
+automatically. A target request failure identifies the operation and journal
+comment to inspect while retaining the original error. A saved prepared journal
+records an uncertain outcome; it is not a completed action. A lost response to a saved applied receipt can be reconciled
+by inspecting fresh history, rather than repeating the mutation.

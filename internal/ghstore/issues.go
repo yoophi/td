@@ -675,6 +675,9 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", record.Number), payload, false)
 	if err != nil {
+		if journal != nil {
+			return nil, fmt.Errorf("%s update outcome for %s is unverified; inspect target and journal %s before retrying: %w", id, journal.OperationID, journal.ID, err)
+		}
 		return nil, err
 	}
 	updated, err := decodeIssue(data)

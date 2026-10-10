@@ -64,6 +64,9 @@ func gitHubFlags(cmd *cobra.Command, operation string) error {
 }
 
 func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *models.Config) error {
+	// Cobra's Print methods otherwise default to stderr when no output writer
+	// was explicitly assigned. Keep human mutation/read results on stdout.
+	cmd.SetOut(cmd.OutOrStdout())
 	if err := gitHubFlags(cmd, operation); err != nil {
 		return err
 	}
@@ -114,7 +117,7 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	var scope ghcontext.Scope
 	var local *ghcontext.State
 	options := ghstore.TransitionOptions{Reason: comment}
-	if operation == "create" || comment != "" || change.Status != nil || relations.changed() {
+	if operation == "create" || operation == "update" {
 		dir, scopeErr := gitHubContextDirectory()
 		if scopeErr != nil {
 			return scopeErr
@@ -129,6 +132,9 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		}
 		options.SessionID = local.Session.ID
 		options.AgentType = local.Session.AgentType
+		if err := client.TrackActions(local.Session.ID); err != nil {
+			return err
+		}
 	}
 	if change.Status != nil {
 		options.Mode, err = resolveReviewPolicyMode(getBaseDir())

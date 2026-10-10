@@ -581,9 +581,13 @@
     {
       "command": "td create",
       "owner": "#17",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Selected CLI create/update behavior with real-session action journals, lazy bootstrap and verified receipt failures is implemented; complete option combinations, other writers and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksCreateUpdatesAndSequentialUndo",
+        "TestGitHubJournalCLIReportsIntentTargetAndReceiptFailures",
+        "TestGitHubJournalCLIBootstrapValidationAndHumanOutput"
+      ],
       "flags": {
         "acceptance": "pending",
         "acceptance-file": "pending",
@@ -793,9 +797,11 @@
     {
       "command": "td epic create",
       "owner": "#17",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Selected creation-shortcut CRUD behavior shares journal-enabled creation; complete option combinations and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubCRUDRichInputsClearAppendAndShortcuts"
+      ],
       "flags": {
         "acceptance": "pending",
         "acceptance-file": "pending",
@@ -1101,7 +1107,7 @@
       "command": "td last",
       "owner": "#9",
       "state": "partial",
-      "reason": "Bulk current-session action-journal history is implemented for last and undo --list; actual undo execution, default CLI write journaling and native acceptance remain pending.",
+      "reason": "Bulk current-session action-journal history and create/update CLI tracking are implemented; complete writer coverage and native acceptance remain pending.",
       "evidence": [
         "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads"
       ],
@@ -1969,9 +1975,13 @@
     {
       "command": "td task create",
       "owner": "#17",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Selected CLI create/update behavior with real-session action journals, lazy bootstrap and verified receipt failures is implemented; complete option combinations, other writers and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksCreateUpdatesAndSequentialUndo",
+        "TestGitHubJournalCLIReportsIntentTargetAndReceiptFailures",
+        "TestGitHubJournalCLIBootstrapValidationAndHumanOutput"
+      ],
       "flags": {
         "acceptance": "pending",
         "acceptance-file": "pending",
@@ -2077,7 +2087,7 @@
       "command": "td undo",
       "owner": "#9",
       "state": "partial",
-      "reason": "Bulk current-session journal list and verified latest scalar undo with receipt-chain verification are implemented; workflow/graph/multi-target integration, default write journaling and native acceptance remain pending.",
+      "reason": "Bulk current-session journal list and verified latest scalar undo with receipt-chain verification are implemented; workflow/graph/multi-target integration, remaining writer journaling and native acceptance remain pending.",
       "evidence": [
         "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads",
         "TestGitHubUndoCLIExecutesVerifiedLatestActionAndReportsFailures"
@@ -2136,9 +2146,13 @@
     {
       "command": "td update",
       "owner": "#17",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Selected CLI create/update behavior with real-session action journals, lazy bootstrap and verified receipt failures is implemented; complete option combinations, other writers and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksCreateUpdatesAndSequentialUndo",
+        "TestGitHubJournalCLIReportsIntentTargetAndReceiptFailures",
+        "TestGitHubJournalCLIBootstrapValidationAndHumanOutput"
+      ],
       "flags": {
         "acceptance": "pending",
         "acceptance-file": "pending",

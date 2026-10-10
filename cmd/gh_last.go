@@ -102,7 +102,7 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 	}
 	// Keep the established array contract even for an empty result. The scope
 	// note goes to stderr so an empty array cannot imply lossless legacy history.
-	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. Default write journaling and workflow/multi-target undo are not fully integrated yet.")
+	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. Journaling across all writers and workflow/multi-target undo are not fully integrated yet.")
 	if jsonMode(cmd) {
 		return true, json.NewEncoder(cmd.OutOrStdout()).Encode(rows)
 	}

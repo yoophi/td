@@ -37,8 +37,9 @@ journal reader, with explicit scope and phase reporting. Actual `undo` executes
 the verified scalar inverse including receipt-verified sequential undo; workflow/graph/
 multi-target integration remains pending. The SQLite path remains
 in `cmd/undo.go`. `internal/ghstore/action_journal*.go` provides before/after
-snapshots and opt-in create/update protocols; default CLI writes have not yet
-been switched, and note/board/cascade journaling and undo execution remain work.
+snapshots and create/update protocols, now connected to default CLI create/update
+with lazy bootstrap and real session attribution. Other command/HTTP/monitor
+writers, comment/note/board journaling and coordinated cascade undo remain work.
 Workflow history provides selected transitions but cannot reconstruct arbitrary
 issue, relationship, note or board changes. An activity feed is insufficient
 to fulfill #9.

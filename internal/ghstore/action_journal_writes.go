@@ -15,6 +15,23 @@ type actionJournalScope struct {
 	Carrier   Record
 }
 
+// TrackActions assigns the real session without making remote writes. Carrier
+// bootstrap is deferred until a validated create/update is ready for its intent.
+func (c *Client) TrackActions(sessionID string) error {
+	probe := ActionJournal{OperationID: "td-op-check", SessionID: sessionID, IssueID: "gh-1", Action: "create", Phase: "prepared"}
+	if err := probe.validate(); err != nil {
+		return err
+	}
+	if c.journal != nil {
+		if c.journal.SessionID != sessionID {
+			return fmt.Errorf("journal client already belongs to a different session")
+		}
+		return nil
+	}
+	c.journal = &actionJournalScope{SessionID: sessionID}
+	return nil
+}
+
 // EnableActionJournal opts a client into before/after tracking. A separate
 // carrier avoids journal comment writes changing the target issue's clock.
 // It never adopts an arbitrary task or chooses between duplicate carriers.
@@ -27,7 +44,9 @@ func (c *Client) EnableActionJournal(ctx context.Context, sessionID string) erro
 		if c.journal.SessionID != sessionID {
 			return fmt.Errorf("journal client already belongs to a different session")
 		}
-		return nil
+		if c.journal.Carrier.ID != "" {
+			return nil
+		}
 	}
 	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), false)
 	if err != nil {
@@ -141,12 +160,18 @@ func (c *Client) prepareActionJournal(ctx context.Context, before *Record) (*Act
 	if err != nil {
 		return nil, err
 	}
+	if err := c.EnableActionJournal(ctx, c.journal.SessionID); err != nil {
+		return nil, err
+	}
 	a := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: before.ID,
 		CarrierID: c.journal.Carrier.ID, Action: "update", Phase: "prepared", Before: &state}
 	return c.writePreparedJournal(ctx, a)
 }
 
 func (c *Client) prepareCreationJournal(ctx context.Context, operationID string, input ActionCreateInput) (*ActionJournalRecord, error) {
+	if err := c.EnableActionJournal(ctx, c.journal.SessionID); err != nil {
+		return nil, err
+	}
 	a := ActionJournal{OperationID: operationID, SessionID: c.journal.SessionID, CarrierID: c.journal.Carrier.ID,
 		Action: "create", Phase: "prepared", CreateInput: &input}
 	if err := a.validate(); err != nil {

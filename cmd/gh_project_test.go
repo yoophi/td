@@ -178,7 +178,7 @@ func TestGitHubProjectAccessibleListNoPerRepositoryQueries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	anchor := "path=next(a for a in args if a.startswith('repos/owner/repo'));"
+	anchor := "path=next(a for a in args if a.startswith('repos/owner/repo') or a=='user');"
 	collection := `if any(a.startswith('user/repos?') for a in args):
  if os.environ.get('TD_REPO_LIST_DENIED'):sys.stderr.write('fixture HTTP 403 repo list denied');sys.exit(1)
  sys.stdout.write('HTTP/2.0 200 OK\r\n\r\n'+os.environ['TD_REPO_LIST_RESPONSE']);sys.exit(0)

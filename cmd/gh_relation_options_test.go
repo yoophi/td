@@ -29,7 +29,7 @@ args=sys.argv[1:]
 if args[0]=='auth':sys.exit(0)
 path=next(a for a in args if a.startswith('repos/owner/repo'));method=args[args.index('--method')+1] if '--method' in args else 'GET'
 f=pathlib.Path(os.environ['TD_RO_STATE'])
-def issue(n):return {'number':n,'title':'Fixture '+str(n),'state':'open','labels':[{'name':'td:open'}],'body':'<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P2','points':0,'details':{'minor':True}})+'\n-->'}
+def issue(n):return {'number':n,'title':'Fixture '+str(n),'state':'open','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'},'labels':[{'name':'td:open'}],'body':'<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P2','points':0,'details':{'minor':True}})+'\n-->'}
 issues=json.loads(f.read_text()) if f.exists() else {str(n):issue(n) for n in [1,2,3]}
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
 elif '/comments?' in path:data=[[]]
@@ -42,7 +42,7 @@ elif path.startswith('repos/owner/repo/issues?'):
    issues['3']['body']='<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P2','points':0,'details':{'minor':True,'dependencies':['gh-4']}})+'\n-->';f.write_text(json.dumps(issues))
  data=[list(issues.values())]
 elif path=='repos/owner/repo/issues' and method=='POST':
- n=str(max(map(int,issues))+1);patch=json.load(sys.stdin);patch['labels']=[{'name':v} for v in patch['labels']];data=issue(int(n));data.update(patch);issues[n]=data;f.write_text(json.dumps(issues))
+ n=str(max(map(int,issues))+1);patch=json.load(sys.stdin);patch['labels']=[{'name':v} for v in patch.get('labels',[])];data=issue(int(n));data.update(patch);issues[n]=data;f.write_text(json.dumps(issues))
 elif '/events?' in path:data=[[]]
 else:
  n=path.split('/issues/')[1]
@@ -51,10 +51,11 @@ else:
   if os.environ.get('TD_RO_FAIL')==n:sys.stderr.write('HTTP 403 permission denied');sys.exit(1)
   patch=json.load(sys.stdin)
   if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]
-  issues[n].update(patch);f.write_text(json.dumps(issues))
+  issues[n].update(patch);issues[n]['updated_at']=fixture_tick(issues[n]['updated_at']);f.write_text(json.dumps(issues))
  data=issues[n]
 sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(data))
 `
+	script = githubJournalFixtureScript(t, script)
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +169,7 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 		_ = os.Remove(strings.TrimSuffix(os.Getenv("TD_RO_STATE"), ".json") + ".reads")
 		t.Setenv("TD_RO_MEMBERSHIP", trigger)
 		_, err = executeGitHubTest(githubTestCommand(updateCmd), "4", "--blocks", "2", "--json")
-		if err == nil || !strings.Contains(err.Error(), "membership") || !strings.Contains(err.Error(), "earlier") {
+		if err == nil || (!strings.Contains(err.Error(), "membership") && !strings.Contains(err.Error(), "conflict")) || !strings.Contains(err.Error(), "earlier") {
 			t.Fatal("membership race hidden", trigger, err)
 		}
 		if strings.Join(deps("3"), ",") != "gh-4" {
