@@ -17,6 +17,7 @@ const actionJournalPrefix = "<!-- td:action:"
 const actionJournalStart = actionJournalPrefix + "v1\n"
 const actionCommentJournalStart = actionJournalPrefix + "v2\n"
 const actionEntityJournalStart = actionJournalPrefix + "v3\n"
+const actionDeletedCommentJournalStart = actionJournalPrefix + "v4\n"
 
 // ActionIssueState preserves native values, including the complete metadata
 // body. UpdatedAt detects later edits even when content has returned to the
@@ -97,6 +98,7 @@ type ActionJournal struct {
 	CreateInput     *ActionCreateInput  `json:"create_input,omitempty"`
 	CommentInput    *ActionCommentInput `json:"comment_input,omitempty"`
 	CommentAfter    *ActionCommentState `json:"comment_after,omitempty"`
+	CommentBefore   *ActionCommentState `json:"comment_before,omitempty"`
 }
 
 // Creation intent has no allocated issue number or observed server clock yet.
@@ -164,7 +166,7 @@ func (a ActionJournal) validate() error {
 			return fmt.Errorf("action requires a distinct canonical journal carrier")
 		}
 	}
-	if !slices.Contains([]string{"create", "update", "delete", "restore", "transition", "relation", "note", "board", "comment_create"}, a.Action) {
+	if !slices.Contains([]string{"create", "update", "delete", "restore", "transition", "relation", "note", "board", "comment_create", "comment_delete"}, a.Action) {
 		return fmt.Errorf("unknown journal action %q", a.Action)
 	}
 	if !slices.Contains([]string{"prepared", "applied", "undo_prepared", "undone"}, a.Phase) {
@@ -212,7 +214,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		target = "new issue"
 	}
 	start := actionJournalStart
-	if a.Action == "comment_create" {
+	if a.Action == "comment_delete" {
+		start = actionDeletedCommentJournalStart
+	} else if a.Action == "comment_create" {
 		start = actionCommentJournalStart
 	} else if a.entityKind() != "" {
 		start = actionEntityJournalStart
@@ -227,7 +231,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	}
 	block := strings.TrimSpace(comment.Body[index:])
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionCommentJournalStart) {
+	if strings.HasPrefix(block, actionDeletedCommentJournalStart) {
+		start = actionDeletedCommentJournalStart
+	} else if strings.HasPrefix(block, actionCommentJournalStart) {
 		start = actionCommentJournalStart
 	} else if strings.HasPrefix(block, actionEntityJournalStart) {
 		start = actionEntityJournalStart
@@ -250,6 +256,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	}
 	if (a.entityKind() != "") != (start == actionEntityJournalStart) {
 		return nil, fmt.Errorf("entity journal version does not match its payload")
+	}
+	if (a.Action == "comment_delete") != (start == actionDeletedCommentJournalStart) {
+		return nil, fmt.Errorf("deleted comment journal version does not match its payload")
 	}
 	if (a.Action == "comment_create") != (start == actionCommentJournalStart) {
 		return nil, fmt.Errorf("action journal version does not match its payload")
@@ -319,6 +328,9 @@ type IssueUndoPlan struct {
 func (a ActionJournalRecord) PlanIssueUndo(current *Record, sessionID, author string) (*IssueUndoPlan, error) {
 	if err := a.validate(); err != nil {
 		return nil, err
+	}
+	if a.Action == "comment_delete" {
+		return nil, &UndoScopeError{Reason: "deleted GitHub comments cannot recover their original ID, author or timestamps; the journal preserves comment_before.body for explicitly posting a new comment; no write attempted"}
 	}
 	if a.Action == "comment_create" {
 		return nil, &UndoScopeError{Reason: "comment undo requires its own guarded executor; no issue PATCH attempted"}

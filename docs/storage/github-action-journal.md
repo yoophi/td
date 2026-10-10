@@ -402,3 +402,36 @@ returns an explicit unverified-result error; inspect GitHub before retrying.
 Each observation uses paginated repository issue/comment collections, without
 per-issue activity queries. These additional reads apply only to tracked creation
 verification and do not change monitor polling intervals or normal cache policy.
+
+## Native comment deletion history (v4)
+
+A tracked `DeleteComment` records `action=comment_delete` in a separate carrier
+using `td:action:v4`. `comment_before` retains the original native comment ID,
+issue membership, raw body, GitHub author, creation/update clocks and checksum.
+The actor/session of the deletion belongs to the journal; it does not replace
+the original author's attribution. This is distinct from v2 comment creation,
+v1 issue changes and v3 auxiliary entity changes. Older readers must report an
+unknown schema rather than silently dropping the original state.
+
+Only ordinary comments may be deleted; logs, handoffs and journal receipts
+remain protected. The intent is validated and read back before another target
+and comment revision check. A denied or uncertain DELETE is not retried and
+leaves a prepared record for inspection. Success requires comment absence,
+unchanged issue fields, a verified applied receipt and a final fresh bulk
+observation. An external target edit or malformed/incomplete collection fails
+explicitly. A later receipt failure includes the operation and journal ID,
+never treating an unverified deletion as ordinary success.
+
+`last` and `undo --list` expose the original comment identity and
+`comment_before` data. Exact inverse execution is an explicit exception:
+GitHub's [issue comment API](https://docs.github.com/en/rest/issues/comments)
+provides creation, edit and deletion, with creation accepting a body rather
+than an original ID/author/clock. There is no restore endpoint for a deleted
+comment. Posting preserved text as a new comment is deliberate compensation,
+with a new ID and author/timestamps; it cannot be claimed as an exact undo.
+The executor returns this limitation and alternative before any target write
+and never creates an `undone` receipt for a deleted original identity.
+
+This adds native deletion history; workflow/relation inverses, explicit
+prepared-creation reconciliation and portable journal transport remain #9
+work. It does not close the whole task.

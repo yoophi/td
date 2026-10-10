@@ -78,6 +78,13 @@ func (c *Client) DeleteComment(ctx context.Context, issueID, commentID string) e
 	if activity.Kind != "comment" {
 		return &PolicyError{Reason: "comment deletion cannot remove td logs or handoffs"}
 	}
+	var prepared *ActionJournalRecord
+	if c.journal != nil {
+		prepared, err = c.prepareCommentDeletionJournal(ctx, issue, before)
+		if err != nil {
+			return err
+		}
+	}
 	latest, err := c.Get(ctx, issue.ID)
 	if err != nil {
 		return err
@@ -96,16 +103,27 @@ func (c *Client) DeleteComment(ctx context.Context, issueID, commentID string) e
 	if current != before {
 		return &WorkflowStateError{Reason: "comment changed before deletion; refresh before retrying"}
 	}
+	uncertain := func(err error) error {
+		if prepared != nil {
+			return fmt.Errorf("comment deletion %s is unverified; inspect target %s and journal %s before retrying: %w", prepared.OperationID, issue.ID, prepared.ID, err)
+		}
+		return err
+	}
 	if _, err := c.request(ctx, "DELETE", path, nil, false); err != nil {
-		return fmt.Errorf("delete %s on %s failed or is uncertain; inspect current comments before retrying: %w", canonical, issue.ID, err)
+		return uncertain(fmt.Errorf("delete %s on %s failed or is uncertain; inspect current comments before retrying: %w", canonical, issue.ID, err))
 	}
 	remaining, err := c.ListActivity(withReadbackCost(ctx), issue.ID)
 	if err != nil {
-		return fmt.Errorf("delete %s was accepted, but verification failed; inspect current comments before retrying: %w", canonical, err)
+		return uncertain(fmt.Errorf("delete %s was accepted, but verification failed; inspect current comments before retrying: %w", canonical, err))
 	}
 	for _, a := range remaining {
 		if a.ID == canonical {
-			return &WorkflowStateError{Reason: fmt.Sprintf("delete %s was accepted but the comment is still visible; inspect before retrying", canonical)}
+			return uncertain(&WorkflowStateError{Reason: fmt.Sprintf("delete %s was accepted but the comment is still visible; inspect before retrying", canonical)})
+		}
+	}
+	if prepared != nil {
+		if err := c.completeCommentDeletionJournal(ctx, prepared); err != nil {
+			return uncertain(err)
 		}
 	}
 	return nil

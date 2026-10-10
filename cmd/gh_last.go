@@ -25,6 +25,7 @@ type githubActionHistoryRow struct {
 	TargetIssueID     string                      `json:"target_issue_id,omitempty"`
 	CommentInput      *ghstore.ActionCommentInput `json:"comment_input,omitempty"`
 	CommentAfter      *ghstore.ActionCommentState `json:"comment_after,omitempty"`
+	CommentBefore     *ghstore.ActionCommentState `json:"comment_before,omitempty"`
 	CommentDataFormat string                      `json:"comment_data_format,omitempty"`
 }
 
@@ -194,8 +195,11 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 		if kind, id := action.EntityIdentity(); kind != "issue" {
 			entityType, entityID, targetIssueID = kind, id, action.IssueID
 		}
-		if action.Action == "comment_create" {
+		if action.Action == "comment_create" || action.Action == "comment_delete" {
 			entityType, entityID, targetIssueID, commentFormat = "comment", "new comment", action.IssueID, "github-native-comment-state-v1"
+			if action.CommentBefore != nil {
+				entityID = action.CommentBefore.ID
+			}
 			if action.CommentAfter != nil {
 				entityID = action.CommentAfter.ID
 			}
@@ -205,7 +209,7 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 			PreviousData: before, NewData: after, Timestamp: action.CreatedAt, Undone: action.Phase == "undone"},
 			OperationID: action.OperationID, Phase: action.Phase, CarrierID: action.CarrierID, Author: action.Author, URL: action.URL,
 			DataFormat: "github-native-issue-state-v1", HistoryScope: "td-action-journal", CreateInput: action.CreateInput,
-			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentDataFormat: commentFormat})
+			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, CommentDataFormat: commentFormat})
 	}
 	return rows, nil
 }

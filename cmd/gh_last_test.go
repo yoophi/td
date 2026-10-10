@@ -275,3 +275,12 @@ print('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(dat
 		t.Fatal("history fell back to SQLite", e)
 	}
 }
+
+func TestGitHubHistoryDeletedCommentKeepsOriginalIdentityAndBody(t *testing.T) {
+	original := &ghstore.ActionCommentState{ID: "ghc-201", IssueID: "gh-1", Body: "Deleted original\nsecond line", Author: "original-author"}
+	rows, err := githubActionHistoryRows([]ghstore.ActionJournalRecord{{ActionJournal: ghstore.ActionJournal{
+		IssueID: "gh-1", Action: "comment_delete", Phase: "applied", CommentBefore: original}}})
+	if err != nil || len(rows) != 1 || rows[0].EntityType != "comment" || rows[0].EntityID != "ghc-201" || rows[0].TargetIssueID != "gh-1" || rows[0].CommentBefore != original || rows[0].CommentAfter != nil || rows[0].Undone {
+		t.Fatal("deleted comment mislabeled or its original lost", rows, err)
+	}
+}

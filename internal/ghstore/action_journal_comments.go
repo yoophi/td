@@ -56,6 +56,31 @@ func (s ActionCommentState) validate() error {
 }
 
 func (a ActionJournal) validateCommentAction() error {
+	if a.Action == "comment_delete" {
+		if a.CarrierID == "" || a.CommentBefore == nil || a.CommentInput != nil || a.CommentAfter != nil || a.CreateInput != nil {
+			return fmt.Errorf("comment deletion requires a separate carrier and original native comment state")
+		}
+		if a.Phase != "prepared" && a.Phase != "applied" {
+			return fmt.Errorf("deleted native comment identity cannot be restored; no undo receipt allowed")
+		}
+		if err := a.CommentBefore.validate(); err != nil {
+			return err
+		}
+		activity, err := decodeActivity(apiComment{ID: 1, Body: a.CommentBefore.Body}, a.IssueID)
+		if err != nil || activity.Kind != "comment" || a.CommentBefore.IssueID != a.IssueID || strings.Contains(a.CommentBefore.Body, actionJournalPrefix) {
+			return fmt.Errorf("comment deletion cannot target another issue, logs, handoffs or journals")
+		}
+		if a.Phase == "prepared" && a.After != nil {
+			return fmt.Errorf("comment deletion intent cannot contain an unverified result")
+		}
+		if a.After != nil && (!sameActionContents(*a.Before, *a.After) || a.After.UpdatedAt.Before(a.Before.UpdatedAt)) {
+			return fmt.Errorf("comment deletion cannot change issue fields or reverse its clock")
+		}
+		return nil
+	}
+	if a.CommentBefore != nil {
+		return fmt.Errorf("only comment deletion can carry original comment state")
+	}
 	if a.Action != "comment_create" {
 		if a.CommentInput != nil || a.CommentAfter != nil {
 			return fmt.Errorf("issue actions cannot carry comment state")
