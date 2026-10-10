@@ -66,15 +66,34 @@ func (f GitHubJournalFixture) Journals(t *testing.T) []GitHubJournalReceipt {
 	}
 	records := []GitHubJournalReceipt{}
 	for _, c := range state.Comments {
-		for _, marker := range []string{"<!-- td:action:v1\n", "<!-- td:action:v2\n", "<!-- td:action:v3\n"} {
-			if index := strings.Index(c.Body, marker); index >= 0 {
-				var a GitHubJournalReceipt
-				if err := json.Unmarshal([]byte(c.Body[index+len(marker):len(c.Body)-len("\n-->")]), &a); err != nil {
-					t.Fatal(err)
-				}
-				records = append(records, a)
+		index := strings.Index(c.Body, "<!-- td:action:v")
+		if index < 0 {
+			continue
+		}
+		block := c.Body[index:]
+		line := strings.IndexByte(block, '\n')
+		if line < 0 || !strings.HasSuffix(block, "\n-->") {
+			t.Fatal("malformed native journal fixture comment")
+		}
+		header := block[:line]
+		known := false
+		for _, version := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "10", "11", "12", "13", "14", "15"} {
+			if header == "<!-- td:action:v"+version {
+				known = true
+				break
 			}
 		}
+		if !known {
+			t.Fatalf("fixture observer needs explicit support for journal header %q", header)
+		}
+		var a GitHubJournalReceipt
+		if err := json.Unmarshal([]byte(strings.TrimSuffix(block[line+1:], "\n-->")), &a); err != nil {
+			t.Fatal(err)
+		}
+		if a.Action == "" || a.Phase == "" {
+			t.Fatal("native journal fixture comment omitted action or phase")
+		}
+		records = append(records, a)
 	}
 	return records
 }
