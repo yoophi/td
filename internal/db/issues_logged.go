@@ -211,69 +211,71 @@ func (db *DB) scanIssueRowFrom(store reviewSyncStore, id string) (*models.Issue,
 // CreateIssueLogged creates an issue and logs the action atomically within a single withWriteLock call.
 func (db *DB) CreateIssueLogged(issue *models.Issue, sessionID string) error {
 	return db.withWriteLock(func() error {
-		if issue.Status == "" {
-			issue.Status = models.StatusOpen
-		}
-		if issue.Type == "" {
-			issue.Type = models.TypeTask
-		}
-		if issue.Priority == "" {
-			issue.Priority = models.PriorityP2
-		}
-
-		now := time.Now()
-		issue.CreatedAt = now
-		issue.UpdatedAt = now
-
-		labels := strings.Join(issue.Labels, ",")
-
-		const maxRetries = 3
-		for attempt := range maxRetries {
-			id, err := generateID()
-			if err != nil {
-				return err
+		return db.withReviewSyncTxLocked(func(tx *sql.Tx) error {
+			if issue.Status == "" {
+				issue.Status = models.StatusOpen
 			}
-			issue.ID = id
-
-			deferUntil := sql.NullString{String: "", Valid: false}
-			if issue.DeferUntil != nil {
-				deferUntil = sql.NullString{String: *issue.DeferUntil, Valid: true}
+			if issue.Type == "" {
+				issue.Type = models.TypeTask
 			}
-			dueDate := sql.NullString{String: "", Valid: false}
-			if issue.DueDate != nil {
-				dueDate = sql.NullString{String: *issue.DueDate, Valid: true}
+			if issue.Priority == "" {
+				issue.Priority = models.PriorityP2
 			}
 
-			_, err = db.conn.Exec(`
+			now := time.Now()
+			issue.CreatedAt = now
+			issue.UpdatedAt = now
+
+			labels := strings.Join(issue.Labels, ",")
+
+			const maxRetries = 3
+			for attempt := range maxRetries {
+				id, err := generateID()
+				if err != nil {
+					return err
+				}
+				issue.ID = id
+
+				deferUntil := sql.NullString{String: "", Valid: false}
+				if issue.DeferUntil != nil {
+					deferUntil = sql.NullString{String: *issue.DeferUntil, Valid: true}
+				}
+				dueDate := sql.NullString{String: "", Valid: false}
+				if issue.DueDate != nil {
+					dueDate = sql.NullString{String: *issue.DueDate, Valid: true}
+				}
+
+				_, err = tx.Exec(`
 				INSERT INTO issues (id, title, description, status, type, priority, points, labels, parent_id, acceptance, sprint, created_at, updated_at, minor, created_branch, creator_session, defer_until, due_date, defer_count)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`, issue.ID, issue.Title, issue.Description, issue.Status, issue.Type, issue.Priority, issue.Points, labels, issue.ParentID, issue.Acceptance, issue.Sprint, issue.CreatedAt, issue.UpdatedAt, issue.Minor, issue.CreatedBranch, issue.CreatorSession, deferUntil, dueDate, issue.DeferCount)
 
-			if err == nil {
-				break
+				if err == nil {
+					break
+				}
+				if !strings.Contains(err.Error(), "UNIQUE constraint") {
+					return err
+				}
+				if attempt == maxRetries-1 {
+					return fmt.Errorf("failed to generate unique issue ID after %d attempts", maxRetries)
+				}
 			}
-			if !strings.Contains(err.Error(), "UNIQUE constraint") {
-				return err
-			}
-			if attempt == maxRetries-1 {
-				return fmt.Errorf("failed to generate unique issue ID after %d attempts", maxRetries)
-			}
-		}
 
-		// Log the action
-		actionID, err := generateActionID()
-		if err != nil {
-			return fmt.Errorf("generate action ID: %w", err)
-		}
-		newData := marshalIssue(issue)
-		actionTS := formatActionLogTimestamp(now)
-		_, err = db.conn.Exec(`INSERT INTO action_log (id, session_id, action_type, entity_type, entity_id, previous_data, new_data, timestamp, undone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-			actionID, sessionID, string(models.ActionCreate), "issue", issue.ID, "", newData, actionTS)
-		if err != nil {
-			return fmt.Errorf("log action: %w", err)
-		}
+			// Log the action
+			actionID, err := generateActionID()
+			if err != nil {
+				return fmt.Errorf("generate action ID: %w", err)
+			}
+			newData := marshalIssue(issue)
+			actionTS := formatActionLogTimestamp(now)
+			_, err = tx.Exec(`INSERT INTO action_log (id, session_id, action_type, entity_type, entity_id, previous_data, new_data, timestamp, undone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+				actionID, sessionID, string(models.ActionCreate), "issue", issue.ID, "", newData, actionTS)
+			if err != nil {
+				return fmt.Errorf("log action: %w", err)
+			}
 
-		return nil
+			return nil
+		})
 	})
 }
 

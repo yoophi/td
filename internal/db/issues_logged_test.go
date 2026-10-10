@@ -8,6 +8,36 @@ import (
 	"github.com/marcus/td/internal/models"
 )
 
+func TestCreateIssueLoggedActionFailureRollsBackIssue(t *testing.T) {
+	database, err := Initialize(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	installFailIssueActionTrigger(t, database, models.ActionCreate)
+	issue := &models.Issue{Title: "Atomic creation failure fixture"}
+	if err := database.CreateIssueLogged(issue, "writer-session"); err == nil {
+		t.Fatal("injected action failure accepted")
+	}
+	var count int
+	if err := database.conn.QueryRow("SELECT COUNT(*) FROM issues").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("creation failure left %d issue rows without their action log", count)
+	}
+	if _, err := database.conn.Exec("DROP TRIGGER fail_issue_action"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.CreateIssueLogged(issue, "writer-session"); err != nil {
+		t.Fatalf("retry after rolled-back failure: %v", err)
+	}
+	actions, err := database.GetRecentActions("writer-session", 10)
+	if err != nil || len(actions) != 1 {
+		t.Fatalf("expected one successful creation action after recovery: %v %v", actions, err)
+	}
+}
+
 func TestCreateIssueLogged(t *testing.T) {
 	dir := t.TempDir()
 	database, err := Initialize(dir)
