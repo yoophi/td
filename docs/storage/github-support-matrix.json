@@ -2129,9 +2129,11 @@
         "TestGitHubUndoCLIExecutesVerifiedLatestActionAndReportsFailures"
       ],
       "flags": {
+        "apply": "pending",
         "help": "pending",
         "json": "pending",
         "list": "pending",
+        "reconcile": "pending",
         "refresh": "pending",
         "work-dir": "pending"
       }

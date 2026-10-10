@@ -645,3 +645,20 @@ receipt already exists. Later target/proof changes remain conflicts. The v6
 reader retains v1–v5 compatibility; older readers fail closed on a new version.
 Native close/reopen compensation and coordinated multi-target/partial recovery
 still need their own proof policies rather than generic matching contents.
+
+### Logical deletion and restoration inverses
+
+A single-target `delete` or `restore` can be undone when its complete writer
+change consists of the visibility timestamp and one transition attributed to
+that journal's session. Native state, issue content, claims, relations, files,
+and review rows must remain unchanged. Undo restores the exact original body
+and labels; it does not create an approval or change a native closed issue into
+an open issue. A retained deletion checkpoint is readable for inverse proof
+checks, while ordinary review and issue commands still reject deleted issues.
+
+Existing review basis, native close/reopen events, and handoff identity/time are
+checked before and after the write and receipt. If they changed, the inverse
+fails explicitly. Uncertain completion can be observed with `undo --reconcile`
+without replaying target writes, under the same non-causal observation policy.
+Multi-target deletion is still represented by individual journals; this does
+not claim atomic rollback for a batch or support native close/reopen inverses.

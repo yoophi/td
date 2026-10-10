@@ -5220,6 +5220,10 @@
     "runnable": true,
     "flags": [
       {
+        "name": "apply",
+        "type": "bool"
+      },
+      {
         "name": "help",
         "type": "bool",
         "shorthand": "h"
@@ -5232,6 +5236,10 @@
       {
         "name": "list",
         "type": "bool"
+      },
+      {
+        "name": "reconcile",
+        "type": "string"
       },
       {
         "name": "refresh",

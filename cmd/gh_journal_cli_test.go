@@ -1001,3 +1001,57 @@ func TestGitHubJournalCLIReconcilesUncertainUndoWithoutReplay(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubJournalCLIUndoesDeleteAndRestore(t *testing.T) {
+	for _, enabled := range []string{"false", "true"} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil || !json.Valid([]byte(out)) {
+					t.Fatal(args, out, stderr, err)
+				}
+			}
+			body := func() string {
+				t.Helper()
+				data, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var state struct {
+					Issues map[string]struct{ Body string }
+				}
+				if err := json.Unmarshal(data, &state); err != nil {
+					t.Fatal(err)
+				}
+				return state.Issues["6"].Body
+			}
+			execute("create", "Visibility undo CLI fixture")
+			original := body()
+			execute("delete", "gh-6", "--reason", "Fixture deletion")
+			if out, stderr, err := run("show", "gh-6", "--json"); err == nil || !strings.Contains(out+stderr, "deleted") {
+				t.Fatal(out, stderr, err)
+			}
+			execute("undo")
+			if body() != original {
+				t.Fatal("delete inverse changed original body")
+			}
+			execute("show", "gh-6")
+			execute("delete", "gh-6", "--reason", "Restore setup")
+			deleted := body()
+			execute("restore", "gh-6", "--reason", "Fixture restoration")
+			execute("undo")
+			if body() != deleted {
+				t.Fatal("restore inverse changed original deletion checkpoint")
+			}
+			if out, stderr, err := run("show", "gh-6", "--json"); err == nil || !strings.Contains(out+stderr, "deleted") {
+				t.Fatal(out, stderr, err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite fallback", err)
+			}
+		})
+	}
+}

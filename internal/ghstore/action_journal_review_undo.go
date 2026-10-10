@@ -41,6 +41,10 @@ func revokedReviewDetails(bd, ad IssueDetails) (IssueDetails, bool) {
 // handoff and native event basis must still be valid at every write fence.
 func (c *Client) checkUndoOriginalReview(ctx context.Context, action *ActionJournalRecord, afterWrite bool) error {
 	ctx = withReviewCost(ctx)
+	deletionChange, err := deletionUndoScope(action)
+	if err != nil {
+		return err
+	}
 	fileChange, err := fileUndoScope(action)
 	if err != nil {
 		return err
@@ -57,8 +61,11 @@ func (c *Client) checkUndoOriginalReview(ctx context.Context, action *ActionJour
 			}
 			if !workflowChange {
 				reviewChange, err := reviewTransitionUndoScope(action)
-				if err != nil || !reviewChange {
+				if err != nil {
 					return err
+				}
+				if !reviewChange && !deletionChange {
+					return nil
 				}
 			}
 		}
@@ -87,10 +94,10 @@ func (c *Client) checkUndoOriginalReview(ctx context.Context, action *ActionJour
 	if original.Status == models.StatusClosed {
 		err = c.verifyClosedApproval(ctx, original, d)
 		if err == nil {
-			err = c.verifyReviewHandoff(ctx, original, d)
+			err = c.verifyReviewHandoffObserved(ctx, original, d, deletionChange)
 		}
 	} else {
-		_, err = c.verifyReview(ctx, original, d)
+		_, err = c.verifyReviewObserved(ctx, original, d, deletionChange)
 	}
 	if err != nil {
 		var stale *WorkflowStateError

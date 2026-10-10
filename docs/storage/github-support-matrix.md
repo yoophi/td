@@ -1,7 +1,7 @@
 # GitHub store support audit
 
 The machine-readable [matrix](github-support-matrix.json) assigns all current
-151 Cobra command nodes and 973 effective flags to audit responsibility. The
+151 Cobra command nodes and 975 effective flags to audit responsibility. The
 inventory includes parent commands, generated help/completion, aliases and
 hidden commands/flags in both sync feature modes. Alias and flag metadata are
 retained in `cmd/testdata/cli-inventory-sync-{false,true}.json`; aliases use

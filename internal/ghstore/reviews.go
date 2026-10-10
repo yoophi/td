@@ -272,6 +272,10 @@ func (c *Client) reviewHandoff(ctx context.Context, observed *Record, o Transiti
 }
 
 func (c *Client) verifyReview(ctx context.Context, record *Record, details IssueDetails) (string, error) {
+	return c.verifyReviewObserved(ctx, record, details, false)
+}
+
+func (c *Client) verifyReviewObserved(ctx context.Context, record *Record, details IssueDetails, includeDeleted bool) (string, error) {
 	ctx = withReviewCost(ctx)
 	if details.ReviewBasis == "" || details.ReviewBasis != reviewBasis(record, details) {
 		return "", workflowStateError("review is stale or missing for %s; start and submit it for review again", record.ID)
@@ -283,15 +287,23 @@ func (c *Client) verifyReview(ctx context.Context, record *Record, details Issue
 	if events != details.ReviewEvents {
 		return "", workflowStateError("native close/reopen history changed for %s; submit a new review cycle", record.ID)
 	}
-	if err := c.verifyReviewHandoff(ctx, record, details); err != nil {
+	if err := c.verifyReviewHandoffObserved(ctx, record, details, includeDeleted); err != nil {
 		return "", err
 	}
 	return events, nil
 }
 
-func (c *Client) verifyReviewHandoff(ctx context.Context, record *Record, details IssueDetails) error {
+// Only inverse verification may inspect a logically deleted checkpoint. Normal
+// review workflows retain their visibility gate.
+func (c *Client) verifyReviewHandoffObserved(ctx context.Context, record *Record, details IssueDetails, includeDeleted bool) error {
 	if details.ReviewHandoffID != "" {
-		entries, err := c.ListActivity(ctx, record.ID)
+		var entries []models.Activity
+		var err error
+		if includeDeleted {
+			entries, err = c.ListActivityIncludingDeleted(ctx, record.ID)
+		} else {
+			entries, err = c.ListActivity(ctx, record.ID)
+		}
 		if err != nil {
 			return err
 		}

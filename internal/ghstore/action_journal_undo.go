@@ -90,6 +90,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 		if err == nil && !workflowChange {
 			workflowChange, err = reviewTransitionUndoScope(action)
 		}
+		if err == nil && !workflowChange {
+			workflowChange, err = deletionUndoScope(action)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -273,6 +276,9 @@ func scalarUndoScope(action *ActionJournalRecord) error {
 		return err
 	}
 	if supported, err := reviewTransitionUndoScope(action); err != nil || supported {
+		return err
+	}
+	if supported, err := deletionUndoScope(action); err != nil || supported {
 		return err
 	}
 	unsupported := func() error {
