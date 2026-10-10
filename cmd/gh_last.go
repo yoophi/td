@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/marcus/td/internal/config"
@@ -51,11 +52,10 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 	cmd.SetOut(cmd.OutOrStdout())
 	cmd.SilenceUsage = true
 	limit := 10
+	executeUndo := false
 	if undo {
 		list, _ := cmd.Flags().GetBool("list")
-		if !list {
-			return true, withErrorCode("unsupported_operation", fmt.Errorf("gh-issue undo execution is not implemented yet; use undo --list to inspect tracked actions; no GitHub or SQLite write attempted"))
-		}
+		executeUndo = !list
 	} else {
 		limit, _ = cmd.Flags().GetInt("n")
 		if limit < 1 {
@@ -78,13 +78,20 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	snapshot, err := client.ReadSnapshot(cmd.Context(), true)
+	ctx := cmd.Context()
+	if executeUndo {
+		ctx = ghstore.WithFreshSnapshot(ctx)
+	}
+	snapshot, err := client.ReadSnapshot(ctx, true)
 	if err != nil {
 		return true, err
 	}
 	actions, err := snapshot.ActionHistory(state.Session.ID)
 	if err != nil {
 		return true, err
+	}
+	if executeUndo {
+		return true, executeGitHubUndo(cmd, client, actions, state.Session.ID)
 	}
 	if len(actions) > limit {
 		actions = actions[:limit]
@@ -95,7 +102,7 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 	}
 	// Keep the established array contract even for an empty result. The scope
 	// note goes to stderr so an empty array cannot imply lossless legacy history.
-	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. CLI write journaling and undo execution are not fully integrated yet.")
+	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. Default write journaling and workflow/multi-target undo are not fully integrated yet.")
 	if jsonMode(cmd) {
 		return true, json.NewEncoder(cmd.OutOrStdout()).Encode(rows)
 	}
@@ -111,6 +118,49 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 		cmd.Printf("%s %s %s (%s) [%s]\n", row.ActionType, row.EntityType, target, formatTimeAgo(row.Timestamp), row.Phase)
 	}
 	return true, nil
+}
+
+func executeGitHubUndo(cmd *cobra.Command, client *ghstore.Client, actions []ghstore.ActionJournalRecord, sessionID string) error {
+	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. Workflow/multi-target undo integration remains pending.")
+	var selected *ghstore.ActionJournalRecord
+	for i := range actions {
+		if actions[i].Phase != "undone" {
+			selected = &actions[i]
+			break
+		}
+	}
+	if selected == nil {
+		if jsonMode(cmd) {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"action": "no_tracked_actions", "session_id": sessionID, "history_scope": "td-action-journal"})
+		}
+		cmd.Println("No tracked actions to undo in current session")
+		return nil
+	}
+	if selected.Phase != "applied" {
+		return withErrorCode("conflict", fmt.Errorf("latest tracked action %s is %s with an unverified outcome; inspect GitHub before retrying; no target write attempted", selected.OperationID, selected.Phase))
+	}
+	if selected.Action == "create" {
+		return withErrorCode("unsupported_operation", fmt.Errorf("creation %s cannot be erased safely; use explicit logical delete for %s to preserve identity/history; no target write attempted", selected.OperationID, selected.IssueID))
+	}
+	result, err := client.UndoAction(cmd.Context(), selected.ID, sessionID)
+	if err != nil {
+		var unsupported *ghstore.UndoScopeError
+		var conflict *ghstore.ConflictError
+		if errors.As(err, &unsupported) {
+			return withErrorCode("unsupported_operation", err)
+		}
+		if errors.As(err, &conflict) {
+			return withErrorCode("conflict", err)
+		}
+		return err
+	}
+	if jsonMode(cmd) {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"action": "undone", "id": result.Issue.ID,
+			"operation_id": result.Journal.OperationID, "undo_operation_id": result.Journal.UndoOperationID, "receipt_id": result.Journal.ID,
+			"already_undone": result.AlreadyUndone, "issue": result.Issue, "history_scope": "td-action-journal"})
+	}
+	cmd.Printf("UNDONE: %s issue %s (%s)\n", result.Journal.Action, result.Issue.ID, result.Journal.UndoOperationID)
+	return nil
 }
 
 func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubActionHistoryRow, error) {

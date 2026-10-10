@@ -33,8 +33,9 @@ automatic supported classification is generated from registration.
 ## Confirmed implementation gap: #9
 
 `cmd/gh_last.go` now dispatches GitHub `last` and `undo --list` to the bulk action
-journal reader, with explicit scope and phase reporting. Actual `undo` execution
-still returns an explicit unsupported-operation error. The SQLite path remains
+journal reader, with explicit scope and phase reporting. Actual `undo` executes
+the verified scalar inverse; workflow/graph/multi-target and receipt-chain
+integration remain pending. The SQLite path remains
 in `cmd/undo.go`. `internal/ghstore/action_journal*.go` provides before/after
 snapshots and opt-in create/update protocols; default CLI writes have not yet
 been switched, and note/board/cascade journaling and undo execution remain work.

@@ -3,10 +3,10 @@
 This work belongs to #9. The codec, bulk reader, inverse planner and an opt-in
 issue-update write protocol are present. `last` and `undo --list` have GitHub
 dispatch; default write integration, multi-target/note/board journaling and
-undo execution remain pending. Issue
+coordinated workflow/graph undo remain pending. Issue
 creation also has an opt-in intent/result protocol; actual command writers have
 not yet been switched to either protocol.
-`td undo` without `--list` remains unsupported for GitHub storage. This document is
+`td undo` executes the supported scalar inverse. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
 A journal is a versioned `td:action:v1` block on a repository carrier's GitHub
@@ -54,8 +54,22 @@ Issue snapshot; `data_format=github-native-issue-state-v1` identifies it.
 Prepared results have no verified after snapshot. A scope note on stderr
 explains that legacy/native changes are not reconstructed and default CLI
 journaling/undo execution is incomplete. Empty history must not imply that no
-older actions occurred. Actual undo returns `unsupported_operation` before any
-GitHub call or SQLite fallback until its executor is implemented.
+older actions occurred. Actual undo selects the newest current-session action
+that is not already undone from a fresh bulk observation. A prepared or
+undo-prepared action stops execution with a conflict error; it is never skipped
+to undo an older action. Creation returns an explicit logical-delete alternative.
+Unsupported scope maps to `unsupported_operation`; stale target state maps to
+`conflict`. Other failures retain the original error. No SQLite fallback occurs.
+
+Successful JSON undo identifies target, original/undo operation, receipt and
+verified issue. Human output reports UNDONE only after receipt verification.
+With no remaining tracked action, JSON reports `action=no_tracked_actions` with
+session and explicit history scope; it does not claim there were no legacy
+changes. Repeating the command after undoing the sole tracked action writes
+nothing. Multi-step undo still needs receipt-chain verification: restoring a
+newer action changes the server clock, so an older action's original after
+revision cannot simply be accepted based on matching field values. That case
+currently remains a conflict rather than silently relaxing the revision guard.
 
 `Snapshot.ActionHistory` consumes the existing bulk issue/comment observation,
 including note/board carriers and logically deleted issues. It makes no extra
@@ -178,7 +192,7 @@ migration before execution, avoiding receipt writes on the target itself.
 Creation retains the explicit logical-delete alternative. These are pending
 implementation boundaries, not SQLite-only exemptions or proof of #9 completion.
 
-The executor is currently a library API: CLI `undo` still reports unsupported
-execution until selection, scope-error mapping and command tests are connected.
+The scalar executor is connected to CLI `undo`, with latest-action selection,
+scope/conflict error mapping and subprocess command tests in both feature modes.
 Default CLI/HTTP write journaling, workflows/cascades, recovery tooling and
 portable journal transport remain required work.

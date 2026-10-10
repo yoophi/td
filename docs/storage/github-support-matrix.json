@@ -2077,9 +2077,10 @@
       "command": "td undo",
       "owner": "#9",
       "state": "partial",
-      "reason": "Bulk current-session action-journal history is implemented for last and undo --list; actual undo execution, default CLI write journaling and native acceptance remain pending.",
+      "reason": "Bulk current-session journal list and verified latest scalar undo are implemented; workflow/graph/multi-target and sequential receipt-chain integration, default write journaling and native acceptance remain pending.",
       "evidence": [
-        "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads"
+        "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads",
+        "TestGitHubUndoCLIExecutesVerifiedLatestActionAndReportsFailures"
       ],
       "flags": {
         "help": "pending",

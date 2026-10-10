@@ -215,7 +215,7 @@ print('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(dat
 		for _, tc := range []struct {
 			args     []string
 			fragment string
-		}{{[]string{"last", "--n", "0", "--json"}, "at least 1"}, {[]string{"last", "unused", "--json"}, "unknown command"}, {[]string{"undo", "--json"}, "unsupported_operation"}} {
+		}{{[]string{"last", "--n", "0", "--json"}, "at least 1"}, {[]string{"last", "unused", "--json"}, "unknown command"}} {
 			writeFixture(comments, false)
 			out, stderr, e := run(tc.args...)
 			if e == nil || !json.Valid([]byte(out)) || !strings.Contains(out, tc.fragment) {
@@ -226,6 +226,12 @@ print('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(dat
 				t.Fatal("invalid/unimplemented command called gh", string(calls))
 			}
 		}
+		writeFixture(comments, false)
+		out, stderr, e = run("undo", "--json")
+		if e == nil || !json.Valid([]byte(out)) || !strings.Contains(out, `"code":"conflict"`) || !strings.Contains(out, "unverified outcome") {
+			t.Fatal("prepared action skipped", out, stderr, e)
+		}
+		assertBulk()
 		writeFixture(comments, true)
 		out, stderr, e = run("last", "--json")
 		if e == nil || !json.Valid([]byte(out)) || !strings.Contains(out, "HTTP 403 fixture comments denied") {
