@@ -111,7 +111,7 @@ func fileUndoFixture(t *testing.T, reviewed, closed bool) (*journalWriteFixture,
 	if err != nil || noop {
 		t.Fatal(noop, err)
 	}
-	return f, func(value string) { mode = value }
+	return f, func(value string) { mode = value; eventReads, commentReads = 0, 0 }
 }
 
 func TestFileUndoRestoresFilesAndVerifiedOriginalReview(t *testing.T) {
@@ -210,6 +210,15 @@ func TestFileUndoCannotRestoreChangedHistoricalReviewOrGraph(t *testing.T) {
 			a.After.Body, err = encodeBody(desc, meta)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if mode == "dependency" || mode == "parent" {
+				if supported, err := fileUndoScope(a); err != nil || supported {
+					t.Fatal("graph change bypassed the graph executor", supported, err)
+				}
+				if supported, err := relationUndoScope(a); err != nil || !supported {
+					t.Fatal("compound single-source restoration unavailable", supported, err)
+				}
+				return
 			}
 			if err := scalarUndoScope(a); err == nil {
 				t.Fatal("unrelated effect accepted", mode)

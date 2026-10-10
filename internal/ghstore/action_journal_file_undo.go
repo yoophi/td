@@ -1,13 +1,8 @@
 package ghstore
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"reflect"
 	"slices"
-	"time"
 
 	"github.com/marcus/td/internal/models"
 )
@@ -59,76 +54,10 @@ func fileUndoScope(action *ActionJournalRecord) (bool, error) {
 	if !reflect.DeepEqual(bm, am) || bdesc != adesc || action.Before.Title != action.After.Title || action.Before.State != action.After.State || !slices.Equal(bl, al) {
 		return false, nil
 	}
-	// A normal file edit clears only the current review pointers and supersedes
-	// every active review at one instant, retaining all original review rows.
-	expected := bd
-	expected.Files = ad.Files
-	expected.ReviewerSession, expected.ReviewBasis = "", ""
-	expected.ReviewedAt = nil
-	if len(bd.Reviews) != len(ad.Reviews) {
+	expected, valid := revokedReviewDetails(bd, ad)
+	if !valid {
 		return false, nil
 	}
-	var revokedAt *time.Time
-	for i := range bd.Reviews {
-		b, a := bd.Reviews[i], ad.Reviews[i]
-		if b.SupersededAt == nil {
-			if a.SupersededAt == nil || a.SupersededAt.Before(b.CreatedAt) || revokedAt != nil && !revokedAt.Equal(*a.SupersededAt) {
-				return false, nil
-			}
-			revokedAt = a.SupersededAt
-			b.SupersededAt = a.SupersededAt
-		}
-		if !reflect.DeepEqual(b, a) {
-			return false, nil
-		}
-	}
-	expected.Reviews = ad.Reviews
+	expected.Files = ad.Files
 	return reflect.DeepEqual(expected, ad), nil
-}
-
-// Restoring a previously valid review is not a new approval. The original
-// handoff and native event basis must still be valid at every write fence.
-func (c *Client) checkFileUndoReview(ctx context.Context, action *ActionJournalRecord, afterWrite bool) error {
-	ctx = withReviewCost(ctx)
-	fileChange, err := fileUndoScope(action)
-	if err != nil || !fileChange {
-		return err
-	}
-	_, meta, _, err := decodeBody(action.Before.Body)
-	if err != nil || meta.Details == nil {
-		return err
-	}
-	d := *meta.Details
-	if d.ReviewBasis == "" && d.ReviewerSession == "" && d.ReviewedAt == nil && activeApproval(&d) == nil {
-		return nil
-	}
-	n, err := Number(action.IssueID)
-	if err != nil {
-		return err
-	}
-	native := apiIssue{Number: n, Title: action.Before.Title, Body: action.Before.Body, State: action.Before.State, UpdatedAt: action.Before.UpdatedAt}
-	data, err := json.Marshal(native)
-	if err != nil {
-		return err
-	}
-	original, err := decodeIssue(data)
-	if err != nil {
-		return err
-	}
-	if original.Status == models.StatusClosed {
-		err = c.verifyClosedApproval(ctx, original, d)
-		if err == nil {
-			err = c.verifyReviewHandoff(ctx, original, d)
-		}
-	} else {
-		_, err = c.verifyReview(ctx, original, d)
-	}
-	if err != nil {
-		var stale *WorkflowStateError
-		if errors.As(err, &stale) {
-			return fmt.Errorf("file undo cannot restore the original review (%v): %w", err, &ConflictError{ID: action.IssueID, AfterWrite: afterWrite})
-		}
-		return fmt.Errorf("file undo review verification failed; result must be inspected if target was written (after_write=%t): %w", afterWrite, err)
-	}
-	return nil
 }

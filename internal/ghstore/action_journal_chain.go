@@ -167,7 +167,7 @@ func (c *Client) planUndo(ctx context.Context, action *ActionJournalRecord, curr
 		return nil, nil, err
 	}
 	for i := range witnesses {
-		if err := c.checkFileUndoReview(ctx, &witnesses[i], false); err != nil {
+		if err := c.checkUndoOriginalReview(ctx, &witnesses[i], false); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -201,7 +201,7 @@ func (c *Client) recheckUndoWitnesses(ctx context.Context, witnesses []ActionJou
 		return err
 	}
 	for i := range witnesses {
-		if err := c.checkFileUndoReview(ctx, &witnesses[i], false); err != nil {
+		if err := c.checkUndoOriginalReview(ctx, &witnesses[i], false); err != nil {
 			return err
 		}
 	}

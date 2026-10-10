@@ -370,6 +370,66 @@ func TestGitHubJournalCLIUndoesFileLinkAndUnlinkAfterOwnAuditLog(t *testing.T) {
 	}
 }
 
+func TestGitHubJournalCLIUndoesDependenciesAndParents(t *testing.T) {
+	for _, enabled := range []string{"false", "true"} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil || !json.Valid([]byte(out)) {
+					t.Fatal(args, out, stderr, err)
+				}
+			}
+			body := func() string {
+				t.Helper()
+				data, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var state struct {
+					Issues map[string]struct{ Body string }
+				}
+				if err := json.Unmarshal(data, &state); err != nil {
+					t.Fatal(err)
+				}
+				return state.Issues["6"].Body
+			}
+			execute("create", "Relation undo CLI fixture")
+			original := body()
+			execute("dep", "add", "gh-6", "gh-1")
+			execute("undo") // one source graph write; no separate log comment
+			if body() != original {
+				t.Fatal("dependency add inverse lost original body")
+			}
+			execute("dep", "add", "gh-6", "gh-1")
+			original = body()
+			execute("dep", "rm", "gh-6", "gh-1")
+			execute("undo")
+			if body() != original {
+				t.Fatal("dependency remove inverse lost original body/history")
+			}
+			original = body()
+			execute("update", "gh-6", "--parent", "gh-1")
+			execute("undo")
+			if body() != original {
+				t.Fatal("parent inverse lost original body")
+			}
+			execute("update", "gh-6", "--parent", "gh-1")
+			original = body()
+			execute("update", "gh-6", "--parent", "")
+			execute("undo")
+			if body() != original {
+				t.Fatal("parent clear inverse lost original body")
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("unexpected SQLite fallback", err)
+			}
+		})
+	}
+}
+
 func TestGitHubJournalCLITracksLabelRepairWritesButNotPreview(t *testing.T) {
 	_, sessionID, run := journalCLI(t)
 	execute := func(args ...string) {

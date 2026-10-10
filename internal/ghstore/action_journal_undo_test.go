@@ -21,7 +21,7 @@ func prepareUndoFixture(t *testing.T) *journalWriteFixture {
 	return f
 }
 
-func TestActionUndoScopeKeepsWorkflowAndRelationsPending(t *testing.T) {
+func TestActionUndoScopeAllowsRelationsAndKeepsWorkflowPending(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		before, after IssueDetails
@@ -29,8 +29,8 @@ func TestActionUndoScopeKeepsWorkflowAndRelationsPending(t *testing.T) {
 	}{
 		{name: "scalar", before: IssueDetails{Status: models.StatusOpen}, after: IssueDetails{Status: models.StatusOpen, Minor: true, Sprint: "Next"}, supported: true},
 		{name: "status", before: IssueDetails{Status: models.StatusOpen}, after: IssueDetails{Status: models.StatusInProgress}},
-		{name: "parent", before: IssueDetails{Status: models.StatusOpen}, after: IssueDetails{Status: models.StatusOpen, ParentID: "gh-2"}},
-		{name: "dependency", before: IssueDetails{Status: models.StatusOpen}, after: IssueDetails{Status: models.StatusOpen, Dependencies: []string{"gh-2"}}},
+		{name: "parent", before: IssueDetails{Status: models.StatusOpen}, after: IssueDetails{Status: models.StatusOpen, ParentID: "gh-2"}, supported: true},
+		{name: "dependency", before: IssueDetails{Status: models.StatusOpen}, after: IssueDetails{Status: models.StatusOpen, Dependencies: []string{"gh-2"}}, supported: true},
 		{name: "claim", before: IssueDetails{Status: models.StatusOpen}, after: IssueDetails{Status: models.StatusOpen, ImplementerSession: "ses_other"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

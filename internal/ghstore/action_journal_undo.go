@@ -21,7 +21,7 @@ type ActionUndoResult struct {
 }
 
 // UndoAction rehydrates the remote receipt rather than trusting a caller's
-// snapshots. Scalar issue and auxiliary configuration restoration are supported; workflow/graph and
+// snapshots. Scalar, file, single-source relation and auxiliary restoration are supported; workflow and
 // multi-target operations require their own coordinated executor.
 func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionUndoResult, error) {
 	number, err := CommentNumber(id)
@@ -75,12 +75,19 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 		return nil, err
 	}
 	if plan.AlreadyUndone {
-		if err := c.checkFileUndoReview(ctx, action, false); err != nil {
+		graph, err := c.observeRelationUndoGraph(ctx, action, current, false)
+		if err != nil {
+			return nil, err
+		}
+		if err := c.checkUndoOriginalReview(ctx, action, false); err != nil {
+			return nil, err
+		}
+		if err := c.recheckRelationUndoGraph(ctx, action, current, graph, false); err != nil {
 			return nil, err
 		}
 		if fileChange, err := fileUndoScope(action); err != nil {
 			return nil, err
-		} else if fileChange {
+		} else if fileChange || graph != nil {
 			latest, err := c.readJournalTarget(ctx, current.ID)
 			if err != nil {
 				return nil, err
@@ -94,7 +101,11 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err := scalarUndoScope(action); err != nil {
 		return nil, err
 	}
-	if err := c.checkFileUndoReview(ctx, action, false); err != nil {
+	graph, err := c.observeRelationUndoGraph(ctx, action, current, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.checkUndoOriginalReview(ctx, action, false); err != nil {
 		return nil, err
 	}
 	if err := c.checkEntityUndoCatalog(ctx, action, false); err != nil {
@@ -115,7 +126,10 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err := c.recheckUndoWitnesses(ctx, witnesses); err != nil {
 		return nil, err
 	}
-	if err := c.checkFileUndoReview(ctx, action, false); err != nil {
+	if err := c.checkUndoOriginalReview(ctx, action, false); err != nil {
+		return nil, err
+	}
+	if err := c.recheckRelationUndoGraph(ctx, action, current, graph, false); err != nil {
 		return nil, err
 	}
 	if err := c.checkEntityUndoCatalog(ctx, action, false); err != nil {
@@ -154,7 +168,10 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err != nil {
 		return nil, err
 	}
-	if err := c.checkFileUndoReview(ctx, action, true); err != nil {
+	if err := c.checkUndoOriginalReview(ctx, action, true); err != nil {
+		return nil, err
+	}
+	if err := c.recheckRelationUndoGraph(ctx, action, restored, graph, true); err != nil {
 		return nil, err
 	}
 	if err := c.checkEntityUndoCatalog(ctx, action, true); err != nil {
@@ -167,7 +184,10 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err != nil {
 		return nil, fmt.Errorf("undo target was verified but receipt is unverified; inspect %s before retrying: %w", pending.UndoOperationID, err)
 	}
-	if err := c.checkFileUndoReview(ctx, action, true); err != nil {
+	if err := c.checkUndoOriginalReview(ctx, action, true); err != nil {
+		return nil, err
+	}
+	if err := c.recheckRelationUndoGraph(ctx, action, restored, graph, true); err != nil {
 		return nil, err
 	}
 	latest, err = c.readJournalTarget(withReadbackCost(ctx), current.ID)
@@ -238,8 +258,11 @@ func scalarUndoScope(action *ActionJournalRecord) error {
 	if supported, err := fileUndoScope(action); err != nil || supported {
 		return err
 	}
+	if supported, err := relationUndoScope(action); err != nil || supported {
+		return err
+	}
 	unsupported := func() error {
-		return &UndoScopeError{Reason: "workflow, graph and multi-target undo integration is still pending; no target write attempted"}
+		return &UndoScopeError{Reason: "workflow and coordinated multi-target undo integration is still pending; no target write attempted"}
 	}
 	if action.Action != "update" || action.Before == nil || action.After == nil || action.Before.State != action.After.State {
 		return unsupported()

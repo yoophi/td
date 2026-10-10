@@ -10,9 +10,9 @@ dependency, schedule, file and label-repair writers also request tracking.
 Tracked activity creation now records v2 receipts. HTTP and monitor client
 factories now enable the same issue/activity protocols with their actual scoped
 actors. Raw comment deletion now preserves v4 original comment snapshots;
-single-target linked-file undo also restores verified original review state.
-Coordinated workflow/graph undo remains pending.
-`td undo` executes supported scalar, linked-file and own comment-creation inverses. This document is
+single-target linked-file and relation undo also restore verified original review
+state. Coordinated workflow and multi-target undo remain pending.
+`td undo` executes supported scalar, linked-file, single-source relation and own comment-creation inverses. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
 An issue journal is a versioned `td:action:v1` block on a repository carrier's GitHub
@@ -202,7 +202,7 @@ look like the old values.
 Current scope includes title, visible description, acceptance, type, priority,
 points, labels and minor/sprint/date scalar data when workflow/graph/review data
 remains unchanged. Native state changes, session/review/transition/history or
-parent/dependency changes and multi-target effects
+multi-target effects
 still require coordinated undo integration. They return an explicit scope
 error before target writes. Legacy per-target journals also need separate-carrier
 migration before execution, avoiding receipt writes on the target itself.
@@ -241,6 +241,48 @@ at these fences remain best-effort conflict detection. Explicit reconciliation
 of an `undo_prepared` file/scalar result is still pending; it cannot be treated
 as success just because fields look restored. This is a completed implementation
 stage within #9, not closure of the whole task.
+
+## Single-source relation inverse
+
+Dependency add/remove, complete set replacement and reordering, and parent
+assignment/clearing/replacement can restore one source issue's exact original
+body/state/labels. Combined scalar/file/relation changes on one issue use the
+same graph guard, with linked-file validation and original review revalidation.
+Session/participation/status changes, review attribution/decision edits,
+rewritten transition history and unrelated transition deltas remain outside
+this scope. Existing transition prefixes must remain immutable, and appended
+dependency events must describe the exact set delta with the journal's actual
+td session. Legacy graph updates without new transition events can restore
+their recorded source state. Both original snapshots remain unchanged in the
+separate carrier; the source's transition rows restore their original values.
+
+Before intent, before target PATCH, after readback and after receipt, graph
+validation uses one fresh complete paginated issue collection per fence. It
+checks the source collection revision against its point observation, then
+validates the proposed original dependency closure and parent ancestor chain.
+Self-links/cycles, missing/deleted tasks and auxiliary storage entities fail
+before any target write. Reachable dependency/ancestor revisions captured at
+the first fence must agree at subsequent fences; unrelated valid issue edits
+do not invalidate restoration. The final source point read occurs after graph
+and review validation. A permission/rate-limit/pagination failure retains its
+original cause and cannot become an empty graph or trigger SQLite fallback.
+
+The graph portion costs four paginated collection invocations for a normal
+inverse, with zero per-reference issue GETs, regardless of graph size. HTTP
+request count within an invocation grows with repository pagination. Receipt
+chains and review verification have their existing separate costs. Already
+undone no-ops validate the current proposed graph and original review, then
+recheck the source; they never replay a target or receipt write. GitHub cannot
+make these separate graph/source reads and writes atomic. A changed graph or
+source after a write is an explicit partial/uncertain result, without automatic
+rollback or target replay. Original stale/unverifiable review state is not
+restored as a valid approval; callers must start and submit a new review cycle.
+
+Batch reverse edges and cascades remain separate per-source/per-target journals.
+This inverse does not silently reverse other issues or claim one distributed
+transaction for a multi-target command. Coordinated workflow/cascade undo,
+explicit undo-prepared recovery and portable journal transport remain required
+work before #9 can close.
 
 The scalar executor is connected to CLI `undo`, with latest-action selection,
 scope/conflict error mapping and subprocess command tests in both feature modes.
