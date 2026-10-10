@@ -80,6 +80,36 @@ native transaction paths. No SQLite database is opened for GitHub operations.
 `td update ID --sprint NAME` changes sprint; an empty string clears it. These
 updates preserve dates, relations, review/session records, and other details.
 
+## Priority label projection
+
+The exact reserved priority labels are `td:priority:P0` through
+`td:priority:P4` (case-insensitive). For td-managed issues, the v1 metadata
+priority remains authoritative; native issues without metadata retain their
+existing labels and the usual task/P2 defaults. Priority and its diagnostic
+come from each issue in the paginated listing or shared snapshot, with no
+individual issue or label lookup for each row.
+
+Managed creates and ordinary field edits project the metadata priority into
+one canonical label, preserving unrelated labels. Legacy issues with no mirror,
+multiple mirrors, or an externally changed mirror remain readable.
+`priority_label_warning` in JSON and human warnings identify the mismatch;
+an external label edit does not silently change task priority. Snapshot cache
+and incremental reads retain this diagnostic.
+
+Use `td config sync-priority-labels` for a read-only preview, optionally with
+`--id gh-123,gh-456`. Use `--apply` to build a fresh plan and repair it. All
+selected IDs are validated before any issue write. Missing repository label
+definitions are created and read back before the issue PATCH. The preview also
+shows a status mirror repair when the ordinary field edit would perform it.
+A repeated apply with no mismatches performs no issue writes.
+
+Each repair uses the normal observed-revision checks. This is a best-effort
+migration, not an atomic multi-issue transaction: a later failure retains
+previous repairs, reports their count and the original cause, and requires
+inspection before retrying. An uncertain label creation is read back rather
+than automatically replayed. Changing the source of truth to labels alone
+would require a separate schema and old-writer compatibility decision.
+
 ## Status label projection
 
 State labels are a display/search projection, never the source of claims or
