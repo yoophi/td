@@ -42,7 +42,7 @@ func checkGroupUndoGate(ctx context.Context) error {
 
 func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, session string) (*ActionUndoResult, error) {
 	if a.Group.Ordered != nil {
-		return nil, &UndoScopeError{Reason: "ordered group executor integration is incomplete; no target write attempted"}
+		return c.undoOrderedGroup(ctx, a, session)
 	}
 	if a.SessionID != session {
 		return nil, fmt.Errorf("group undo requires its original session")
@@ -228,9 +228,47 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 // groups fail explicitly rather than letting one member be undone alone.
 func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord, error) {
 	groups := map[string]ActionJournalRecord{}
+	members := map[string][]*ActionJournalRecord{}
 	for _, a := range actions {
 		if a.Group != nil {
 			groups[a.OperationID] = a
+		}
+	}
+	for i := range actions {
+		a := &actions[i]
+		if a.GroupOperationID != "" {
+			members[a.GroupOperationID] = append(members[a.GroupOperationID], a)
+		}
+	}
+	for op, group := range groups {
+		if group.Group.Ordered == nil {
+			continue
+		}
+		if err := group.validate(); err != nil {
+			return nil, err
+		}
+		if _, err := orderedGroupEffects(&group, members[op]); err != nil {
+			return nil, err
+		}
+		if group.Phase != "prepared" {
+			if len(members[op]) != len(group.Group.Ordered.Forward) {
+				return nil, fmt.Errorf("ordered history lost its frozen original membership")
+			}
+			for _, frozen := range group.Group.Ordered.Forward {
+				found := false
+				for _, actual := range members[op] {
+					if actual.ID == frozen.Record.ID {
+						observed, err := orderedEffectSnapshot(actual, frozen.Status)
+						if err != nil || !sameOrderedEffect(frozen, observed) {
+							return nil, fmt.Errorf("ordered history original body, identity or result changed")
+						}
+						found = true
+					}
+				}
+				if !found {
+					return nil, fmt.Errorf("ordered history lost an original receipt")
+				}
+			}
 		}
 	}
 	out := []ActionJournalRecord{}
@@ -240,8 +278,10 @@ func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord,
 			if !found {
 				return nil, fmt.Errorf("member %s has no observed group receipt", a.ID)
 			}
-			if err := validateGroupMember(&group, &a); err != nil {
-				return nil, err
+			if group.Group.Ordered == nil {
+				if err := validateGroupMember(&group, &a); err != nil {
+					return nil, err
+				}
 			}
 			continue
 		}

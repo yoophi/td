@@ -854,8 +854,10 @@ need integration; this group support does not declare the whole undo task done.
 ### Ordered effect format under development (#64)
 
 The v14 group and v15 member formats provide the storage and planning contract
-for repeated effects on one issue. They are not yet emitted by command writers;
-the ordered target executor still rejects before any target write.
+for repeated effects on one issue. They are not yet emitted by command writers.
+The source executor can compensate frozen ordered groups through the public
+undo entrypoint; compound command generation and live GitHub verification remain
+unfinished.
 The installed, verified command behavior remains the v10/v12/v13 integration.
 
 The source implementation supports observation and receipt-only reconciliation
@@ -867,7 +869,7 @@ It distinguishes an applied but unrecorded forward attempt, an unapplied tail
 after earlier effects, a completed inverse step and an uncertain inverse input.
 Observation never replays a target write or invents a completed receipt. The
 point-read helper also checks the original native comment body and identity;
-the future target executor still needs to invoke it before each target write.
+the source executor invokes it before each target write.
 
 Explicit reconciliation can freeze actual forward outcomes and recover a
 terminal applied-but-unrecorded member receipt before freezing the group. Every
@@ -897,9 +899,19 @@ event evidence is checked against its historical forward prefix, not rebased
 onto later compensation events. These steps only connect the frozen group;
 they do not authorize an ordinary causal undo chain.
 
-The remaining executor must freeze and point-read actual receipts and hashes,
-reserve completion capacity before writes, fence all watched revisions,
-relationships, native events and historical handoffs before each PATCH, and
-connect the target writer and no-replay continuation to the receipt-only
-recovery path. Format, observation and receipt-recovery fixture tests alone do
-not establish that the compound command integration works on GitHub.
+The source reverse executor reserves eventual inverse capacity before any
+write, including audit growth and clock/identity headroom in both transport
+budgets. It saves one complete input before each target PATCH, fences all
+original receipts and watched revisions, relationships, native events and
+historical handoffs, and verifies the exact response, point readback and fresh
+group observation before saving verified completion. Completed effects are not
+replayed; an uncertain pending step requires explicit receipt-only recovery.
+Observed proof remains weaker through later verified steps and final completion.
+The final receipt also rechecks historical handoffs. Original member receipts
+remain unchanged, and history collapses the entire ordered sequence while
+rejecting missing or modified originals.
+
+Remaining integration includes the ordered forward writer/cache, forward
+completion capacity before the original command writes, further command-path
+regressions and actual GitHub/installed-binary verification. Synthetic executor
+tests do not establish that the compound command integration works on GitHub.

@@ -10,14 +10,18 @@ import (
 )
 
 type orderedObservationFixture struct {
-	client                *Client
-	group                 *ActionJournalRecord
-	comments              map[int64]apiComment
-	issues                map[int]apiIssue
-	events                map[string][]nativeStateEvent
-	allowReceiptWrites    bool
-	receiptWrites         int
-	failReceiptAfterWrite bool
+	client                 *Client
+	group                  *ActionJournalRecord
+	comments               map[int64]apiComment
+	issues                 map[int]apiIssue
+	events                 map[string][]nativeStateEvent
+	allowReceiptWrites     bool
+	receiptWrites          int
+	failReceiptAfterWrite  bool
+	failReceiptWriteAt     int
+	allowTargetWrites      bool
+	targetWrites           int
+	failTargetAfterWriteAt int
 }
 
 func observedFixtureIssue(t *testing.T, id string, state ActionIssueState) apiIssue {
@@ -82,7 +86,42 @@ func newOrderedObservationFixture(t *testing.T, a ActionJournal) *orderedObserva
 	base := f.client.run
 	f.client.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
 		method, path := args[4], strings.TrimPrefix(args[5], "repos/owner/repo")
+		if o.allowTargetWrites && method == "PATCH" && strings.HasPrefix(path, "/issues/") && !strings.Contains(path, "/comments/") {
+			var n int
+			_, _ = fmt.Sscanf(path, "/issues/%d", &n)
+			var input ActionUpdateInput
+			if err := json.Unmarshal(payload, &input); err != nil {
+				return nil, err
+			}
+			state, err := input.contents()
+			if err != nil {
+				return nil, err
+			}
+			state.UpdatedAt = time.Now().UTC()
+			id := fmt.Sprintf("gh-%d", n)
+			if state.State != o.issues[n].State {
+				kind := "closed"
+				if state.State == "open" {
+					kind = "reopened"
+				}
+				events := o.events[id]
+				last := int64(0)
+				if len(events) > 0 {
+					last = events[len(events)-1].ID
+				}
+				o.events[id] = append(events, nativeStateEvent{ID: last + 10, Event: kind})
+			}
+			o.issues[n] = observedFixtureIssue(t, id, state)
+			o.targetWrites++
+			if o.targetWrites == o.failTargetAfterWriteAt {
+				return nil, fmt.Errorf("synthetic reply lost after target PATCH")
+			}
+			return json.Marshal(o.issues[n])
+		}
 		if o.allowReceiptWrites && method == "PATCH" && strings.HasPrefix(path, "/issues/comments/") {
+			if o.receiptWrites+1 == o.failReceiptWriteAt {
+				return nil, fmt.Errorf("synthetic receipt PATCH denied")
+			}
 			var n int64
 			_, _ = fmt.Sscanf(path, "/issues/comments/%d", &n)
 			var input struct{ Body string }

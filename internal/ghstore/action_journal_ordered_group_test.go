@@ -250,14 +250,14 @@ func TestOrderedGroupArchivePreservesEmptyActualObservations(t *testing.T) {
 	}
 }
 
-func TestOrderedGroupUnconnectedExecutorCannotWrite(t *testing.T) {
+func TestOrderedGroupMissingOriginalEvidenceCannotWrite(t *testing.T) {
 	a := orderedArchiveFixture(t)
 	f := newJournalWriteFixture(t, "")
 	group := &ActionJournalRecord{ActionJournal: a, ID: "ghc-200", Author: a.Group.Forward.Actor}
 	if _, err := f.client.undoActionGroup(context.Background(), group, a.SessionID); err == nil {
-		t.Fatal("incomplete ordered executor accepted a target write")
+		t.Fatal("missing original evidence accepted a target write")
 	}
 	if f.targetWrites != 0 || f.receiptWrites != 0 || f.intentWrites != 0 || f.carrierWrites != 0 {
-		t.Fatal("incomplete integration reached a writer")
+		t.Fatal("missing original evidence reached a writer")
 	}
 }

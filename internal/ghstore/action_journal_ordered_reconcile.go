@@ -59,6 +59,9 @@ func orderedObservationProof(observed *orderedGroupObservation, normal bool) str
 
 func (c *Client) saveOrderedObservation(ctx context.Context, a *ActionJournalRecord, next ActionJournal, observed *orderedGroupObservation, normal bool) (*ActionJournalRecord, error) {
 	written, err := c.writeGroupReceipt(ctx, a, next, func() error {
+		if a.Phase == "undo_prepared" || a.Phase == "undone" {
+			return c.fenceOrderedInverse(ctx, a, observed)
+		}
 		return c.fenceOrderedObservation(ctx, a, observed, normal)
 	})
 	if err != nil {
