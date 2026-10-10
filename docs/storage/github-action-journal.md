@@ -854,9 +854,9 @@ need integration; this group support does not declare the whole undo task done.
 ### Ordered effect format under development (#64)
 
 The v14 group and v15 member formats provide the storage and planning contract
-for repeated effects on one issue. They are not yet emitted by command writers.
-The source executor can compensate frozen ordered groups through the public
-undo entrypoint; compound command generation and live GitHub verification remain
+for repeated effects on one issue. Native close, approve and reopen command
+groups now emit these formats. The source executor compensates frozen ordered
+groups through the public undo entrypoint; live GitHub verification remains
 unfinished.
 The installed, verified command behavior remains the v10/v12/v13 integration.
 
@@ -911,7 +911,14 @@ The final receipt also rechecks historical handoffs. Original member receipts
 remain unchanged, and history collapses the entire ordered sequence while
 rejecting missing or modified originals.
 
-Remaining integration includes the ordered forward writer/cache, forward
-completion capacity before the original command writes, further command-path
-regressions and actual GitHub/installed-binary verification. Synthetic executor
-tests do not establish that the compound command integration works on GitHub.
+The forward writer retains each actual verified receipt and result in command
+order. It rejects continuation after an uncertain receipt, checks all original
+receipts, watched states, native events and historical handoffs before target
+and completion writes, and records the actual preceding effect on each target.
+Each attempt reserves both applied and unapplied completion and eventual inverse
+capacity before saving its member intent. A later capacity failure may retain
+earlier completed effects; the command does not promise an atomic transaction.
+The CLI regression covers dependency unblock followed by explicit close on the
+same target and three inverse steps, including read-only completed confirmation.
+Further command-path regressions and actual GitHub/installed-binary verification
+remain. Synthetic tests do not establish live GitHub behavior.

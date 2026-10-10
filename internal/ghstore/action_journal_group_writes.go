@@ -9,9 +9,11 @@ import (
 )
 
 type activeActionGroup struct {
-	Journal   *ActionJournalRecord
-	Expected  map[string]ActionIssueState
-	Attempted map[string]bool
+	Journal      *ActionJournalRecord
+	Expected     map[string]ActionIssueState
+	Attempted    map[string]bool
+	Receipts     []*ActionJournalRecord
+	NativeEvents map[string][]nativeStateEvent
 }
 
 // BeginActionGroup declares explicit membership before any target changes.
@@ -209,6 +211,9 @@ func (c *Client) attachActionGroupMember(ctx context.Context, a *ActionJournal) 
 		return nil
 	}
 	active := c.journal.Group
+	if active.Journal.Group.Ordered != nil {
+		return c.attachOrderedGroupMember(ctx, a)
+	}
 	if active.Attempted[a.IssueID] {
 		return fmt.Errorf("group target %s was already attempted; no target write attempted", a.IssueID)
 	}

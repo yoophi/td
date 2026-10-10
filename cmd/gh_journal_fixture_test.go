@@ -25,6 +25,9 @@ import datetime,io
 journal_file=pathlib.Path(` + string(file) + `)
 journal=json.loads(journal_file.read_text()) if journal_file.exists() else {'comments':[]}
 def fixture_tick(value):return (datetime.datetime.fromisoformat(value.replace('Z','+00:00'))+datetime.timedelta(seconds=1)).isoformat().replace('+00:00','Z')
+def fixture_ordered_record(body):
+ marker='<!-- td:action:v14\n';start=body.find(marker)
+ return json.loads(body[start+len(marker):body.rindex('\n-->')]) if start>=0 else None
 journal_carrier={'number':999,'title':'td action journal','state':'open','labels':[],'updated_at':'2026-10-09T00:00:00Z','body':'<!-- td:issue:v1\n'+json.dumps({'entity_kind':'journal','type':'task','priority':'P2','points':0})+'\n-->'}
 journal_carrier=journal.get('carrier',None if os.environ.get('TD_GH_FIXTURE_NO_CARRIER') else journal_carrier)
 def journal_result(data):
@@ -67,10 +70,14 @@ if path.startswith('repos/owner/repo/issues/comments/'):
  if data is not None:
   if method=='PATCH':
    payload=json.load(sys.stdin)
-   if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-denied' or (os.environ.get('TD_GH_JOURNAL_FAIL')=='undo-completion-denied' and '"phase":"undone"' in payload.get('body','')):sys.stderr.write('HTTP 403 journal receipt denied');sys.exit(1)
+   ordered=fixture_ordered_record(payload.get('body',''));steps=ordered.get('group',{}).get('ordered',{}).get('steps',[]) if ordered else [];step=steps[-1] if steps else None
+   completes_ordered_step=step is not None and step.get('result') is not None
+   if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-denied' or (os.environ.get('TD_GH_JOURNAL_FAIL')=='undo-completion-denied' and ('"phase":"undone"' in payload.get('body','') or completes_ordered_step)):sys.stderr.write('HTTP 403 journal receipt denied');sys.exit(1)
    data.update(payload);data['updated_at']=fixture_tick(data['updated_at'])
    target=os.environ.get('TD_GH_GROUP_EVENT_TARGET')
-   if target and '"group_operation_id":' in payload.get('body','') and '"native_undo":' in payload.get('body','') and '"phase":"undo_prepared"' in payload.get('body','') and not journal.get('foreign_group_event_injected'):
+   ordered_native_input=ordered is not None and ordered.get('phase')=='undo_prepared' and step is not None and step.get('result') is None and step['source']['state']!=step['input']['state']
+   legacy_native_input='"group_operation_id":' in payload.get('body','') and '"native_undo":' in payload.get('body','') and '"phase":"undo_prepared"' in payload.get('body','')
+   if target and (legacy_native_input or ordered_native_input) and not journal.get('foreign_group_event_injected'):
     observed=journal['native_events'][target];n=observed[-1]['id'] if observed else 0;observed.extend([{'id':n+1,'event':'reopened'},{'id':n+2,'event':'closed'}]);journal['foreign_group_event_injected']=True
    journal_file.write_text(json.dumps(journal))
    if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-lost':sys.stderr.write('connection lost after receipt');sys.exit(1)

@@ -1703,11 +1703,11 @@ func TestGitHubJournalCLINativeClosureGroupAndRecovery(t *testing.T) {
 				}
 				body := b.Issues[id]["body"].(string)
 				if id == "8" {
-					if body != a.Issues[id]["body"] {
-						t.Fatal("dependent not restored")
+					if !sameFixtureTaskContentsWithoutAudit(t, body, a.Issues[id]["body"].(string)) {
+						t.Fatal("dependent task fields not restored")
 					}
 				} else if mode != "forward-partial" || id == "7" {
-					if !strings.Contains(body, `"action":"undo_native"`) {
+					if !strings.Contains(body, `"action":"undo_group"`) {
 						t.Fatal("native audit missing", id, body)
 					}
 				}

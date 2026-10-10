@@ -18,7 +18,7 @@ func (c *Client) BeginTransitionActionGroup(ctx context.Context, command string,
 	if !nativeGroupCommand(command) {
 		return c.BeginActionGroup(ctx, command, ids)
 	}
-	g := &ActionGroup{Command: command, Roots: slices.Clone(ids), Cascade: command == "close" || command == "approve" && !o.RecordOnly}
+	g := &ActionGroup{Command: command, Roots: slices.Clone(ids), Cascade: command == "close" || command == "approve" && !o.RecordOnly, Ordered: &ActionOrderedGroup{}}
 	return c.beginGraphActionGroup(ctx, g)
 }
 

@@ -120,7 +120,11 @@ func (c *Client) beginGraphActionGroup(ctx context.Context, g *ActionGroup) erro
 		}
 	}
 	a := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: ids[0], CarrierID: carrier, Action: "group", Phase: "prepared", Group: g}
-	if err := checkGroupArchiveCapacity(a, expected); err != nil {
+	capacity := checkGroupArchiveCapacity
+	if g.Ordered != nil {
+		capacity = checkOrderedInitialCapacity
+	}
+	if err := capacity(a, expected); err != nil {
 		return fmt.Errorf("graph group capacity preflight: %w", err)
 	}
 	if err := c.EnableActionJournal(ctx, c.journal.SessionID); err != nil {
@@ -134,7 +138,7 @@ func (c *Client) beginGraphActionGroup(ctx context.Context, g *ActionGroup) erro
 	if err != nil {
 		return err
 	}
-	c.journal.Group = &activeActionGroup{Journal: journal, Expected: expected, Attempted: map[string]bool{}}
+	c.journal.Group = &activeActionGroup{Journal: journal, Expected: expected, Attempted: map[string]bool{}, NativeEvents: map[string][]nativeStateEvent{}}
 	return nil
 }
 

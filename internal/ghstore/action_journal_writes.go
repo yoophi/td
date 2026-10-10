@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -249,10 +250,21 @@ func (c *Client) writePreparedJournal(ctx context.Context, a ActionJournal) (*Ac
 		return nil, fmt.Errorf("journal intent identity changed; no target write attempted")
 	}
 	if c.journal.Group != nil && a.GroupOperationID == c.journal.Group.Journal.OperationID {
-		if err := validateGroupMember(c.journal.Group.Journal, verified); err != nil {
-			return nil, fmt.Errorf("group member intent is unverified (no target write attempted): %w", err)
+		active := c.journal.Group
+		var groupErr error
+		if active.Journal.Group.Ordered != nil {
+			before := active.Expected[a.IssueID]
+			groupErr = validateGroupMemberAtState(active.Journal, verified, &before)
+		} else {
+			groupErr = validateGroupMember(active.Journal, verified)
 		}
-		c.journal.Group.Attempted[a.IssueID] = true
+		if groupErr != nil {
+			return nil, fmt.Errorf("group member intent is unverified (no target write attempted): %w", groupErr)
+		}
+		active.Attempted[a.IssueID] = true
+		if active.Journal.Group.Ordered != nil {
+			active.Receipts = append(active.Receipts, verified)
+		}
 	}
 	return verified, nil
 }
@@ -309,6 +321,13 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	if err != nil {
 		return err
 	}
+	var orderedEvents []nativeStateEvent
+	if c.journal != nil && c.journal.Group != nil && c.journal.Group.Journal.Group.Ordered != nil && prepared.GroupOperationID == c.journal.Group.Journal.OperationID {
+		orderedEvents, err = c.verifyOrderedForwardProgress(ctx, prepared, after)
+		if err != nil {
+			return err
+		}
+	}
 	written, err := c.journalComment(ctx, path, map[string]string{"body": body}, body, prepared.CarrierID)
 	if err != nil {
 		return err
@@ -331,7 +350,16 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 		return &ConflictError{ID: after.ID, AfterWrite: true}
 	}
 	if c.journal != nil && c.journal.Group != nil && prepared.GroupOperationID == c.journal.Group.Journal.OperationID {
-		c.journal.Group.Expected[after.ID] = state
+		active := c.journal.Group
+		if active.Journal.Group.Ordered != nil {
+			events, err := c.readStateEvents(withReadbackCost(ctx), after.ID)
+			if err != nil || !reflect.DeepEqual(events, orderedEvents) {
+				return fmt.Errorf("ordered member receipt saved but native events changed; inspect before continuing: %v", err)
+			}
+			active.Receipts[len(active.Receipts)-1] = verified
+			active.NativeEvents[after.ID] = events
+		}
+		active.Expected[after.ID] = state
 	}
 	return nil
 }

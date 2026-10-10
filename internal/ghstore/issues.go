@@ -674,6 +674,11 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 		if err := c.verifyParentObservations(ctx, record.ID, parents, false); err != nil {
 			return nil, err
 		}
+		if c.journal.Group != nil && c.journal.Group.Journal.Group.Ordered != nil && journal.GroupOperationID == c.journal.Group.Journal.OperationID {
+			if _, err := c.verifyOrderedForwardProgress(ctx, journal, nil); err != nil {
+				return nil, err
+			}
+		}
 	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", record.Number), payload, false)
 	if err != nil {
