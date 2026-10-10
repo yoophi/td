@@ -2,7 +2,9 @@
 
 This work belongs to #9. The codec, bulk reader, inverse planner and an opt-in
 issue-update write protocol are present. CLI dispatch, default write integration,
-creation/multi-target/note/board journaling and undo execution remain pending.
+multi-target/note/board journaling and undo execution remain pending. Issue
+creation also has an opt-in intent/result protocol; actual command writers have
+not yet been switched to either protocol.
 `td last` and `td undo` remain unsupported for GitHub storage. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
@@ -91,3 +93,37 @@ identity and duplicate bootstrap. Native GitHub acceptance remains pending.
 Enabling is currently an internal API opt-in; CLI/HTTP/monitor writers have not
 yet been switched. Unchanged clients keep their existing behavior. No claim of
 full #9 support follows from this update-only protocol.
+
+## Creation intents and result linking
+
+An unallocated creation intent has `action=create`, `phase=prepared`, a distinct
+journal `carrier_id`, an empty target `issue_id` and `create_input` containing the
+exact title, metadata body and labels. It has no observed after-state or clock.
+This is the only form allowed to omit target identity. After allocation and
+response/readback checks, an applied receipt links the canonical issue number
+and verified after-state. The operation identity in input/issue body/journal
+must agree; the parser rejects after-state that disagrees with the input.
+
+The enabled creation path scans complete issue/comment collections before
+intent publication. A previously observed journal or issue with the same
+operation identity blocks another POST and requires reconciliation. After POST,
+response fields, label application, parent consistency and issue readback must
+succeed. A fresh bulk scan checks for changed/duplicate operation results and
+duplicate journal identities before recording an applied receipt. Concurrent
+creates cannot be made atomic; an observed duplicate remains an explicit error
+with both remote issues preserved for inspection.
+
+Denied/lost creation responses, changed results, failed readback and receipt
+failure never become ordinary success and are not automatically retried. A
+prepared intent can outlive an issue POST that reached GitHub. A retry with the
+same explicit/deterministic operation identity is rejected without another
+intent or issue POST. Ordinary `create` generates a new identity, so manually
+repeating the command is a new operation, not an automatic reconciliation of
+the previous one. Inspect the failed attempt's printed identity first. Explicit
+reconciliation and persistent CLI retry identity are still implementation work;
+this protocol does not claim safe retry of arbitrary repeated command text.
+
+Creation undo still cannot erase an issue safely; the planner describes logical
+delete compensation. These library tests do not prove creation is already
+journaled by the CLI/HTTP paths. Import/export transport of the new creation
+intent/receipt and high-volume write cost validation also remain pending.

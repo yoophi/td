@@ -379,6 +379,16 @@ func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue,
 	if err := c.verifyParentObservations(ctx, "new issue", parents, false); err != nil {
 		return nil, err
 	}
+	var journal *ActionJournalRecord
+	if c.journal != nil {
+		journal, err = c.prepareCreationJournal(ctx, operationID, ActionCreateInput{Title: issue.Title, Body: body, Labels: append([]string{}, labels...)})
+		if err != nil {
+			return nil, err
+		}
+		if err := c.verifyParentObservations(ctx, "new issue", parents, false); err != nil {
+			return nil, err
+		}
+	}
 	data, err := c.request(ctx, "POST", "/issues", payload, false)
 	if err != nil {
 		return nil, fmt.Errorf("%w; operation %s is embedded in the issue body if created; inspect recent issues before retrying (search indexing can lag)", err, operationID)
@@ -395,6 +405,9 @@ func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue,
 	if returned.Title != issue.Title || returned.Body != body || returned.State != "open" {
 		return nil, fmt.Errorf("%s was created, but returned fields differ from operation %s; inspect %s before retrying", record.ID, operationID, record.URL)
 	}
+	if journal != nil && !strings.EqualFold(returned.User.Login, journal.Author) {
+		return nil, fmt.Errorf("%s was created, but its GitHub author differs from intent %s; inspect GitHub before retrying", record.ID, operationID)
+	}
 	if err := checkLabels(record, labels, "created"); err != nil {
 		return nil, err
 	}
@@ -403,6 +416,18 @@ func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue,
 	}
 	if err := c.verifyParentObservations(ctx, record.ID, parents, true); err != nil {
 		return nil, fmt.Errorf("%s was created, but its parent hierarchy changed; inspect %s before retrying: %w", record.ID, record.URL, err)
+	}
+	if journal != nil {
+		verified, err := c.GetIncludingDeleted(withReadbackCost(ctx), record.ID)
+		if err != nil {
+			return nil, fmt.Errorf("%s creation readback failed; journal %s remains unverified; inspect before retrying: %w", record.ID, operationID, err)
+		}
+		if verified.revision != record.revision {
+			return nil, &ConflictError{ID: record.ID, AfterWrite: true}
+		}
+		if err := c.completeActionJournal(ctx, journal, record); err != nil {
+			return nil, fmt.Errorf("%s was created but its receipt for %s is unverified; inspect GitHub before retrying: %w", record.ID, operationID, err)
+		}
 	}
 	return record, nil
 }

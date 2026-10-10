@@ -141,11 +141,48 @@ func (c *Client) prepareActionJournal(ctx context.Context, before *Record) (*Act
 	if err != nil {
 		return nil, err
 	}
+	a := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: before.ID,
+		CarrierID: c.journal.Carrier.ID, Action: "update", Phase: "prepared", Before: &state}
+	return c.writePreparedJournal(ctx, a)
+}
+
+func (c *Client) prepareCreationJournal(ctx context.Context, operationID string, input ActionCreateInput) (*ActionJournalRecord, error) {
+	a := ActionJournal{OperationID: operationID, SessionID: c.journal.SessionID, CarrierID: c.journal.Carrier.ID,
+		Action: "create", Phase: "prepared", CreateInput: &input}
+	if err := a.validate(); err != nil {
+		return nil, err
+	}
+	// A repeated deterministic operation must be reconciled, not POSTed again.
+	// Regular create generates a new identity; manual retries must inspect the
+	// identity printed by the failed attempt before issuing a new operation.
+	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+	if err != nil {
+		return nil, err
+	}
+	history, err := snapshot.ActionHistory("")
+	if err != nil {
+		return nil, err
+	}
+	for _, existing := range history {
+		if existing.OperationID == operationID {
+			return nil, fmt.Errorf("creation operation %s already has a %s journal (%s); inspect and reconcile it before retrying; no new issue POST attempted", operationID, existing.Phase, existing.ID)
+		}
+	}
+	for _, record := range snapshot.records {
+		if record.meta.OperationID == operationID {
+			return nil, fmt.Errorf("creation operation %s already identifies %s; inspect it before retrying; no new issue POST attempted", operationID, record.ID)
+		}
+	}
+	return c.writePreparedJournal(ctx, a)
+}
+
+func (c *Client) writePreparedJournal(ctx context.Context, a ActionJournal) (*ActionJournalRecord, error) {
+	if c.journal == nil || a.Phase != "prepared" || a.SessionID != c.journal.SessionID || a.CarrierID != c.journal.Carrier.ID {
+		return nil, fmt.Errorf("prepared intent must belong to this journal scope")
+	}
 	if _, err := c.journalCarrier(ctx, c.journal.Carrier.ID); err != nil {
 		return nil, fmt.Errorf("verify journal carrier before intent (no target write attempted): %w", err)
 	}
-	a := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: before.ID,
-		CarrierID: c.journal.Carrier.ID, Action: "update", Phase: "prepared", Before: &state}
 	body, err := renderActionJournal(a)
 	if err != nil {
 		return nil, err
@@ -201,6 +238,21 @@ func (c *Client) completeActionJournal(ctx context.Context, prepared *ActionJour
 	applied := prepared.ActionJournal
 	applied.Phase = "applied"
 	applied.After = &state
+	if applied.Action == "create" {
+		if prepared.IssueID != "" && prepared.IssueID != after.ID {
+			return fmt.Errorf("creation receipt target identity changed")
+		}
+		if prepared.CreateInput == nil || after.meta.OperationID != prepared.OperationID || state.Title != prepared.CreateInput.Title || state.Body != prepared.CreateInput.Body || state.State != "open" {
+			return fmt.Errorf("creation result does not match its recorded operation/input")
+		}
+		if err := checkLabels(after, prepared.CreateInput.Labels, "created"); err != nil {
+			return err
+		}
+		if err := c.verifyCreationJournalResult(ctx, after, prepared.OperationID); err != nil {
+			return err
+		}
+		applied.IssueID = after.ID
+	}
 	body, err := renderActionJournal(applied)
 	if err != nil {
 		return err
@@ -225,6 +277,30 @@ func (c *Client) completeActionJournal(ctx context.Context, prepared *ActionJour
 	}
 	if latest.revision != after.revision {
 		return &ConflictError{ID: after.ID, AfterWrite: true}
+	}
+	return nil
+}
+
+func (c *Client) verifyCreationJournalResult(ctx context.Context, after *Record, operationID string) error {
+	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+	if err != nil {
+		return fmt.Errorf("creation operation %s uniqueness read failed: %w", operationID, err)
+	}
+	if _, err := snapshot.ActionHistory(""); err != nil {
+		return err
+	}
+	matches := 0
+	for _, record := range snapshot.records {
+		if record.meta.OperationID != operationID {
+			continue
+		}
+		matches++
+		if record.ID != after.ID || record.revision != after.revision {
+			return fmt.Errorf("creation operation %s identifies a changed or duplicate result; inspect GitHub before retrying", operationID)
+		}
+	}
+	if matches != 1 {
+		return fmt.Errorf("creation operation %s has no unique observed result; inspect GitHub before retrying", operationID)
 	}
 	return nil
 }

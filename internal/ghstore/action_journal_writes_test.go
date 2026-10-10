@@ -18,6 +18,7 @@ type journalWriteFixture struct {
 	comment                                                                *apiComment
 	mode                                                                   string
 	targetWrites, receiptWrites, intentWrites, carrierWrites, commentReads int
+	creationWrites                                                         int
 }
 
 func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
@@ -48,11 +49,53 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 			}
 			return encode([][]apiComment{page})
 		case method == "POST" && path == "/issues":
-			f.carrierWrites++
 			var value struct{ Title, Body string }
 			if err := json.Unmarshal(payload, &value); err != nil {
 				return nil, err
 			}
+			_, meta, _, err := decodeBody(value.Body)
+			if err != nil {
+				return nil, err
+			}
+			if meta.EntityKind != "journal" {
+				f.creationWrites++
+				if f.mode == "create-denied" {
+					return nil, errors.New("HTTP 403 creation permission denied")
+				}
+				var full struct{ Labels []string }
+				if err := json.Unmarshal(payload, &full); err != nil {
+					return nil, err
+				}
+				created := apiIssue{Number: 2, Title: value.Title, Body: value.Body, State: "open", UpdatedAt: clock.Add(2 * time.Second)}
+				created.User.Login = "github-author"
+				if f.mode == "create-author" {
+					created.User.Login = "different-author"
+				}
+				for _, label := range full.Labels {
+					created.Labels = append(created.Labels, struct {
+						Name string `json:"name"`
+					}{label})
+				}
+				if f.mode == "create-labels" {
+					created.Labels = nil
+				}
+				f.issues[2] = created
+				if f.mode == "create-duplicate" {
+					other := created
+					other.Number = 3
+					f.issues[3] = other
+				}
+				if f.mode == "create-uncertain" {
+					return nil, errors.New("connection lost after creation")
+				}
+				if f.mode == "create-response" {
+					copy := created
+					copy.Body = "Unexpected response"
+					return encode(copy)
+				}
+				return encode(created)
+			}
+			f.carrierWrites++
 			created := apiIssue{Number: 9, Title: value.Title, Body: value.Body, State: "open", UpdatedAt: clock}
 			f.issues[9] = created
 			if f.mode == "duplicate-bootstrap" {
@@ -116,10 +159,21 @@ func newJournalWriteFixture(t *testing.T, mode string) *journalWriteFixture {
 				return nil, errors.New("connection lost after receipt write")
 			}
 			return encode(f.comment)
-		case path == "/issues/1" || path == "/issues/9":
+		case path == "/issues/1" || path == "/issues/9" || path == "/issues/2":
 			n := 1
 			if path == "/issues/9" {
 				n = 9
+			}
+			if path == "/issues/2" {
+				n = 2
+			}
+			if f.mode == "create-readback" && n == 2 {
+				return nil, errors.New("creation readback unavailable")
+			}
+			if f.mode == "create-concurrent" && n == 2 {
+				target := f.issues[n]
+				target.Body = "Concurrent creation edit"
+				f.issues[n] = target
 			}
 			if method == "PATCH" {
 				f.targetWrites++

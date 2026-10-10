@@ -82,16 +82,25 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
-	OperationID     string            `json:"operation_id"`
-	SessionID       string            `json:"session_id"`
-	IssueID         string            `json:"issue_id"`
-	CarrierID       string            `json:"carrier_id,omitempty"`
-	Action          string            `json:"action"`
-	Phase           string            `json:"phase"`
-	Before          *ActionIssueState `json:"before,omitempty"`
-	After           *ActionIssueState `json:"after,omitempty"`
-	Restored        *ActionIssueState `json:"restored,omitempty"`
-	UndoOperationID string            `json:"undo_operation_id,omitempty"`
+	OperationID     string             `json:"operation_id"`
+	SessionID       string             `json:"session_id"`
+	IssueID         string             `json:"issue_id"`
+	CarrierID       string             `json:"carrier_id,omitempty"`
+	Action          string             `json:"action"`
+	Phase           string             `json:"phase"`
+	Before          *ActionIssueState  `json:"before,omitempty"`
+	After           *ActionIssueState  `json:"after,omitempty"`
+	Restored        *ActionIssueState  `json:"restored,omitempty"`
+	UndoOperationID string             `json:"undo_operation_id,omitempty"`
+	CreateInput     *ActionCreateInput `json:"create_input,omitempty"`
+}
+
+// Creation intent has no allocated issue number or observed server clock yet.
+// Its input is separate from verified After state and cannot authorize undo.
+type ActionCreateInput struct {
+	Title  string   `json:"title"`
+	Body   string   `json:"body"`
+	Labels []string `json:"labels"`
 }
 
 type ActionJournalRecord struct {
@@ -119,9 +128,31 @@ func (a ActionJournal) validate() error {
 	if !identity(a.OperationID) || !identity(a.SessionID) {
 		return fmt.Errorf("action history requires operation and session identity")
 	}
-	n, err := Number(a.IssueID)
-	if err != nil || a.IssueID != fmt.Sprintf("gh-%d", n) {
-		return fmt.Errorf("action requires canonical issue identity")
+	pendingCreate := a.Action == "create" && a.Phase == "prepared" && a.IssueID == "" && a.CarrierID != "" && a.CreateInput != nil && a.After == nil
+	if !pendingCreate {
+		n, err := Number(a.IssueID)
+		if err != nil || a.IssueID != fmt.Sprintf("gh-%d", n) {
+			return fmt.Errorf("action requires canonical issue identity")
+		}
+	}
+	if a.CreateInput != nil {
+		if a.Action != "create" || strings.TrimSpace(a.CreateInput.Title) == "" || a.CreateInput.Labels == nil {
+			return fmt.Errorf("creation input requires a create action, title and label array")
+		}
+		_, meta, managed, err := decodeBody(a.CreateInput.Body)
+		if err != nil || !managed || meta.OperationID != a.OperationID || (meta.EntityKind != "" && meta.EntityKind != "issue") {
+			return fmt.Errorf("creation input requires issue metadata with the same operation identity")
+		}
+		if a.After != nil {
+			if a.After.Title != a.CreateInput.Title || a.After.Body != a.CreateInput.Body || a.After.State != "open" {
+				return fmt.Errorf("creation after-state differs from its recorded input")
+			}
+			for _, label := range a.CreateInput.Labels {
+				if !slices.ContainsFunc(a.After.Labels, func(actual string) bool { return strings.EqualFold(actual, label) }) {
+					return fmt.Errorf("creation after-state omits a requested label")
+				}
+			}
+		}
 	}
 	if a.CarrierID != "" {
 		carrier, err := Number(a.CarrierID)
@@ -169,7 +200,11 @@ func renderActionJournal(a ActionJournal) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, a.IssueID, a.Phase, actionJournalStart, data, markerEnd), nil
+	target := a.IssueID
+	if target == "" {
+		target = "new issue"
+	}
+	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, target, a.Phase, actionJournalStart, data, markerEnd), nil
 }
 
 func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalRecord, error) {
