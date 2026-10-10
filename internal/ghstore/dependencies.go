@@ -86,7 +86,7 @@ func (c *Client) ChangeDependencyObserved(ctx context.Context, observed *Record,
 		action = "add_dep"
 	}
 	details.Transitions = append(details.Transitions, TransitionRecord{OperationID: "td-op-" + rand.Text(), Action: action, From: observed.Status, To: observed.Status, SessionID: actor, At: now, RelatedIssueID: target})
-	result, err := c.UpdateObserved(ctx, observed, Changes{Details: &details})
+	result, err := c.UpdateObserved(ctx, observed, Changes{Details: &details, journalRelated: observations})
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func (c *Client) ReplaceDependenciesObserved(ctx context.Context, observed *Reco
 	details.ReviewerSession = ""
 	details.ReviewedAt = nil
 	details.ReviewBasis = ""
-	result, err := c.UpdateObserved(ctx, observed, Changes{Details: &details})
+	result, err := c.UpdateObserved(ctx, observed, Changes{Details: &details, journalRelated: observations})
 	if err != nil {
 		return nil, false, fmt.Errorf("replace dependencies %s (operation %s): %w", observed.ID, operation, err)
 	}

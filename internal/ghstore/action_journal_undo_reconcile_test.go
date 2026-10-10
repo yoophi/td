@@ -206,7 +206,7 @@ func TestUndoReconcileVersionAndActorCannotBeForged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(f.comment.Body, actionUndoObservedJournalStart) {
+	if !strings.Contains(f.comment.Body, actionUpdateIntentJournalStart) {
 		t.Fatal("observation not versioned")
 	}
 	if result.Journal.UndoObservation.SessionID != "ses_recovery" || result.Journal.UndoObservation.Actor != "github-author" || result.UndoOutcome.TargetWriteVerified || result.UndoOutcome.CausalUndoChainEligible {
@@ -216,7 +216,7 @@ func TestUndoReconcileVersionAndActorCannotBeForged(t *testing.T) {
 		copy := *f.comment
 		switch mode {
 		case "old-version":
-			copy.Body = strings.Replace(copy.Body, actionUndoObservedJournalStart, actionJournalStart, 1)
+			copy.Body = strings.Replace(copy.Body, actionUpdateIntentJournalStart, actionJournalStart, 1)
 		case "foreign-author":
 			copy.User.Login = "other-author"
 		case "changed-state", "fake-proof":

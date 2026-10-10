@@ -144,12 +144,12 @@ func (c *Client) reconcileUndo(ctx context.Context, a *ActionJournalRecord, sess
 	}
 	result := &ActionReconcileResult{Issue: current, Journal: a, AlreadyReconciled: a.Phase == "undone", UndoOutcome: &ActionUndoOutcome{Proof: inverseObservationProof}}
 	if a.Phase == "undone" && a.UndoObservation == nil {
-		result.UndoOutcome = &ActionUndoOutcome{Proof: "verified-undo-receipt", TargetWriteVerified: true, CausalUndoChainEligible: true}
+		result.UndoOutcome = &ActionUndoOutcome{Proof: "verified-undo-receipt", TargetWriteVerified: true, CausalUndoChainEligible: a.UpdateObservation == nil}
 	}
 	if a.Phase == "undone" || !apply {
 		return result, nil
 	}
-	oldBody, err := renderActionJournal(a.ActionJournal)
+	oldBody, err := renderExistingActionJournal(a)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (c *Client) reconcileUndo(ctx context.Context, a *ActionJournalRecord, sess
 	resolved.Phase = "undone"
 	resolved.Restored = &state
 	resolved.UndoObservation = &ActionUndoObservation{SessionID: session, Actor: actor, ObservedAt: time.Now().UTC(), Proof: inverseObservationProof, State: &state}
-	body, err := renderActionJournal(resolved)
+	body, err := renderWriteActionJournal(resolved)
 	if err != nil {
 		return nil, err
 	}

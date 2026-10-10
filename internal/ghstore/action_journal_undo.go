@@ -114,7 +114,7 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 				return nil, &ConflictError{ID: current.ID}
 			}
 		}
-		return &ActionUndoResult{Issue: current, Journal: action, AlreadyUndone: true}, nil
+		return &ActionUndoResult{Issue: current, Journal: action, AlreadyUndone: true, UndoOutcome: observedForwardInverseOutcome(action)}, nil
 	}
 	if err := scalarUndoScope(action); err != nil {
 		return nil, err
@@ -218,7 +218,7 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err := c.checkEntityUndoCatalog(ctx, action, true); err != nil {
 		return nil, fmt.Errorf("undo receipt was verified but board catalog changed; inspect before retrying: %w", err)
 	}
-	return &ActionUndoResult{Issue: restored, Journal: receipt}, nil
+	return &ActionUndoResult{Issue: restored, Journal: receipt, UndoOutcome: observedForwardInverseOutcome(receipt)}, nil
 }
 
 func (c *Client) rewriteActionJournal(ctx context.Context, old *ActionJournalRecord, next ActionJournal) (*ActionJournalRecord, error) {
@@ -226,18 +226,18 @@ func (c *Client) rewriteActionJournal(ctx context.Context, old *ActionJournalRec
 }
 
 func (c *Client) rewriteActionJournalGuarded(ctx context.Context, old *ActionJournalRecord, next ActionJournal, fence func() error) (*ActionJournalRecord, error) {
-	oldBody, err := renderActionJournal(old.ActionJournal)
+	oldBody, err := renderExistingActionJournal(old)
 	if err != nil {
 		return nil, err
 	}
-	newBody, err := renderActionJournal(next)
+	newBody, err := renderWriteActionJournal(next)
 	if err != nil {
 		return nil, err
 	}
 	if old.OperationID != next.OperationID || old.SessionID != next.SessionID || old.IssueID != next.IssueID || old.CarrierID != next.CarrierID {
 		return nil, fmt.Errorf("journal rewrite cannot change action identity")
 	}
-	if old.Action != next.Action || !reflect.DeepEqual(old.Before, next.Before) || !reflect.DeepEqual(old.After, next.After) || !reflect.DeepEqual(old.CreateInput, next.CreateInput) || !reflect.DeepEqual(old.CommentInput, next.CommentInput) || !reflect.DeepEqual(old.CommentAfter, next.CommentAfter) || !reflect.DeepEqual(old.CommentBefore, next.CommentBefore) || !reflect.DeepEqual(old.Reconciliation, next.Reconciliation) || !reflect.DeepEqual(old.UndoObservation, next.UndoObservation) {
+	if old.Action != next.Action || !reflect.DeepEqual(old.Before, next.Before) || !reflect.DeepEqual(old.After, next.After) || !reflect.DeepEqual(old.CreateInput, next.CreateInput) || !reflect.DeepEqual(old.CommentInput, next.CommentInput) || !reflect.DeepEqual(old.CommentAfter, next.CommentAfter) || !reflect.DeepEqual(old.CommentBefore, next.CommentBefore) || !reflect.DeepEqual(old.UpdateObservation, next.UpdateObservation) || !reflect.DeepEqual(old.UpdateIntent, next.UpdateIntent) || !reflect.DeepEqual(old.Reconciliation, next.Reconciliation) || !reflect.DeepEqual(old.UndoObservation, next.UndoObservation) {
 		return nil, fmt.Errorf("undo receipt cannot rewrite original action snapshots")
 	}
 	if err := validateNativeUndoRewrite(old.NativeUndo, next.NativeUndo); err != nil {
@@ -336,4 +336,16 @@ func scalarUndoScope(action *ActionJournalRecord) error {
 		return unsupported()
 	}
 	return nil
+}
+
+// A new inverse can be verified even when the original forward write was only
+// observed. It must not become a causal bridge for an earlier action.
+func observedForwardInverseOutcome(a *ActionJournalRecord) *ActionUndoOutcome {
+	if a.UpdateObservation == nil {
+		return nil
+	}
+	if a.UndoObservation != nil {
+		return &ActionUndoOutcome{Proof: inverseObservationProof}
+	}
+	return &ActionUndoOutcome{Proof: "verified-undo-receipt", TargetWriteVerified: true}
 }

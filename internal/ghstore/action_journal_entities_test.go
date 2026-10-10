@@ -125,7 +125,7 @@ func TestJournalEntityUpdatesValidateActorAndStoreExactBeforeAfter(t *testing.T)
 				}
 			}
 			action, err := decodeActionJournal(*f.comment, "gh-9")
-			if err != nil || action.Action != kind || action.Phase != "applied" || action.Before.Title == action.After.Title || f.targetWrites != 1 {
+			if err != nil || action.Action != kind || action.Phase != "applied" || action.UpdateIntent == nil || action.UpdateIntent.Target.Title != action.After.Title || action.UpdateIntent.Target.Body != action.After.Body || action.Before.Title == action.After.Title || f.targetWrites != 1 {
 				t.Fatal(action, err, f.targetWrites)
 			}
 		})

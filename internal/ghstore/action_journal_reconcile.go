@@ -40,6 +40,7 @@ func (a ActionJournal) validateReconciliation() error {
 }
 
 type ActionReconcileResult struct {
+	ForwardOutcome      *ActionUndoOutcome   `json:"forward_outcome,omitempty"`
 	Compensation        *NativeIssueUndoPlan `json:"compensation,omitempty"`
 	Issue               *Record              `json:"issue"`
 	Journal             *ActionJournalRecord `json:"journal"`
@@ -101,6 +102,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	if action.Phase == "undo_prepared" || action.Phase == "undone" {
 		return c.reconcileUndo(ctx, action, sessionID, actor.Login, apply)
 	}
+	if action.UpdateIntent != nil {
+		return c.reconcileForwardUpdate(ctx, action, sessionID, actor.Login, apply)
+	}
 	if action.Phase != "prepared" && action.Phase != "applied" {
 		return nil, &UndoScopeError{Reason: "undo recovery needs its own inverse proof; no write attempted"}
 	}
@@ -133,7 +137,7 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	if latest.revision != current.revision {
 		return nil, &ConflictError{ID: current.ID}
 	}
-	oldBody, err := renderActionJournal(action.ActionJournal)
+	oldBody, err := renderExistingActionJournal(action)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +155,7 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 		resolved.IssueID = current.ID
 	}
 	resolved.Reconciliation = &ActionReconciliation{SessionID: sessionID, Actor: actor.Login, ObservedAt: time.Now().UTC(), State: &state}
-	body, err := renderActionJournal(resolved)
+	body, err := renderWriteActionJournal(resolved)
 	if err != nil {
 		return nil, err
 	}

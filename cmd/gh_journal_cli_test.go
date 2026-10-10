@@ -1135,3 +1135,66 @@ func TestGitHubJournalCLINativeCompensationAndRecovery(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubJournalCLIForwardUpdateRecovery(t *testing.T) {
+	for _, enabled := range []string{"false", "true"} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+			t.Setenv("TD_GH_FIXTURE_NATIVE_EVENTS", "1")
+			dir, _, run := journalCLI(t)
+			execute := func(args ...string) string {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil || !json.Valid([]byte(out)) {
+					t.Fatal(args, out, stderr, err)
+				}
+				return out
+			}
+			execute("create", "Forward recovery CLI fixture")
+			recoverWrite := func(args ...string) {
+				t.Helper()
+				t.Setenv("TD_GH_JOURNAL_FAIL", "receipt-denied")
+				out, stderr, err := run(append(args, "--json")...)
+				if err == nil || !strings.Contains(out+stderr, "unverified") {
+					t.Fatal(args, out, stderr, err)
+				}
+				t.Setenv("TD_GH_JOURNAL_FAIL", "")
+				var rows []struct{ ID, Phase string }
+				last := execute("last", "--n", "1")
+				if json.Unmarshal([]byte(last), &rows) != nil || len(rows) != 1 || rows[0].Phase != "prepared" || !strings.Contains(last, `"update_intent":`) {
+					t.Fatal(last)
+				}
+				before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				execute("undo", "--reconcile", rows[0].ID)
+				out = execute("undo", "--reconcile", rows[0].ID, "--apply")
+				if !strings.Contains(out, `"forward_outcome":`) || !strings.Contains(out, `"target_write_verified":false`) || !strings.Contains(out, `"causal_undo_chain_eligible":false`) || !strings.Contains(out, `"update_observation":`) {
+					t.Fatal(out)
+				}
+				execute("undo", "--reconcile", rows[0].ID, "--apply")
+				after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if err != nil || !bytes.Equal(before, after) {
+					t.Fatal("forward recovery replayed target", err)
+				}
+			}
+			recoverWrite("update", "gh-6", "--title", "Recovered scalar request")
+			out := execute("undo")
+			if !strings.Contains(out, `"target_write_verified":true`) || !strings.Contains(out, `"causal_undo_chain_eligible":false`) {
+				t.Fatal("observed source inverse promoted to causal proof", out)
+			}
+			execute("start", "gh-6")
+			execute("handoff", "gh-6", "--done", "Synthetic planned forward recovery work")
+			execute("review", "gh-6")
+			recoverWrite("approve", "gh-6", "--self-review", "--reason", "Synthetic fixture self-review")
+			out = execute("show", "gh-6")
+			if !strings.Contains(out, `"status":"closed"`) {
+				t.Fatal(out)
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite fallback", err)
+			}
+		})
+	}
+}

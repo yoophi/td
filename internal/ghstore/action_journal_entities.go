@@ -75,7 +75,7 @@ func (c *Client) readJournalTarget(ctx context.Context, id string) (*Record, err
 	return record, nil
 }
 
-func (c *Client) prepareEntityJournal(ctx context.Context, before *Record, actor string) (*ActionJournalRecord, error) {
+func (c *Client) prepareEntityJournal(ctx context.Context, before *Record, actor string, payload map[string]any) (*ActionJournalRecord, error) {
 	if c.journal == nil {
 		return nil, nil
 	}
@@ -86,10 +86,21 @@ func (c *Client) prepareEntityJournal(ctx context.Context, before *Record, actor
 	if err != nil {
 		return nil, err
 	}
+	input, err := c.plannedUpdateIntent(ctx, before, payload, nil)
+	if err != nil {
+		return nil, err
+	}
+	intent := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: actor, IssueID: before.ID, CarrierID: c.journal.Carrier.ID, Action: before.meta.EntityKind, Phase: "prepared", Before: &state, UpdateIntent: input}
+	if err := intent.validate(); err != nil {
+		return nil, err
+	}
+	if err := checkUpdateArchiveCapacity(intent); err != nil {
+		return nil, fmt.Errorf("journal capacity preflight (no target write attempted): %w", err)
+	}
 	if err := c.EnableActionJournal(ctx, actor); err != nil {
 		return nil, err
 	}
-	intent := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: actor, IssueID: before.ID, CarrierID: c.journal.Carrier.ID, Action: before.meta.EntityKind, Phase: "prepared", Before: &state}
+	intent.CarrierID = c.journal.Carrier.ID
 	prepared, err := c.writePreparedJournal(ctx, intent)
 	if err != nil {
 		return nil, err

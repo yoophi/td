@@ -434,6 +434,7 @@ func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue,
 
 // Changes uses pointers so omitted fields, empty strings and cleared labels differ.
 type Changes struct {
+	journalRelated                 []Record
 	ParentID                       *string
 	DueDate, DeferUntil            *string
 	Details                        *IssueDetails
@@ -656,7 +657,8 @@ func (c *Client) UpdateObserved(ctx context.Context, observed *Record, change Ch
 	}
 	var journal *ActionJournalRecord
 	if c.journal != nil {
-		journal, err = c.prepareActionJournal(ctx, observed)
+		related := append(append([]Record{}, parents...), change.journalRelated...)
+		journal, err = c.prepareActionJournal(ctx, observed, payload, related)
 		if err != nil {
 			return nil, err
 		}

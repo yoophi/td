@@ -213,14 +213,14 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 	if current.observed.revision != original.revision {
 		return nil, &ConflictError{ID: before.ID}
 	}
-	journal, err := c.prepareEntityJournal(ctx, &original, actor)
-	if err != nil {
-		return nil, err
-	}
 	// Preserve native state, labels and clocks; this writes configuration only.
 	payload := map[string]any{"body": body}
 	if changes.Name != nil {
 		payload["title"] = name
+	}
+	journal, err := c.prepareEntityJournal(ctx, &original, actor, payload)
+	if err != nil {
+		return nil, err
 	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", original.Number), payload, false)
 	if err != nil {

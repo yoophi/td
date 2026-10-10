@@ -87,23 +87,25 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
-	NativeUndo      *ActionNativeUndo      `json:"native_undo,omitempty"`
-	OperationID     string                 `json:"operation_id"`
-	SessionID       string                 `json:"session_id"`
-	IssueID         string                 `json:"issue_id"`
-	CarrierID       string                 `json:"carrier_id,omitempty"`
-	Action          string                 `json:"action"`
-	Phase           string                 `json:"phase"`
-	Before          *ActionIssueState      `json:"before,omitempty"`
-	After           *ActionIssueState      `json:"after,omitempty"`
-	Restored        *ActionIssueState      `json:"restored,omitempty"`
-	UndoOperationID string                 `json:"undo_operation_id,omitempty"`
-	CreateInput     *ActionCreateInput     `json:"create_input,omitempty"`
-	CommentInput    *ActionCommentInput    `json:"comment_input,omitempty"`
-	CommentAfter    *ActionCommentState    `json:"comment_after,omitempty"`
-	CommentBefore   *ActionCommentState    `json:"comment_before,omitempty"`
-	UndoObservation *ActionUndoObservation `json:"undo_observation,omitempty"`
-	Reconciliation  *ActionReconciliation  `json:"reconciliation,omitempty"`
+	UpdateObservation *ActionUpdateObservation `json:"update_observation,omitempty"`
+	UpdateIntent      *ActionUpdateIntent      `json:"update_intent,omitempty"`
+	NativeUndo        *ActionNativeUndo        `json:"native_undo,omitempty"`
+	OperationID       string                   `json:"operation_id"`
+	SessionID         string                   `json:"session_id"`
+	IssueID           string                   `json:"issue_id"`
+	CarrierID         string                   `json:"carrier_id,omitempty"`
+	Action            string                   `json:"action"`
+	Phase             string                   `json:"phase"`
+	Before            *ActionIssueState        `json:"before,omitempty"`
+	After             *ActionIssueState        `json:"after,omitempty"`
+	Restored          *ActionIssueState        `json:"restored,omitempty"`
+	UndoOperationID   string                   `json:"undo_operation_id,omitempty"`
+	CreateInput       *ActionCreateInput       `json:"create_input,omitempty"`
+	CommentInput      *ActionCommentInput      `json:"comment_input,omitempty"`
+	CommentAfter      *ActionCommentState      `json:"comment_after,omitempty"`
+	CommentBefore     *ActionCommentState      `json:"comment_before,omitempty"`
+	UndoObservation   *ActionUndoObservation   `json:"undo_observation,omitempty"`
+	Reconciliation    *ActionReconciliation    `json:"reconciliation,omitempty"`
 }
 
 // Creation intent has no allocated issue number or observed server clock yet.
@@ -115,6 +117,7 @@ type ActionCreateInput struct {
 }
 
 type ActionJournalRecord struct {
+	compressedBody string
 	ActionJournal
 	ID        string    `json:"id"`
 	Author    string    `json:"author"`
@@ -209,6 +212,12 @@ func (a ActionJournal) validate() error {
 	if err := a.validateUndoObservation(); err != nil {
 		return err
 	}
+	if err := a.validateUpdateObservation(); err != nil {
+		return err
+	}
+	if err := a.validateUpdateIntent(); err != nil {
+		return err
+	}
 	if err := a.validateNativeUndo(); err != nil {
 		return err
 	}
@@ -228,7 +237,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		target = "new issue"
 	}
 	start := actionJournalStart
-	if a.NativeUndo != nil {
+	if a.UpdateIntent != nil {
+		start = actionUpdateIntentJournalStart
+	} else if a.NativeUndo != nil {
 		start = actionNativeUndoJournalStart
 	} else if a.UndoObservation != nil {
 		start = actionUndoObservedJournalStart
@@ -250,8 +261,21 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		return nil, nil
 	}
 	block := strings.TrimSpace(comment.Body[index:])
+	compressed := strings.HasPrefix(block, actionCompressedJournalStart)
+	if compressed {
+		if len(comment.Body) > actionCommentBudget {
+			return nil, fmt.Errorf("compressed journal body exceeds transport budget")
+		}
+		var err error
+		block, err = decodeJournalEnvelope(block)
+		if err != nil {
+			return nil, err
+		}
+	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionNativeUndoJournalStart) {
+	if strings.HasPrefix(block, actionUpdateIntentJournalStart) {
+		start = actionUpdateIntentJournalStart
+	} else if strings.HasPrefix(block, actionNativeUndoJournalStart) {
 		start = actionNativeUndoJournalStart
 	} else if strings.HasPrefix(block, actionUndoObservedJournalStart) {
 		start = actionUndoObservedJournalStart
@@ -280,22 +304,29 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	if (a.NativeUndo != nil) != (start == actionNativeUndoJournalStart) || a.NativeUndo != nil && !strings.EqualFold(a.NativeUndo.Plan.Actor, comment.User.Login) {
+	planned := start == actionUpdateIntentJournalStart
+	if a.UpdateObservation != nil && !strings.EqualFold(a.UpdateObservation.Actor, comment.User.Login) {
+		return nil, fmt.Errorf("update observer differs from native journal author")
+	}
+	if (a.UpdateIntent != nil) != planned {
+		return nil, fmt.Errorf("update intent version differs from its payload")
+	}
+	if !planned && (a.NativeUndo != nil) != (start == actionNativeUndoJournalStart) || a.NativeUndo != nil && !strings.EqualFold(a.NativeUndo.Plan.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("native undo version or actor differs from native receipt")
 	}
-	if (a.UndoObservation != nil) != (start == actionUndoObservedJournalStart) || a.UndoObservation != nil && !strings.EqualFold(a.UndoObservation.Actor, comment.User.Login) {
+	if !planned && (a.UndoObservation != nil) != (start == actionUndoObservedJournalStart) || a.UndoObservation != nil && !strings.EqualFold(a.UndoObservation.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("undo observation version or native author does not match its payload")
 	}
-	if (a.Reconciliation != nil) != (start == actionReconciledJournalStart) {
+	if !planned && (a.Reconciliation != nil) != (start == actionReconciledJournalStart) {
 		return nil, fmt.Errorf("reconciliation journal version does not match its payload")
 	}
-	if a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.entityKind() != "") != (start == actionEntityJournalStart) {
+	if !planned && a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.entityKind() != "") != (start == actionEntityJournalStart) {
 		return nil, fmt.Errorf("entity journal version does not match its payload")
 	}
-	if a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_delete") != (start == actionDeletedCommentJournalStart) {
+	if !planned && a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_delete") != (start == actionDeletedCommentJournalStart) {
 		return nil, fmt.Errorf("deleted comment journal version does not match its payload")
 	}
-	if a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_create") != (start == actionCommentJournalStart) {
+	if !planned && a.Reconciliation == nil && a.UndoObservation == nil && a.NativeUndo == nil && (a.Action == "comment_create") != (start == actionCommentJournalStart) {
 		return nil, fmt.Errorf("action journal version does not match its payload")
 	}
 	if a.Reconciliation != nil && !strings.EqualFold(a.Reconciliation.Actor, comment.User.Login) {
@@ -312,11 +343,19 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		return nil, fmt.Errorf("action journal belongs to carrier %s, not %s", carrier, issueID)
 	}
 	expected, err := renderActionJournal(a)
-	if err != nil || expected != comment.Body {
+	canonical := comment.Body
+	if compressed {
+		canonical = comment.Body[:index] + block
+	}
+	if err != nil || expected != canonical {
 		return nil, fmt.Errorf("comment %d action journal was edited or is noncanonical", comment.ID)
 	}
-	return &ActionJournalRecord{ActionJournal: a, ID: fmt.Sprintf("ghc-%d", comment.ID), Author: comment.User.Login,
-		URL: comment.URL, CreatedAt: comment.CreatedAt, UpdatedAt: comment.UpdatedAt}, nil
+	record := &ActionJournalRecord{ActionJournal: a, ID: fmt.Sprintf("ghc-%d", comment.ID), Author: comment.User.Login,
+		URL: comment.URL, CreatedAt: comment.CreatedAt, UpdatedAt: comment.UpdatedAt}
+	if compressed {
+		record.compressedBody = comment.Body
+	}
+	return record, nil
 }
 
 // ActionHistory reads all carriers' journals from the existing bulk comments,

@@ -153,7 +153,7 @@ func (c *Client) decodeJournalResponse(data []byte, expectedBody, carrierID stri
 	return decodeActionJournal(comment, carrierID)
 }
 
-func (c *Client) prepareActionJournal(ctx context.Context, before *Record) (*ActionJournalRecord, error) {
+func (c *Client) prepareActionJournal(ctx context.Context, before *Record, payload map[string]any, parents []Record) (*ActionJournalRecord, error) {
 	if before == nil || before.repository != c.repo || before.ID == c.journal.Carrier.ID {
 		return nil, fmt.Errorf("a target observation from this repository is required")
 	}
@@ -161,11 +161,22 @@ func (c *Client) prepareActionJournal(ctx context.Context, before *Record) (*Act
 	if err != nil {
 		return nil, err
 	}
-	if err := c.EnableActionJournal(ctx, c.journal.SessionID); err != nil {
+	intent, err := c.plannedUpdateIntent(ctx, before, payload, parents)
+	if err != nil {
 		return nil, err
 	}
 	a := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: before.ID,
-		CarrierID: c.journal.Carrier.ID, Action: "update", Phase: "prepared", Before: &state}
+		CarrierID: c.journal.Carrier.ID, Action: "update", Phase: "prepared", Before: &state, UpdateIntent: intent}
+	if err := a.validate(); err != nil {
+		return nil, err
+	}
+	if err := checkUpdateArchiveCapacity(a); err != nil {
+		return nil, fmt.Errorf("journal capacity preflight (no target write attempted): %w", err)
+	}
+	if err := c.EnableActionJournal(ctx, c.journal.SessionID); err != nil {
+		return nil, err
+	}
+	a.CarrierID = c.journal.Carrier.ID
 	return c.writePreparedJournal(ctx, a)
 }
 
@@ -209,7 +220,7 @@ func (c *Client) writePreparedJournal(ctx context.Context, a ActionJournal) (*Ac
 	if _, err := c.journalCarrier(ctx, c.journal.Carrier.ID); err != nil {
 		return nil, fmt.Errorf("verify journal carrier before intent (no target write attempted): %w", err)
 	}
-	body, err := renderActionJournal(a)
+	body, err := renderWriteActionJournal(a)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +260,7 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	if err != nil {
 		return err
 	}
-	oldBody, err := renderActionJournal(prepared.ActionJournal)
+	oldBody, err := renderExistingActionJournal(prepared)
 	if err != nil {
 		return err
 	}
@@ -284,7 +295,7 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 		}
 		applied.IssueID = after.ID
 	}
-	body, err := renderActionJournal(applied)
+	body, err := renderWriteActionJournal(applied)
 	if err != nil {
 		return err
 	}

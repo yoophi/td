@@ -13,7 +13,9 @@ import (
 )
 
 type githubActionHistoryRow struct {
-	NativeUndo *ghstore.ActionNativeUndo `json:"native_undo,omitempty"`
+	UpdateObservation *ghstore.ActionUpdateObservation `json:"update_observation,omitempty"`
+	UpdateIntent      *ghstore.ActionUpdateIntent      `json:"update_intent,omitempty"`
+	NativeUndo        *ghstore.ActionNativeUndo        `json:"native_undo,omitempty"`
 	models.ActionLog
 	OperationID       string                         `json:"operation_id"`
 	Phase             string                         `json:"phase"`
@@ -114,6 +116,9 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 		if jsonMode(cmd) {
 			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 		}
+		if result.ForwardOutcome != nil {
+			cmd.Printf("Forward result: proof=%s, target write verified=%t, causal undo chain eligible=%t\n", result.ForwardOutcome.Proof, result.ForwardOutcome.TargetWriteVerified, result.ForwardOutcome.CausalUndoChainEligible)
+		}
 		if result.Compensation != nil {
 			cmd.Printf("Native compensation: new review required=%t; native events retained; causal undo chain eligible=false\n", result.Compensation.RequiresNewReview)
 		}
@@ -202,7 +207,10 @@ func executeGitHubUndo(cmd *cobra.Command, client *ghstore.Client, actions []ghs
 			"operation_id": result.Journal.OperationID, "undo_operation_id": result.Journal.UndoOperationID, "receipt_id": result.Journal.ID,
 			"already_undone": result.AlreadyUndone, "issue": result.Issue, "history_scope": "td-action-journal"}
 		if result.Compensation != nil {
-			out["compensation"], out["undo_outcome"] = result.Compensation, result.UndoOutcome
+			out["compensation"] = result.Compensation
+		}
+		if result.UndoOutcome != nil {
+			out["undo_outcome"] = result.UndoOutcome
 		}
 		if kind != "issue" {
 			out["entity_type"], out["target_issue_id"] = kind, result.Issue.ID
@@ -253,7 +261,7 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 			PreviousData: before, NewData: after, Timestamp: action.CreatedAt, Undone: action.Phase == "undone"},
 			OperationID: action.OperationID, Phase: action.Phase, CarrierID: action.CarrierID, Author: action.Author, URL: action.URL,
 			DataFormat: "github-native-issue-state-v1", HistoryScope: "td-action-journal", CreateInput: action.CreateInput,
-			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, Reconciliation: action.Reconciliation, NativeUndo: action.NativeUndo, UndoObservation: action.UndoObservation, CommentDataFormat: commentFormat})
+			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, Reconciliation: action.Reconciliation, NativeUndo: action.NativeUndo, UpdateIntent: action.UpdateIntent, UpdateObservation: action.UpdateObservation, UndoObservation: action.UndoObservation, CommentDataFormat: commentFormat})
 	}
 	return rows, nil
 }

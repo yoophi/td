@@ -124,7 +124,7 @@ func TestNativeUndoExecutesCompensationWithoutRevivingApproval(t *testing.T) {
 			if variant == "close-minor" && result.Compensation.RequiresNewReview {
 				t.Fatal("minor inverse incorrectly requires review")
 			}
-			if !strings.Contains(f.comment.Body, actionNativeUndoJournalStart) {
+			if !strings.Contains(f.comment.Body, actionUpdateIntentJournalStart) {
 				t.Fatal("native result not versioned")
 			}
 			writes, receipts := f.targetWrites, f.receiptWrites
@@ -217,7 +217,7 @@ func TestNativeUndoJournalCannotForgePlanVersionActorOrProof(t *testing.T) {
 			copy := *f.comment
 			switch mode {
 			case "version":
-				copy.Body = strings.Replace(copy.Body, actionNativeUndoJournalStart, actionJournalStart, 1)
+				copy.Body = strings.Replace(copy.Body, actionUpdateIntentJournalStart, actionJournalStart, 1)
 			case "actor":
 				copy.User.Login = "foreign-author"
 			default:

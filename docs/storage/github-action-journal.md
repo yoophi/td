@@ -707,3 +707,41 @@ before/after, session, plan and undo identity. An already completed receipt is
 confirmed without writes. Stale, extra, missing or delayed native events fail
 explicitly until the remote evidence can be inspected. v1–v6 reading remains
 supported; older readers reject v7 rather than silently accepting it.
+
+
+## Forward update recovery and bounded transport
+
+New task, note and board updates record their complete planned title, body,
+native state and labels before the target write (v8). Native review/state
+changes also retain a real event baseline. Changed relation and board-position
+inputs retain the already validated related issue observations; unchanged
+legacy edges are not revalidated as new writes.
+
+If the target PATCH or completion receipt is uncertain, `td undo --reconcile
+ghc-ID` previews the exact remote planned contents and proofs. `--apply` updates
+only the existing receipt after a second fresh proof/source check. It never
+replays the target write or invents the original server timestamp. Recovery
+records the actual observer session, GitHub author, time and native state with
+`proof=forward-contents-observed`. JSON exposes `forward_outcome`, with
+`target_write_verified=false` and `causal_undo_chain_eligible=false`. A completed
+original receipt is confirmed without writes; repeated recovery is read-only.
+Observed forward contents cannot bridge a causal undo chain. A separately
+verified direct inverse can report its own write as verified while remaining
+ineligible as a causal witness.
+
+Large new receipts use a v9 envelope containing the original v1–v8 schema,
+gzip/base64 data, decoded size and SHA-256. The implementation chooses a
+conservative 60,000-byte single-comment budget and a 4 MiB decoded budget;
+these are internal transport bounds, not claims about GitHub API maxima.
+Completion and recovery observation capacity are checked before an update
+writes its target, with reserved headroom. Incompressible records that require
+multipart transport fail explicitly before the target write. Malformed,
+unknown, recursive, corrupt and oversized envelopes fail closed. Reading
+retains all earlier schemas, and rewriting a compressed receipt fences against
+its exact original bytes instead of recompressing historical data.
+
+This stage does not implement grouped cascade intent/recovery, portable
+journal history, or multipart transport for large incompressible snapshots.
+Older updates without recorded full inputs cannot be recovered by guessing
+what the original command requested. Optimistic GitHub checks do not provide
+an atomic compare-and-swap boundary.

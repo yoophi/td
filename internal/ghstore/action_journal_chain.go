@@ -58,7 +58,7 @@ func planUndoThroughReceipts(action *ActionJournalRecord, current *Record, sessi
 			if edge != nil || a.Phase != "undone" || a.SessionID != sessionID || !strings.EqualFold(a.Author, author) || a.CarrierID != action.CarrierID {
 				return fail()
 			}
-			if a.NativeUndo != nil || a.UndoObservation != nil || a.validate() != nil || (a.Action != "comment_create" && scalarUndoScope(a) != nil) || !sameActionContents(*a.Before, *a.Restored) || a.Restored.UpdatedAt.Before(a.After.UpdatedAt) {
+			if a.UpdateObservation != nil || a.NativeUndo != nil || a.UndoObservation != nil || a.validate() != nil || (a.Action != "comment_create" && scalarUndoScope(a) != nil) || !sameActionContents(*a.Before, *a.Restored) || a.Restored.UpdatedAt.Before(a.After.UpdatedAt) {
 				return fail()
 			}
 			edge = a
@@ -91,7 +91,7 @@ func sameActionContents(a, b ActionIssueState) bool {
 
 func verifyUndoWitnesses(witnesses, history []ActionJournalRecord) error {
 	for _, witness := range witnesses {
-		if witness.NativeUndo != nil || witness.UndoObservation != nil {
+		if witness.UpdateObservation != nil || witness.NativeUndo != nil || witness.UndoObservation != nil {
 			return &ConflictError{ID: witness.IssueID}
 		}
 		matches := 0

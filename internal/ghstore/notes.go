@@ -277,11 +277,12 @@ func (c *Client) UpdateNoteObserved(ctx context.Context, observed *NoteRecord, c
 	if err != nil {
 		return nil, false, err
 	}
-	journal, err := c.prepareEntityJournal(ctx, &original, actor)
+	payload := map[string]any{"title": title, "body": body}
+	journal, err := c.prepareEntityJournal(ctx, &original, actor, payload)
 	if err != nil {
 		return nil, false, err
 	}
-	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", original.Number), map[string]any{"title": title, "body": body}, false)
+	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", original.Number), payload, false)
 	if err != nil {
 		return nil, false, fmt.Errorf("note %s operation %s failed; outcome may be unknown, inspect GitHub before retrying: %w", before.ID, operation, err)
 	}
