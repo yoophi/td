@@ -22,7 +22,7 @@ func (c *Client) TransitionObservedWithCascades(ctx context.Context, observed *R
 // TransitionWithCascades is the command-level transition entry point. Individual
 // writes remain optimistic: GitHub provides no transaction over a hierarchy.
 func (c *Client) TransitionWithCascades(ctx context.Context, id, action string, o TransitionOptions) (*Record, bool, error) {
-	owned := action == "review" && c.journal != nil && c.journal.Group == nil
+	owned := (action == "review" || action == "close" || action == "approve" && !o.RecordOnly) && c.journal != nil && c.journal.Group == nil
 	if owned {
 		if c.journal.SessionID != o.SessionID {
 			return nil, false, fmt.Errorf("review actor differs from tracked session; no target write attempted")
@@ -31,14 +31,14 @@ func (c *Client) TransitionWithCascades(ctx context.Context, id, action string, 
 		if err != nil {
 			return nil, false, err
 		}
-		if err := c.BeginActionGroup(ctx, "review", []string{fmt.Sprintf("gh-%d", n)}); err != nil {
+		if err := c.BeginTransitionActionGroup(ctx, action, []string{fmt.Sprintf("gh-%d", n)}, o); err != nil {
 			return nil, false, err
 		}
 	}
 	result, noop, err := c.transitionWithCascades(ctx, id, action, o)
 	if err != nil {
 		if owned && c.journal.Group != nil {
-			return nil, false, fmt.Errorf("review group %s stopped; inspect and reconcile before retrying (earlier changes remain): %w", c.journal.Group.Journal.ID, err)
+			return nil, false, fmt.Errorf("transition group %s stopped; inspect and reconcile before retrying (earlier changes remain): %w", c.journal.Group.Journal.ID, err)
 		}
 		return nil, false, err
 	}

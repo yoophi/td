@@ -57,6 +57,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if action.GroupOperationID != "" && groupUndoContext(ctx) != action.GroupOperationID {
 		return nil, &UndoScopeError{Reason: "group member must be undone through its complete group; no target write attempted"}
 	}
+	if err := checkGroupUndoMember(ctx, action); err != nil {
+		return nil, err
+	}
 	if action.CarrierID == "" {
 		return nil, &UndoScopeError{Reason: "legacy per-target journal execution requires migration to a separate carrier; no target write attempted"}
 	}

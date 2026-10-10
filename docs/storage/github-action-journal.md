@@ -816,3 +816,37 @@ chains. This is optimistic compensation, not a GitHub transaction.
 Close/approve cascades, native-state groups, other batch writers, sweeps,
 work-session fanout, portable history and multipart transport still require
 integration; this review support does not claim those operations are complete.
+
+### Native closure and reopen groups
+
+Tracked close/closing-approve entry points freeze their roots, ancestors,
+siblings, dependents and all dependencies used to decide unblocking in v13.
+Explicit multi-ID reopen and record-only approval use the same group transport
+with root-only membership. An isolated single target retains its existing
+receipt. Missing dependency existence is also fenced: a later appearing
+otherwise missing dependency changes the watched membership. New dependents,
+reparenting, sibling edits and deleted nodes fail before inverse target writes.
+
+Complete root native effects, aggregate epic closures and dependency unblocks
+have separate admission checks. Aggregate epic closure preserves its actual
+implementer and never creates an approval. The group preflights every inverse
+and original handoff/event proof before the first inverse, then applies member
+inverses in reverse actual receipt order. Native members retain forward audit
+rows, append compensation, supersede old approvals and preserve all actual
+closed/reopened events; they do not restore an old approval onto new events.
+Ordinary dependent unblocks restore their original snapshots. The native target
+PATCH also invokes the full group receipt/membership/revision fence immediately
+before writing. Completion capacity probes include native compensation audit
+payloads and never claim future results or timestamps as observed evidence.
+
+An uncertain native inverse is matched to its original compensation input and
+actual event prefix before receipt-only recovery. The original group roots,
+forward results and undo identity remain unchanged; completed members are not
+replayed. Observed native completion keeps its weaker proof even when the rest
+of the group is later undone through verified writes. Groups remain non-causal.
+Repeated completed verification is read-only. The API still supplies no atomic
+transaction or CAS over this hierarchy.
+
+Multiple effects on the same issue in one compound command, remaining writers,
+claim sweeps/work-session fanout, portable history and multipart transport still
+need integration; this group support does not declare the whole undo task done.

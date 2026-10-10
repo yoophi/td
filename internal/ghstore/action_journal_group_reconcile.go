@@ -24,7 +24,7 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 	if err != nil {
 		return nil, err
 	}
-	if err := verifyReviewGroupMembership(a.Group, snapshot.Issues(true)); err != nil {
+	if err := verifyGraphGroupMembership(a.Group, snapshot.Issues(true)); err != nil {
 		return nil, err
 	}
 	history, err := snapshot.ActionHistory("")
@@ -104,8 +104,8 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 					result.Status = "applied"
 					out.Remaining = true
 				case "undo_prepared":
-					if !sameActionContents(m.Before, state) || state.UpdatedAt.Before(receipt.After.UpdatedAt) {
-						return nil, fmt.Errorf("group inverse %s is unverified; inspect remote state before retrying; no target replay", receipt.ID)
+					if err := groupMemberInverseObserved(ctx, c, receipt, &current, m.Before, true); err != nil {
+						return nil, err
 					}
 					result.Status = "pending-undone"
 					out.Pending = true
@@ -113,7 +113,7 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 					if receipt.Restored == nil || state.Revision != receipt.Restored.Revision {
 						return nil, &ConflictError{ID: m.IssueID}
 					}
-					if err := c.checkUndoOriginalReview(ctx, receipt, false); err != nil {
+					if err := groupMemberInverseObserved(ctx, c, receipt, &current, m.Before, false); err != nil {
 						return nil, err
 					}
 					result.Status = "undone"
@@ -298,7 +298,7 @@ func (c *Client) reconcileActionGroup(ctx context.Context, a *ActionJournalRecor
 	}
 	if inverse && normal {
 		for _, m := range observed.Members {
-			if m.Status == "undone" && observed.Receipts[m.IssueID].UndoObservation != nil {
+			if m.Status == "undone" && nativeGroupMemberProofObserved(observed.Receipts[m.IssueID]) {
 				observation.Proof = "group-contents-observed"
 			}
 		}

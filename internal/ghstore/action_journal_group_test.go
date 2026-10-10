@@ -97,3 +97,44 @@ func TestReviewGroupVersionRootsAndImmutableMembership(t *testing.T) {
 		t.Fatal("roots rewritten")
 	}
 }
+
+func TestNativeGroupVersionCascadePolicyAndInverseCapacity(t *testing.T) {
+	a := groupModelFixture(t)
+	a.Group.Command = "close"
+	a.Group.Roots = []string{"gh-1"}
+	a.Group.Cascade = true
+	body, err := renderWriteActionJournal(a)
+	if err != nil || !strings.Contains(body, actionNativeGroupJournalStart) {
+		t.Fatal(body, err)
+	}
+	c := journalCommentFixture(t, a)
+	c.Body = body
+	decoded, err := decodeActionJournal(c, "gh-9")
+	if err != nil || !reflect.DeepEqual(decoded.ActionJournal, a) {
+		t.Fatal(decoded, err)
+	}
+	c.Body = strings.Replace(body, actionNativeGroupJournalStart, actionReviewGroupJournalStart, 1)
+	if _, err := decodeActionJournal(c, "gh-9"); err == nil {
+		t.Fatal("legacy group accepted native graph")
+	}
+	next := a
+	g := *a.Group
+	g.Cascade = false
+	next.Group = &g
+	if _, err := renderWriteActionJournal(next); err == nil {
+		t.Fatal("close omitted closure graph")
+	}
+	if err := validateGroupRewrite(a, next); err == nil {
+		t.Fatal("cascade role rewritten")
+	}
+	f, _ := nativeExecutionFixture(t, "close-approved")
+	forward, err := decodeActionJournal(*f.comment, "gh-9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := *forward.After
+	projected, err := projectGroupInverseState(a, ActionGroupMember{IssueID: forward.IssueID, Before: *forward.Before}, after)
+	if err != nil || projected.Body == forward.Before.Body || !strings.Contains(projected.Body, `"action":"undo_native"`) {
+		t.Fatal("native inverse capacity omitted audit", err)
+	}
+}

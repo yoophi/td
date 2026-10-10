@@ -68,7 +68,11 @@ if path.startswith('repos/owner/repo/issues/comments/'):
   if method=='PATCH':
    payload=json.load(sys.stdin)
    if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-denied' or (os.environ.get('TD_GH_JOURNAL_FAIL')=='undo-completion-denied' and '"phase":"undone"' in payload.get('body','')):sys.stderr.write('HTTP 403 journal receipt denied');sys.exit(1)
-   data.update(payload);data['updated_at']=fixture_tick(data['updated_at']);journal_file.write_text(json.dumps(journal))
+   data.update(payload);data['updated_at']=fixture_tick(data['updated_at'])
+   target=os.environ.get('TD_GH_GROUP_EVENT_TARGET')
+   if target and '"group_operation_id":' in payload.get('body','') and '"native_undo":' in payload.get('body','') and '"phase":"undo_prepared"' in payload.get('body','') and not journal.get('foreign_group_event_injected'):
+    observed=journal['native_events'][target];n=observed[-1]['id'] if observed else 0;observed.extend([{'id':n+1,'event':'reopened'},{'id':n+2,'event':'closed'}]);journal['foreign_group_event_injected']=True
+   journal_file.write_text(json.dumps(journal))
    if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-lost':sys.stderr.write('connection lost after receipt');sys.exit(1)
   journal_result(data)
 `

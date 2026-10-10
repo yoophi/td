@@ -78,15 +78,20 @@ func reviewGroupIDs(records []Record, roots []string) ([]string, error) {
 }
 
 func (c *Client) beginReviewActionGroup(ctx context.Context, roots []string) error {
+	return c.beginGraphActionGroup(ctx, &ActionGroup{Command: "review", Roots: slices.Clone(roots)})
+}
+
+func (c *Client) beginGraphActionGroup(ctx context.Context, g *ActionGroup) error {
+	roots := g.Roots
 	if c.journal == nil || c.journal.Group != nil || len(roots) == 0 {
-		return fmt.Errorf("review group requires tracked roots; no target write attempted")
+		return fmt.Errorf("graph group requires tracked roots; no target write attempted")
 	}
 	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), false)
 	if err != nil {
 		return err
 	}
 	records := snapshot.Issues(true)
-	ids, err := reviewGroupIDs(records, roots)
+	ids, err := graphGroupIDs(g, records)
 	if err != nil {
 		return err
 	}
@@ -97,7 +102,6 @@ func (c *Client) beginReviewActionGroup(ctx context.Context, roots []string) err
 	for _, r := range records {
 		byID[r.ID] = r
 	}
-	g := &ActionGroup{Command: "review", Roots: slices.Clone(roots)}
 	expected := map[string]ActionIssueState{}
 	for _, id := range ids {
 		r := byID[id]
@@ -117,13 +121,13 @@ func (c *Client) beginReviewActionGroup(ctx context.Context, roots []string) err
 	}
 	a := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: ids[0], CarrierID: carrier, Action: "group", Phase: "prepared", Group: g}
 	if err := checkGroupArchiveCapacity(a, expected); err != nil {
-		return fmt.Errorf("review group capacity preflight: %w", err)
+		return fmt.Errorf("graph group capacity preflight: %w", err)
 	}
 	if err := c.EnableActionJournal(ctx, c.journal.SessionID); err != nil {
 		return err
 	}
 	a.CarrierID = c.journal.Carrier.ID
-	if err := c.verifyReviewGroupExpected(ctx, g, expected); err != nil {
+	if err := c.verifyGraphGroupExpected(ctx, g, expected); err != nil {
 		return err
 	}
 	journal, err := c.writePreparedJournal(ctx, a)
@@ -134,32 +138,32 @@ func (c *Client) beginReviewActionGroup(ctx context.Context, roots []string) err
 	return nil
 }
 
-func verifyReviewGroupMembership(g *ActionGroup, records []Record) error {
-	if g.Command != "review" {
+func verifyGraphGroupMembership(g *ActionGroup, records []Record) error {
+	if len(g.Roots) == 0 {
 		return nil
 	}
-	ids, err := reviewGroupIDs(records, g.Roots)
+	ids, err := graphGroupIDs(g, records)
 	if err != nil {
 		return err
 	}
 	if len(ids) != len(g.Members) {
-		return fmt.Errorf("review group hierarchy membership changed")
+		return fmt.Errorf("group hierarchy/dependency membership changed")
 	}
 	for i, id := range ids {
 		if id != g.Members[i].IssueID {
-			return fmt.Errorf("review group hierarchy membership/order changed")
+			return fmt.Errorf("group hierarchy/dependency membership/order changed")
 		}
 	}
 	return nil
 }
 
-func (c *Client) verifyReviewGroupExpected(ctx context.Context, g *ActionGroup, expected map[string]ActionIssueState) error {
+func (c *Client) verifyGraphGroupExpected(ctx context.Context, g *ActionGroup, expected map[string]ActionIssueState) error {
 	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), false)
 	if err != nil {
 		return err
 	}
 	records := snapshot.Issues(true)
-	if err := verifyReviewGroupMembership(g, records); err != nil {
+	if err := verifyGraphGroupMembership(g, records); err != nil {
 		return err
 	}
 	actual := map[string]ActionIssueState{}

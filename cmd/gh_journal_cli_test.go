@@ -1573,3 +1573,154 @@ func TestGitHubJournalCLIReviewCascadeGroupUndoAndHierarchyFence(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHubJournalCLINativeClosureGroupAndRecovery(t *testing.T) {
+	for _, mode := range []string{"cascade", "approve", "forward-partial", "inverse-partial", "inverse-native-partial", "reopen-batch", "late-dependent", "foreign-event-fence"} {
+		t.Run(mode, func(t *testing.T) {
+			dir, _, run := journalCLI(t)
+			t.Setenv("TD_GH_FIXTURE_NATIVE_EVENTS", "1")
+			execute := func(args ...string) string {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil {
+					t.Fatal(args, out, stderr, err)
+				}
+				return out
+			}
+			execute("create", "Aggregate epic", "--type", "epic")
+			execute("create", "Minor leaf", "--parent", "gh-6", "--minor")
+			execute("create", "Blocked dependent")
+			execute("update", "gh-8", "--depends-on", "gh-6")
+			execute("block", "gh-8")
+			command := []string{"close", "gh-7", "--reason", "Synthetic fixture minor closure"}
+			if mode == "approve" {
+				execute("review", "gh-7")
+				command = []string{"approve", "gh-7", "--self-review", "--reason", "Synthetic fixture minor review"}
+			}
+			if mode == "reopen-batch" {
+				execute(command...)
+				command = []string{"reopen", "gh-7", "gh-6", "--reason", "Synthetic fixture reopen"}
+			}
+			if mode == "inverse-native-partial" || mode == "foreign-event-fence" {
+				execute("delete", "gh-8", "--force")
+			}
+			before, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if mode == "forward-partial" {
+				t.Setenv("TD_GH_JOURNAL_FAIL", "receipt-denied")
+			}
+			out, stderr, err := run(append(command, "--json")...)
+			if (err != nil) != (mode == "forward-partial") {
+				t.Fatal(out, stderr, err)
+			}
+			t.Setenv("TD_GH_JOURNAL_FAIL", "")
+			var rows []struct {
+				ID, Phase string
+				Group     *ghstore.ActionGroup
+			}
+			latest := execute("last", "--n", "1")
+			if json.Unmarshal([]byte(latest), &rows) != nil || len(rows) != 1 || rows[0].Group == nil {
+				t.Fatal(latest)
+			}
+			rid := rows[0].ID
+			if mode == "forward-partial" {
+				current, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				result := execute("undo", "--reconcile", rid, "--apply")
+				after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if !bytes.Equal(current, after) || !strings.Contains(result, `"partial":true`) {
+					t.Fatal(result)
+				}
+			}
+			if mode == "late-dependent" {
+				data, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				var state map[string]any
+				_ = json.Unmarshal(data, &state)
+				issues := state["issues"].(map[string]any)
+				raw, _ := json.Marshal(issues["8"])
+				var child map[string]any
+				_ = json.Unmarshal(raw, &child)
+				child["number"] = 9
+				child["title"] = "External new dependent"
+				issues["9"] = child
+				data, _ = json.Marshal(state)
+				_ = os.WriteFile(os.Getenv("TD_SCHEDULE_STATE"), data, 0600)
+				current, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				out, stderr, err := run("undo", "--json")
+				if err == nil || !strings.Contains(out+stderr, "membership") {
+					t.Fatal(out, stderr, err)
+				}
+				after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if !bytes.Equal(current, after) {
+					t.Fatal("conflict mutated tasks")
+				}
+				return
+			}
+			if mode == "foreign-event-fence" {
+				t.Setenv("TD_GH_GROUP_EVENT_TARGET", "7")
+				current, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				out, stderr, err := run("undo", "--json")
+				if err == nil || !strings.Contains(out+stderr, "event") {
+					t.Fatal(out, stderr, err)
+				}
+				after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if !bytes.Equal(current, after) {
+					t.Fatal("event collision allowed inverse target writes")
+				}
+				return
+			}
+			if mode == "inverse-partial" || mode == "inverse-native-partial" {
+				t.Setenv("TD_GH_JOURNAL_FAIL", "undo-completion-denied")
+				out, stderr, err := run("undo", "--json")
+				if err == nil || !strings.Contains(out+stderr, "unverified") {
+					t.Fatal(out, stderr, err)
+				}
+				t.Setenv("TD_GH_JOURNAL_FAIL", "")
+				current, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				execute("undo", "--reconcile", rid, "--apply")
+				after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if !bytes.Equal(current, after) {
+					t.Fatal("inverse recovery replayed targets")
+				}
+			}
+			inverse := execute("undo")
+			if !strings.Contains(inverse, `"group_members":`) || !strings.Contains(inverse, `"causal_undo_chain_eligible":false`) {
+				t.Fatal(inverse)
+			}
+			if mode == "inverse-native-partial" && !strings.Contains(inverse, `"target_write_verified":false`) {
+				t.Fatal("observed native completion promoted", inverse)
+			}
+			after, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			var a, b struct{ Issues map[string]map[string]any }
+			if json.Unmarshal(before, &a) != nil || json.Unmarshal(after, &b) != nil {
+				t.Fatal("fixture")
+			}
+			for _, id := range []string{"6", "7", "8"} {
+				for _, field := range []string{"title", "state", "labels"} {
+					x, _ := json.Marshal(a.Issues[id][field])
+					y, _ := json.Marshal(b.Issues[id][field])
+					if !bytes.Equal(x, y) {
+						t.Fatal("compensation differs", mode, id, field)
+					}
+				}
+				body := b.Issues[id]["body"].(string)
+				if id == "8" {
+					if body != a.Issues[id]["body"] {
+						t.Fatal("dependent not restored")
+					}
+				} else if mode != "forward-partial" || id == "7" {
+					if !strings.Contains(body, `"action":"undo_native"`) {
+						t.Fatal("native audit missing", id, body)
+					}
+				}
+			}
+			current, _ := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			execute("undo", "--reconcile", rid, "--apply")
+			after, _ = os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+			if !bytes.Equal(current, after) {
+				t.Fatal("confirmation replayed tasks")
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("SQLite", err)
+			}
+		})
+	}
+}

@@ -108,7 +108,11 @@ func checkGroupArchiveCapacity(a ActionJournal, expected map[string]ActionIssueS
 	inverse.Members = append([]ActionGroupResultMember{}, observation.Members...)
 	for i := range inverse.Members {
 		inverse.Members[i].Status = "undone"
-		inverse.Members[i].State = group.Members[i].Before
+		state, err := projectGroupInverseState(a, group.Members[i], expected[group.Members[i].IssueID])
+		if err != nil {
+			return err
+		}
+		inverse.Members[i].State = state
 	}
 	group.Inverse = &inverse
 	probe.Phase = "undone"
@@ -174,12 +178,15 @@ func validateGroupMember(group *ActionJournalRecord, member *ActionJournalRecord
 	if group.Group.Command == "review" {
 		matched, err = reviewGroupMemberScope(group.Group, &probe)
 	}
+	if nativeGroupCommand(group.Group.Command) {
+		matched, err = nativeGroupMemberScope(group.Group, &probe)
+	}
 	if err != nil || !matched {
 		return &UndoScopeError{Reason: "member input is not the complete declared basic transition effect; no target write attempted"}
 	}
 	_, meta, _, _ := decodeBody(after.Body)
 	tr := meta.Details.Transitions[len(meta.Details.Transitions)-1]
-	if tr.Action != group.Group.Command {
+	if tr.Action != group.Group.Command && !group.Group.Cascade {
 		return fmt.Errorf("member transition differs from declared group command")
 	}
 	return nil
@@ -215,8 +222,8 @@ func (c *Client) attachActionGroupMember(ctx context.Context, a *ActionJournal) 
 	if err := checkGroupArchiveCapacity(active.Journal.ActionJournal, sizing); err != nil {
 		return fmt.Errorf("group completion capacity preflight (no target write attempted): %w", err)
 	}
-	if active.Journal.Group.Command == "review" {
-		return c.verifyReviewGroupExpected(ctx, active.Journal.Group, active.Expected)
+	if len(active.Journal.Group.Roots) > 0 {
+		return c.verifyGraphGroupExpected(ctx, active.Journal.Group, active.Expected)
 	}
 	return c.verifyGroupExpected(ctx, active.Expected)
 }

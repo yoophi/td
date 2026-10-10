@@ -32,6 +32,9 @@ type NativeIssueUndoPlan struct {
 // Recognize every single-target native writer effect. Coordinated cascades and
 // unrelated edits are excluded rather than silently absorbed by compensation.
 func nativeUndoScope(action *ActionJournalRecord) (TransitionRecord, bool, error) {
+	if tr, matched, err := autoParentCloseUndoScope(action); err != nil || matched {
+		return tr, matched, err
+	}
 	fail := func() (TransitionRecord, bool, error) { return TransitionRecord{}, false, nil }
 	if action.Action != "update" || action.Before == nil || action.After == nil || action.entityKind() != "" || action.Before.State == action.After.State {
 		return fail()

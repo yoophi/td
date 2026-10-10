@@ -94,6 +94,24 @@ func (c *Client) undoNativeAction(ctx context.Context, a *ActionJournalRecord, c
 	if _, err := c.checkNativeUndoFence(ctx, a, native, current, false); err != nil {
 		return nil, err
 	}
+	body, err := renderExistingActionJournal(prepared)
+	if err != nil {
+		return nil, err
+	}
+	number, err := CommentNumber(prepared.ID)
+	if err != nil {
+		return nil, err
+	}
+	intent, err := c.journalComment(ctx, fmt.Sprintf("/issues/comments/%d", number), nil, body, prepared.CarrierID)
+	if err != nil {
+		return nil, err
+	}
+	if !reflect.DeepEqual(intent, prepared) {
+		return nil, fmt.Errorf("native inverse intent changed before target write")
+	}
+	if err := checkGroupUndoGate(ctx); err != nil {
+		return nil, err
+	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", current.Number), plan.Payload, false)
 	if err != nil {
 		return nil, fmt.Errorf("native undo %s has an uncertain result; inspect with --reconcile before retrying, no automatic replay: %w", plan.UndoOperationID, err)

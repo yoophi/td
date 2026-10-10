@@ -10,6 +10,7 @@ import (
 
 const actionGroupJournalStart = actionJournalPrefix + "v10\n"
 const actionReviewGroupJournalStart = actionJournalPrefix + "v12\n"
+const actionNativeGroupJournalStart = actionJournalPrefix + "v13\n"
 const actionGroupMemberJournalStart = actionJournalPrefix + "v11\n"
 
 type ActionGroupMember struct {
@@ -39,6 +40,7 @@ type ActionGroupObservation struct {
 type ActionGroup struct {
 	Command string                  `json:"command"`
 	Roots   []string                `json:"roots,omitempty"`
+	Cascade bool                    `json:"cascade,omitempty"`
 	Members []ActionGroupMember     `json:"members"`
 	Forward *ActionGroupObservation `json:"forward,omitempty"`
 	Inverse *ActionGroupObservation `json:"inverse,omitempty"`
@@ -55,7 +57,7 @@ func canonicalGroupID(id string) bool {
 
 func (a ActionJournal) validateGroupAction() error {
 	g := a.Group
-	if g == nil || a.Action != "group" || a.GroupOperationID != "" || (!groupBasicCommand(g.Command) && g.Command != "review") || len(g.Members) < 2 || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
+	if g == nil || a.Action != "group" || a.GroupOperationID != "" || (!groupBasicCommand(g.Command) && g.Command != "review" && !nativeGroupCommand(g.Command)) || len(g.Members) < 2 || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
 		return fmt.Errorf("group requires its immutable explicit command membership and separate carrier")
 	}
 	if a.Before != nil || a.After != nil || a.Restored != nil || a.CreateInput != nil || a.UpdateIntent != nil || a.UpdateObservation != nil || a.NativeUndo != nil || a.CommentInput != nil || a.CommentAfter != nil || a.CommentBefore != nil || a.UndoObservation != nil || a.Reconciliation != nil {
@@ -75,7 +77,7 @@ func (a ActionJournal) validateGroupAction() error {
 			return fmt.Errorf("group member must be an observed live task")
 		}
 	}
-	if g.Command == "review" {
+	if g.Command == "review" || nativeGroupCommand(g.Command) {
 		rootSeen := map[string]bool{}
 		if len(g.Roots) == 0 {
 			return fmt.Errorf("review group requires original roots")
@@ -91,6 +93,12 @@ func (a ActionJournal) validateGroupAction() error {
 		}
 	} else if len(g.Roots) != 0 {
 		return fmt.Errorf("basic group cannot claim cascade roots")
+	}
+	if g.Command == "close" && !g.Cascade {
+		return fmt.Errorf("close group requires closure graph membership")
+	}
+	if g.Cascade && (!nativeGroupCommand(g.Command) || g.Command == "reopen") {
+		return fmt.Errorf("invalid native cascade group")
 	}
 	if a.IssueID != g.Members[0].IssueID {
 		return fmt.Errorf("group root differs from its first member")
@@ -185,7 +193,7 @@ func validateGroupRewrite(old, next ActionJournal) error {
 		}
 		return nil
 	}
-	if old.Group.Command != next.Group.Command || !slices.Equal(old.Group.Roots, next.Group.Roots) || !reflect.DeepEqual(old.Group.Members, next.Group.Members) {
+	if old.Group.Command != next.Group.Command || old.Group.Cascade != next.Group.Cascade || !slices.Equal(old.Group.Roots, next.Group.Roots) || !reflect.DeepEqual(old.Group.Members, next.Group.Members) {
 		return fmt.Errorf("group command membership is immutable")
 	}
 	if old.Group.Forward != nil && !reflect.DeepEqual(old.Group.Forward, next.Group.Forward) {

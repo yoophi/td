@@ -15,6 +15,7 @@ type groupUndoContextKey struct{}
 type groupUndoGate struct {
 	OperationID string
 	Fence       func() error
+	Member      func(*ActionJournalRecord) error
 }
 
 func groupUndoContext(ctx context.Context) string {
@@ -23,6 +24,13 @@ func groupUndoContext(ctx context.Context) string {
 		return ""
 	}
 	return gate.OperationID
+}
+func checkGroupUndoMember(ctx context.Context, a *ActionJournalRecord) error {
+	gate, _ := ctx.Value(groupUndoContextKey{}).(*groupUndoGate)
+	if gate != nil && gate.Member != nil {
+		return gate.Member(a)
+	}
+	return nil
 }
 func checkGroupUndoGate(ctx context.Context) error {
 	gate, _ := ctx.Value(groupUndoContextKey{}).(*groupUndoGate)
@@ -69,6 +77,14 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 		}
 		receipt := observed.Receipts[m.IssueID]
 		current := observed.Records[m.IssueID]
+		if _, native, err := nativeUndoScope(receipt); err != nil {
+			return nil, err
+		} else if native {
+			if err := c.preflightNativeGroupUndo(ctx, receipt, &current, session, user.Login); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if err := scalarUndoScope(receipt); err != nil {
 			return nil, err
 		}
@@ -124,16 +140,27 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 		if !reflect.DeepEqual(receipt, a) {
 			return fmt.Errorf("group inverse intent changed")
 		}
-		if a.Group.Command == "review" {
-			return c.verifyReviewGroupExpected(ctx, a.Group, expected)
+		if err := c.checkGroupNativeEventReceipts(ctx, observed.Receipts); err != nil {
+			return err
+		}
+		if len(a.Group.Roots) > 0 {
+			return c.verifyGraphGroupExpected(ctx, a.Group, expected)
 		}
 		return c.verifyGroupExpected(ctx, expected)
 	}
-	gated := context.WithValue(ctx, groupUndoContextKey{}, &groupUndoGate{OperationID: a.OperationID, Fence: fence})
+	gated := context.WithValue(ctx, groupUndoContextKey{}, &groupUndoGate{OperationID: a.OperationID, Fence: fence, Member: func(member *ActionJournalRecord) error {
+		if err := validateGroupMember(a, member); err != nil {
+			return err
+		}
+		if old := observed.Receipts[member.IssueID]; old == nil || !reflect.DeepEqual(old, member) {
+			return fmt.Errorf("group member receipt changed before inverse")
+		}
+		return nil
+	}})
 	// Reverse the declared command order. A failure retains all member receipts
 	// and the original group undo identity; no automatic write retry is made.
 	ordered := slices.Clone(observed.Members)
-	if a.Group.Command == "review" {
+	if len(a.Group.Roots) > 0 {
 		slices.SortStableFunc(ordered, func(x, y ActionGroupResultMember) int {
 			xr, yr := observed.Receipts[x.IssueID], observed.Receipts[y.IssueID]
 			if xr == nil && yr == nil {
@@ -173,6 +200,7 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 			return nil, err
 		}
 		expected[m.IssueID] = state
+		observed.Receipts[m.IssueID] = result.Journal
 	}
 	result, err := c.reconcileActionGroup(ctx, a, session, user.Login, true, true)
 	if err != nil {
