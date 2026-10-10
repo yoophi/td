@@ -1,11 +1,12 @@
 # GitHub action journal implementation
 
 This work belongs to #9. The codec, bulk reader, inverse planner and an opt-in
-issue-update write protocol are present. CLI dispatch, default write integration,
-multi-target/note/board journaling and undo execution remain pending. Issue
+issue-update write protocol are present. `last` and `undo --list` have GitHub
+dispatch; default write integration, multi-target/note/board journaling and
+undo execution remain pending. Issue
 creation also has an opt-in intent/result protocol; actual command writers have
 not yet been switched to either protocol.
-`td last` and `td undo` remain unsupported for GitHub storage. This document is
+`td undo` without `--list` remains unsupported for GitHub storage. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
 A journal is a versioned `td:action:v1` block on a repository carrier's GitHub
@@ -36,6 +37,25 @@ and edited visible text. Ordinary activity exposes a concise `action_journal`
 summary instead of displaying full before/after bodies as native comments.
 This format's checks cannot establish who executed a manually forged action;
 execution must validate the actual GitHub author and session before undo.
+
+`td last [-n N]` and `td undo --list` read current-session journals from one
+complete issue collection and one complete comment collection; they do not
+enumerate comments per issue, write GitHub or open SQLite. `last` defaults to
+one entry and requires positive N on GitHub; `undo --list` displays up to ten.
+Both reject unused positional arguments. SQLite retains its existing backend
+and action output. Human output labels prepared/applied/undo-prepared/undone;
+creation without an allocated target displays `new issue`.
+
+JSON retains the established array shape, including `[]` for empty history.
+Rows include common action-log identity/session/action/entity/snapshot/time/
+undone fields plus operation, phase, carrier, GitHub author/URL and explicit
+history/data scope. Before/after data is native issue state JSON, not a SQLite
+Issue snapshot; `data_format=github-native-issue-state-v1` identifies it.
+Prepared results have no verified after snapshot. A scope note on stderr
+explains that legacy/native changes are not reconstructed and default CLI
+journaling/undo execution is incomplete. Empty history must not imply that no
+older actions occurred. Actual undo returns `unsupported_operation` before any
+GitHub call or SQLite fallback until its executor is implemented.
 
 `Snapshot.ActionHistory` consumes the existing bulk issue/comment observation,
 including note/board carriers and logically deleted issues. It makes no extra

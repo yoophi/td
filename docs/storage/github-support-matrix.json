@@ -1100,13 +1100,15 @@
     {
       "command": "td last",
       "owner": "#9",
-      "state": "unsupported",
-      "reason": "cmd/undo.go directly opens SQLite; no GitHub before/after action journal or undo dispatch exists.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Bulk current-session action-journal history is implemented for last and undo --list; actual undo execution, default CLI write journaling and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
-        "n": "unsupported",
+        "n": "pending",
         "refresh": "pending",
         "work-dir": "pending"
       }
@@ -2074,13 +2076,15 @@
     {
       "command": "td undo",
       "owner": "#9",
-      "state": "unsupported",
-      "reason": "cmd/undo.go directly opens SQLite; no GitHub before/after action journal or undo dispatch exists.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Bulk current-session action-journal history is implemented for last and undo --list; actual undo execution, default CLI write journaling and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
-        "list": "unsupported",
+        "list": "pending",
         "refresh": "pending",
         "work-dir": "pending"
       }

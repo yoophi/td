@@ -32,17 +32,20 @@ automatic supported classification is generated from registration.
 
 ## Confirmed implementation gap: #9
 
-`cmd/undo.go` opens SQLite for both `last` and `undo`, including `undo --list`.
-Neither has GitHub store dispatch. `internal/ghstore/activity.go` stores authored
-comments, logs and handoffs, not before/after snapshots suitable for undo.
+`cmd/gh_last.go` now dispatches GitHub `last` and `undo --list` to the bulk action
+journal reader, with explicit scope and phase reporting. Actual `undo` execution
+still returns an explicit unsupported-operation error. The SQLite path remains
+in `cmd/undo.go`. `internal/ghstore/action_journal*.go` provides before/after
+snapshots and opt-in create/update protocols; default CLI writes have not yet
+been switched, and note/board/cascade journaling and undo execution remain work.
 Workflow history provides selected transitions but cannot reconstruct arbitrary
 issue, relationship, note or board changes. An activity feed is insufficient
 to fulfill #9.
 
-The implementation needs a versioned action journal with actor/session,
-operation and target identity, before/after values, verified result and undo
-receipt. Reads must use bulk snapshots rather than enumerate comments per
-issue. Undo must compare the current target with the recorded after-state,
+The remaining implementation must connect all actual writers to the versioned
+action journal and execute verified undo receipts. Reads use bulk snapshots
+rather than enumerate comments per issue. Undo must compare the current target
+with the recorded after-state,
 preserve later changes, report uncertain/partial writes and reconcile an
 existing receipt before any replay. GitHub PATCH remains best effort; it cannot
 provide an atomic distributed compare-and-swap. Physical deletion and creation

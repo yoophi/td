@@ -29,6 +29,7 @@ Supported actions:
 
 Use 'td undo --list' to see recent undoable actions.`,
 	GroupID: "system",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
 
@@ -363,6 +364,7 @@ var lastCmd = &cobra.Command{
 	Use:     "last",
 	Short:   "Show the last action performed",
 	GroupID: "system",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
 
