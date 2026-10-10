@@ -259,10 +259,16 @@ func TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSess
 		{"link", "gh-6", "linked.go"}, {"unlink", "gh-6", "linked.go"},
 		{"delete", "gh-6", "--yes"}, {"restore", "gh-6"},
 	}
+	expectedJournals := 0
 	for i, args := range commands {
 		execute(args...)
+		expectedJournals++
+		switch args[0] {
+		case "due", "defer", "link", "unlink":
+			expectedJournals++ // command aggregate in addition to its field effect
+		}
 		journals := fixtureJournals(t)
-		if len(journals) != i+1 {
+		if len(journals) != expectedJournals {
 			t.Fatal("missing or duplicate issue write journal", args, journals)
 		}
 		last := journals[len(journals)-1]
@@ -342,9 +348,7 @@ func TestGitHubJournalCLIUndoesFileLinkAndUnlinkAfterOwnAuditLog(t *testing.T) {
 				} else {
 					execute("link", "gh-6", "linked.go", "--role", "test")
 				}
-				// File commands have two distinct tracked effects: issue metadata,
-				// then their own audit comment. Undo them in reverse order.
-				execute("undo")
+				// One command restores both its file metadata and companion activity.
 				execute("undo")
 				data, err = os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
 				if err != nil {
@@ -355,7 +359,7 @@ func TestGitHubJournalCLIUndoesFileLinkAndUnlinkAfterOwnAuditLog(t *testing.T) {
 					t.Fatal(err)
 				}
 				if after["issues"].(map[string]any)["6"].(map[string]any)["body"] != body {
-					t.Fatal("file metadata was not restored after sequential audit-comment/file undo")
+					t.Fatal("file metadata was not restored by whole-command undo")
 				}
 				journals := fixtureAllJournals(t)
 				last := journals[len(journals)-1]
@@ -522,7 +526,17 @@ func TestGitHubJournalCLIWriterReceiptFailuresRetainUnverifiedHistory(t *testing
 				t.Fatal("unverified receipt reported success", tc.name, out, stderr, err)
 			}
 			journals := fixtureJournals(t)
-			if len(journals) != 2 || journals[1].Phase != "prepared" || journals[1].SessionID != sessionID || journals[1].After != nil {
+			effectIndex := 1
+			if tc.name == "schedule" || tc.name == "files" {
+				effectIndex = 2
+				if len(journals) != 3 || journals[1].Action != "group" || journals[1].Phase != "prepared" || journals[1].SessionID != sessionID || journals[1].Group == nil || journals[1].Group.Command != tc.args[0] || journals[1].Group.UpdateActivity == nil || journals[1].Group.Forward != nil {
+					t.Fatal("failed command lost its original unverified group", journals)
+				}
+				if !journals[2].GroupMixed || journals[2].GroupSequence != 1 || journals[2].GroupOperationID != journals[1].OperationID {
+					t.Fatal("failed first effect escaped its original command", journals)
+				}
+			}
+			if len(journals) != effectIndex+1 || journals[effectIndex].Phase != "prepared" || journals[effectIndex].SessionID != sessionID || journals[effectIndex].After != nil {
 				t.Fatal("failed receipt falsely completed or retried", journals)
 			}
 			before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
@@ -548,7 +562,7 @@ func TestGitHubJournalCLIWriterReceiptFailuresRetainUnverifiedHistory(t *testing
 // It must not become an implicit exemption from revision conflict detection.
 func TestGitHubJournalCLIUndoRejectsUnjournaledCommentClock(t *testing.T) {
 	_, _, run := journalCLI(t)
-	for _, args := range [][]string{{"create", "Comment clock fixture"}, {"due", "gh-6", "2026-12-01"}} {
+	for _, args := range [][]string{{"create", "Comment clock fixture"}, {"update", "gh-6", "--title", "Before external comment"}, {"log", "gh-6", "Unjournaled activity"}} {
 		out, stderr, err := run(append(args, "--json")...)
 		if err != nil {
 			t.Fatal(args, out, stderr, err)
@@ -569,7 +583,7 @@ func TestGitHubJournalCLIUndoRejectsUnjournaledCommentClock(t *testing.T) {
 	}
 	kept := []map[string]any{}
 	for _, comment := range raw.Comments {
-		if !strings.Contains(comment["body"].(string), "<!-- td:action:v2") {
+		if !strings.Contains(comment["body"].(string), `"action":"comment_create"`) {
 			kept = append(kept, comment)
 		}
 	}

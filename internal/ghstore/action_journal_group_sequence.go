@@ -50,7 +50,7 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 		if i > 0 && a.CreatedAt.Before(ordered[i-1].CreatedAt) {
 			return nil, fmt.Errorf("ordered effect creation clocks regress")
 		}
-		if group.Group.Ordered != nil {
+		if group.Group.Ordered != nil || group.Group.updateActivityGroup() {
 			previous := ""
 			chain := chains[a.IssueID]
 			if len(chain) > 0 {
@@ -78,7 +78,7 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 		}
 		if len(chain) > 0 {
 			previous := chain[len(chain)-1]
-			if previous.UpdateIntent != nil && previous.UpdateIntent.NativeEvents != nil {
+			if previous.UpdateIntent != nil && previous.UpdateIntent.NativeEvents != nil && !group.Group.updateActivityGroup() {
 				if a.UpdateIntent.NativeEvents == nil {
 					return nil, fmt.Errorf("ordered effect omitted its predecessor's native event continuation")
 				}

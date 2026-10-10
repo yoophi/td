@@ -660,9 +660,11 @@
       "command": "td defer",
       "owner": "#19",
       "state": "partial",
-      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "reason": "CLI fixtures verify complete field/activity inputs fixed before writes, one command history entry, whole-command reverse undo, receipt-only partial recovery, read-only confirmation and rejection of foreign task/comment/original-receipt changes. Native acceptance and full option combinations remain pending.",
       "evidence": [
-        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions",
+        "TestGitHubJournalCLIUpdateActivityWholeCommand",
+        "TestGitHubJournalCLIUpdateActivityRejectsForeignChanges"
       ],
       "flags": {
         "clear": "pending",
@@ -797,9 +799,11 @@
       "command": "td due",
       "owner": "#19",
       "state": "partial",
-      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "reason": "CLI fixtures verify complete field/activity inputs fixed before writes, one command history entry, whole-command reverse undo, receipt-only partial recovery, read-only confirmation and rejection of foreign task/comment/original-receipt changes. Native acceptance and full option combinations remain pending.",
       "evidence": [
-        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions",
+        "TestGitHubJournalCLIUpdateActivityWholeCommand",
+        "TestGitHubJournalCLIUpdateActivityRejectsForeignChanges"
       ],
       "flags": {
         "clear": "pending",
@@ -1154,9 +1158,11 @@
       "command": "td link",
       "owner": "#4",
       "state": "partial",
-      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "reason": "CLI fixtures verify complete field/activity inputs fixed before writes, one command history entry, whole-command reverse undo, receipt-only partial recovery, read-only confirmation and rejection of foreign task/comment/original-receipt changes. Native acceptance and full option combinations remain pending.",
       "evidence": [
-        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions",
+        "TestGitHubJournalCLIUpdateActivityWholeCommand",
+        "TestGitHubJournalCLIUpdateActivityRejectsForeignChanges"
       ],
       "flags": {
         "depends-on": "pending",
@@ -2161,9 +2167,11 @@
       "command": "td unlink",
       "owner": "#4",
       "state": "partial",
-      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "reason": "CLI fixtures verify complete field/activity inputs fixed before writes, one command history entry, whole-command reverse undo, receipt-only partial recovery, read-only confirmation and rejection of foreign task/comment/original-receipt changes. Native acceptance and full option combinations remain pending.",
       "evidence": [
-        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions",
+        "TestGitHubJournalCLIUpdateActivityWholeCommand",
+        "TestGitHubJournalCLIUpdateActivityRejectsForeignChanges"
       ],
       "flags": {
         "help": "pending",

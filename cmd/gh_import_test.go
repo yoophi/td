@@ -130,19 +130,6 @@ func TestSQLiteImportRejectsGitHubSourceFlagBeforeOpeningDatabase(t *testing.T) 
 
 func TestGitHubImportCLIExecuteExportReimportAndNoSQLiteFallback(t *testing.T) {
 	dir := githubScheduleTestDir(t)
-	ghPath := filepath.Join(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0], "gh")
-	script, err := os.ReadFile(ghPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	original := "data={'id':len(state['comments'])+1,'body':body"
-	replacement := "data={'issue_url':'https://api.github.com/repos/owner/repo/issues/'+path.split('/issues/')[1].split('/')[0],'id':len(state['comments'])+1,'body':body"
-	if !strings.Contains(string(script), original) {
-		t.Fatal("fixture comment format changed")
-	}
-	if err := os.WriteFile(ghPath, []byte(strings.Replace(string(script), original, replacement, 1)), 0755); err != nil {
-		t.Fatal(err)
-	}
 	execute := func(input string, args ...string) (ghstore.ImportResult, error) {
 		t.Helper()
 		c := &cobra.Command{Use: importCmd.Use, RunE: importCmd.RunE, SilenceErrors: true, SilenceUsage: true}

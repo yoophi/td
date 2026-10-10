@@ -15,22 +15,49 @@ import (
 // ReplaceLinkedFilesObserved updates the complete file set from the revision the
 // caller read. One PATCH preserves unrelated details; it is not a GitHub CAS.
 func (c *Client) ReplaceLinkedFilesObserved(ctx context.Context, observed *Record, files []models.IssueFile) (*Record, bool, error) {
-	if observed == nil || observed.repository != c.repo || observed.revision == ([32]byte{}) {
-		return nil, false, fmt.Errorf("file change requires an observation from this repository")
+	change, noop, err := prepareLinkedFileChange(observed, files, c.repo)
+	if err != nil {
+		return nil, false, err
+	}
+	if noop {
+		return observed, true, nil
+	}
+	result, err := c.UpdateObserved(ctx, observed, change)
+	return result, false, err
+}
+
+// ReplaceLinkedFilesWithActivityObserved journals a CLI file edit together with
+// its automatic activity. HTTP/monitor callers without an activity keep the
+// standalone file update contract above.
+func (c *Client) ReplaceLinkedFilesWithActivityObserved(ctx context.Context, observed *Record, files []models.IssueFile, activity models.Activity, command string) (*Record, bool, error) {
+	change, noop, err := prepareLinkedFileChange(observed, files, c.repo)
+	if err != nil {
+		return nil, false, err
+	}
+	if noop {
+		return observed, true, nil
+	}
+	result, err := c.UpdateWithActivityObserved(ctx, observed, change, activity, command)
+	return result, false, err
+}
+
+func prepareLinkedFileChange(observed *Record, files []models.IssueFile, repository string) (Changes, bool, error) {
+	if observed == nil || observed.repository != repository || observed.revision == ([32]byte{}) {
+		return Changes{}, false, fmt.Errorf("file change requires an observation from this repository")
 	}
 	if observed.DeletedAt != nil {
-		return nil, false, fmt.Errorf("cannot change files of deleted issue %s", observed.ID)
+		return Changes{}, false, fmt.Errorf("cannot change files of deleted issue %s", observed.ID)
 	}
 	details, err := observed.CopyDetails()
 	if err != nil {
-		return nil, false, err
+		return Changes{}, false, err
 	}
 	files, err = validatedLinkedFiles(observed.ID, files)
 	if err != nil {
-		return nil, false, err
+		return Changes{}, false, err
 	}
 	if (len(details.Files) == 0 && len(files) == 0) || reflect.DeepEqual(details.Files, files) {
-		return observed, true, nil
+		return Changes{}, true, nil
 	}
 	details.Files = files
 	// Review basis includes linked files; keep historical review rows but revoke
@@ -40,8 +67,7 @@ func (c *Client) ReplaceLinkedFilesObserved(ctx context.Context, observed *Recor
 	details.ReviewerSession = ""
 	details.ReviewedAt = nil
 	details.ReviewBasis = ""
-	result, err := c.UpdateObserved(ctx, observed, Changes{Details: &details})
-	return result, false, err
+	return Changes{Details: &details}, false, nil
 }
 
 func validatedLinkedFiles(issueID string, files []models.IssueFile) ([]models.IssueFile, error) {

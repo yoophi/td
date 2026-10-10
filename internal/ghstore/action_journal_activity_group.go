@@ -161,6 +161,9 @@ func (c *Client) bindActivityGroupIntent(a *ActionJournal) error {
 		return nil
 	}
 	active := c.journal.Group
+	if active.Journal.Group.updateActivityGroup() {
+		return c.bindUpdateActivityMember(a)
+	}
 	if !active.Journal.Group.activityGroup() || active.Attempted[a.IssueID] {
 		return fmt.Errorf("activity is outside the current command or was already attempted; no comment POST attempted")
 	}

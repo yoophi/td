@@ -85,12 +85,18 @@ func runGitHubSchedule(cmd *cobra.Command, args []string, cfg *models.Config, de
 			action, message = "deferral_cleared", "Deferral cleared"
 		}
 	}
-	record, err := client.Update(cmd.Context(), args[0], change)
+	observed, err := client.Get(cmd.Context(), args[0])
 	if err != nil {
 		return err
 	}
-	if _, err := client.AppendActivity(cmd.Context(), record.ID, models.Activity{Kind: "log", LogType: models.LogTypeProgress, SessionID: state.Session.ID, WorkSessionID: state.ActiveWorkSession, Message: message}); err != nil {
-		return fmt.Errorf("%s schedule was saved, but its log failed; do not repeat the entire schedule update: %w", record.ID, err)
+	command := "due"
+	if deferDate {
+		command = "defer"
+	}
+	record, err := client.UpdateWithActivityObserved(cmd.Context(), observed, change,
+		models.Activity{Kind: "log", LogType: models.LogTypeProgress, SessionID: state.Session.ID, WorkSessionID: state.ActiveWorkSession, Message: message}, command)
+	if err != nil {
+		return err
 	}
 	return emitGitHubMutation(cmd, action, record)
 }

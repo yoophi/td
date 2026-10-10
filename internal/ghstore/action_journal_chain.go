@@ -149,6 +149,10 @@ func (a ActionJournalRecord) planActionUndo(current *Record, sessionID, author s
 }
 
 func (c *Client) planUndo(ctx context.Context, action *ActionJournalRecord, current *Record, sessionID, author string) (*IssueUndoPlan, []ActionJournalRecord, error) {
+	if gate, _ := ctx.Value(groupUndoContextKey{}).(*groupUndoGate); gate != nil && gate.Plan != nil {
+		plan, err := gate.Plan(action, current, sessionID, author)
+		return plan, nil, err
+	}
 	plan, err := action.planActionUndo(current, sessionID, author)
 	var conflict *ConflictError
 	if !errors.As(err, &conflict) || action.Phase != "applied" {

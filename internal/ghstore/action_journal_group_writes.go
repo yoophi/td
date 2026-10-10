@@ -126,6 +126,11 @@ func checkGroupArchiveCapacity(a ActionJournal, expected map[string]ActionIssueS
 		return err
 	}
 	group := *a.Group
+	if group.updateActivityGroup() {
+		input := *group.UpdateActivity
+		input.ForwardDigests = []string{strings.Repeat("f", 64), strings.Repeat("f", 64)}
+		group.UpdateActivity = &input
+	}
 	observation := &ActionGroupObservation{SessionID: a.SessionID, Actor: strings.Repeat("x", 39), ObservedAt: time.Now().UTC(), Proof: "group-contents-observed", Members: []ActionGroupResultMember{}}
 	for _, m := range group.Members {
 		result := ActionGroupResultMember{IssueID: m.IssueID, ReceiptID: "ghc-9223372036854775807", Status: "applied", State: expected[m.IssueID]}
@@ -217,6 +222,12 @@ func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJourna
 	if before == nil || member.Before.Revision != before.Revision {
 		return fmt.Errorf("member initial revision differs from immutable group membership")
 	}
+	if group.Group.updateActivityGroup() {
+		return validateUpdateActivityMember(group, member)
+	}
+	if member.GroupMixed {
+		return fmt.Errorf("mixed member is outside an update/activity command")
+	}
 	if group.Group.activityGroup() {
 		for _, m := range group.Group.Members {
 			if m.IssueID == member.IssueID && member.Action == "comment_create" && member.UpdateIntent == nil && m.CommentInput != nil && reflect.DeepEqual(m.CommentInput, member.CommentInput) {
@@ -273,6 +284,9 @@ func (c *Client) attachActionGroupMember(ctx context.Context, a *ActionJournal) 
 		return nil
 	}
 	active := c.journal.Group
+	if active.Journal.Group.updateActivityGroup() {
+		return c.bindUpdateActivityMember(a)
+	}
 	if active.Journal.Group.Ordered != nil {
 		return c.attachOrderedGroupMember(ctx, a)
 	}

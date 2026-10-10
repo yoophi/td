@@ -45,14 +45,15 @@ type ActionGroupObservation struct {
 // any target write. Every attempted member independently records its complete
 // update input before its write; future unattempted inputs are never invented.
 type ActionGroup struct {
-	Planned bool                    `json:"planned,omitempty"`
-	Ordered *ActionOrderedGroup     `json:"ordered,omitempty"`
-	Command string                  `json:"command"`
-	Roots   []string                `json:"roots,omitempty"`
-	Cascade bool                    `json:"cascade,omitempty"`
-	Members []ActionGroupMember     `json:"members"`
-	Forward *ActionGroupObservation `json:"forward,omitempty"`
-	Inverse *ActionGroupObservation `json:"inverse,omitempty"`
+	UpdateActivity *ActionUpdateActivity   `json:"update_activity,omitempty"`
+	Planned        bool                    `json:"planned,omitempty"`
+	Ordered        *ActionOrderedGroup     `json:"ordered,omitempty"`
+	Command        string                  `json:"command"`
+	Roots          []string                `json:"roots,omitempty"`
+	Cascade        bool                    `json:"cascade,omitempty"`
+	Members        []ActionGroupMember     `json:"members"`
+	Forward        *ActionGroupObservation `json:"forward,omitempty"`
+	Inverse        *ActionGroupObservation `json:"inverse,omitempty"`
 }
 
 func groupBasicCommand(command string) bool {
@@ -65,7 +66,7 @@ func canonicalGroupID(id string) bool {
 }
 
 func groupCommandSupported(g *ActionGroup) bool {
-	return groupBasicCommand(g.Command) || g.Command == "review" || g.Command == "update" || nativeGroupCommand(g.Command) || g.Planned && plannedTaskCommand(g.Command) || g.activityGroup()
+	return groupBasicCommand(g.Command) || g.Command == "review" || g.Command == "update" || nativeGroupCommand(g.Command) || g.Planned && plannedTaskCommand(g.Command) || g.activityGroup() || g.updateActivityGroup()
 }
 
 func (a ActionJournal) validateGroupAction() error {
@@ -73,7 +74,7 @@ func (a ActionJournal) validateGroupAction() error {
 	if a.CommentObservation != nil {
 		return fmt.Errorf("task group cannot carry a comment observation")
 	}
-	if g == nil || a.Action != "group" || a.GroupOperationID != "" || a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" || !groupCommandSupported(g) || len(g.Members) < 2 || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
+	if g == nil || a.Action != "group" || a.GroupOperationID != "" || a.GroupMixed || a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" || !groupCommandSupported(g) || len(g.Members) < 1 || len(g.Members) < 2 && !g.updateActivityGroup() || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
 		return fmt.Errorf("group requires its immutable explicit command membership and separate carrier")
 	}
 	if a.Before != nil || a.After != nil || a.Restored != nil || a.CreateInput != nil || a.UpdateIntent != nil || a.UpdateObservation != nil || a.NativeUndo != nil || a.CommentInput != nil || a.CommentAfter != nil || a.CommentBefore != nil || a.UndoObservation != nil || a.Reconciliation != nil {
@@ -208,11 +209,14 @@ func (a ActionJournal) validateGroupAction() error {
 			}
 		}
 	}
+	if err := a.validateUpdateActivityGroup(); err != nil {
+		return err
+	}
 	return a.validateOrderedGroup()
 }
 
 func validateGroupRewrite(old, next ActionJournal) error {
-	if old.GroupOperationID != next.GroupOperationID {
+	if old.GroupOperationID != next.GroupOperationID || old.GroupMixed != next.GroupMixed {
 		return fmt.Errorf("member group identity is immutable")
 	}
 	if old.Group == nil || next.Group == nil {
@@ -220,6 +224,9 @@ func validateGroupRewrite(old, next ActionJournal) error {
 			return fmt.Errorf("group identity is immutable")
 		}
 		return nil
+	}
+	if err := validateUpdateActivityRewrite(old.Group.UpdateActivity, next.Group.UpdateActivity, old.Group.Forward != nil); err != nil {
+		return err
 	}
 	if err := validateOrderedGroupRewrite(old.Group.Ordered, next.Group.Ordered); err != nil {
 		return err

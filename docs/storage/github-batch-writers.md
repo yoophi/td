@@ -21,10 +21,13 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | Multi-target `ws log` / `ws handoff` without `--review` | v19 activity group fixes all complete inputs; partial recovery observes comments without replay; undo checks and removes actual results | Tags, history membership and end state remain local |
 | `config sync-state-labels` / `config sync-priority-labels --apply` with multiple repairs | v17 planned scalar `update` group fixes every repair's complete labels and original revision, including closed/deleted tasks | No local context change |
 | Multi-edge `dep add` / `dep rm` (`remove`) | One source PATCH and one existing update receipt for the full prevalidated delta; shared reachable targets are observed once per fence | No local context change |
+| File `link` / `unlink`, `due` / `defer` | v21 update/activity group freezes both complete inputs before writes; v22 members bind the actual field result to the following activity | File commands retain their local path/hash checks; schedule activities retain work-session attribution |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
-paths retain the existing standalone journal. A later failure leaves earlier
+transition paths retain the existing standalone journal when no cascade is
+needed. Update/activity commands use their two-effect group even for one task.
+A later failure leaves earlier
 actual effects and the group intent available for explicit reconciliation.
 
 Scalar update batches select tasks from one fresh bulk issue read and prepare
@@ -88,6 +91,31 @@ captured only methods and endpoints. Lost-response recovery was exercised in CLI
 fixtures, not by injecting a GitHub service failure. Stage evidence is recorded
 on #65; this does not complete the full command/flag audit.
 
+Update/activity commands record one original task and two ordered effects. The
+first effect updates fields; only its verified actual result can establish the
+comment's starting revision. No future GitHub clock or allocated comment ID is
+invented in the plan. Group completion freezes digests of the original effect
+identities, inputs, observations and results. `last` and `undo --list` collapse
+the two effects into one command; direct member undo is refused.
+
+Reconciliation observes uncertain field/comment outcomes and writes receipts
+only. Undo first validates the complete field inverse, deletes only its exact
+companion activity, then restores the fields. This command's observed comment
+inverse may bridge its own field revision; it never becomes a causal witness
+for unrelated earlier commands. Source, original receipts, native activity and
+required review/native-event evidence are fenced. A partial inverse keeps its
+original group/undo identity; completed effects are not replayed. Observed
+outcomes remain weaker evidence even after later effects complete normally.
+
+Native comment size is checked before any target or journal write. File no-ops
+still create no activity or group. The v21/v22 semantic formats preserve the
+existing v20 multipart manifest and bounded v9 compressed transport. Running
+monitors/servers must be restarted with a build that understands v21/v22 before
+reading repositories containing these records. Fixture tests cover complete and
+partial forward/inverse paths, read-only confirmation, invalid activity input,
+and foreign source/comment/original-receipt changes. Native acceptance and the
+full command/flag audit remain separate verification gates.
+
 ## Remaining writer integration
 
 | Writer | Current effects requiring an aggregate |
@@ -95,8 +123,6 @@ on #65; this does not complete the full command/flag audit.
 | Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 | `ws handoff --review` | Activity fanout followed by task review requests |
-| File link/unlink | One whole file-set update followed by an automatic activity comment |
-| Due/defer | Task schedule update followed by an automatic activity comment |
 
 These remaining paths need a shared mixed-effect contract, including complete
 command inputs fixed before the first write, original target identity, partial

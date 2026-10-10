@@ -77,6 +77,9 @@ func useNativeCommentOrderFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if bytes.Contains(script, []byte("# native-comment-order:")) {
+		return
+	}
 	needle := "state['comments'].append(data);n="
 	replacement := "data.update(id=20000+len(state['comments']),created_at=fixture_tick(journal['comments'][-1]['created_at']),updated_at=fixture_tick(journal['comments'][-1]['created_at']));issues[path.split('/issues/')[1].split('/')[0]]['updated_at']=data['updated_at'];state['comments'].append(data);n="
 	if !bytes.Contains(script, []byte(needle)) {

@@ -114,7 +114,11 @@ elif '/events?' in path:data=[[]]
 elif '/comments?' in path:data=[state['comments']]
 elif path.endswith('/comments') and method=='POST':
  if os.environ.get('TD_SCHEDULE_FAIL_LOG'):sys.stderr.write('HTTP 403 log denied');sys.exit(1)
- body=json.load(sys.stdin)['body'];data={'id':len(state['comments'])+1,'body':body,'issue_url':'https://api.github.com/repos/owner/repo/issues/'+path.split('/issues/')[1].split('/')[0],'user':{'login':'fixture-author'},'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z'};state['comments'].append(data);n=path.split('/issues/')[1].split('/')[0];issues[n]['updated_at']=fixture_tick(issues[n]['updated_at']);f.write_text(json.dumps(state))
+ # native-comment-order: comments follow their actual journal intent and never reuse IDs
+ body=json.load(sys.stdin)['body'];n=path.split('/issues/')[1].split('/')[0]
+ clock=fixture_tick(max(issues[n]['updated_at'],journal['comments'][-1]['created_at'] if journal['comments'] else issues[n]['updated_at']))
+ comment_id=state.get('next_comment_id',20000);state['next_comment_id']=comment_id+1
+ data={'id':comment_id,'body':body,'issue_url':'https://api.github.com/repos/owner/repo/issues/'+n,'user':{'login':'fixture-author'},'created_at':clock,'updated_at':clock};state['comments'].append(data);issues[n]['updated_at']=clock;f.write_text(json.dumps(state))
 elif path.startswith('repos/owner/repo/issues/comments/') and method=='DELETE':
  n=int(path.rsplit('/',1)[1]);comment=next((c for c in state['comments'] if c['id']==n),None)
  if comment is None:sys.stderr.write('HTTP 404 comment missing');sys.exit(1)
@@ -210,7 +214,7 @@ func TestGitHubScheduleCommandsFlagsAndPartialFailure(t *testing.T) {
 		t.Fatal(r)
 	}
 	t.Setenv("TD_SCHEDULE_FAIL_LOG", "1")
-	if _, err := executeGitHubTest(githubTestCommand(deferCmd), "1", "2099-01-01", "--json"); err == nil || !strings.Contains(err.Error(), "schedule was saved") {
+	if _, err := executeGitHubTest(githubTestCommand(deferCmd), "1", "2099-01-01", "--json"); err == nil || !strings.Contains(err.Error(), "command group") || !strings.Contains(err.Error(), "earlier effects may remain") {
 		t.Fatal("partial log failure hidden", err)
 	}
 	if r = read("1"); r.DeferUntil == nil || *r.DeferUntil != "2099-01-01" {

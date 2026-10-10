@@ -13,10 +13,20 @@ import (
 
 type groupUndoContextKey struct{}
 type groupUndoGate struct {
+	Plan         func(*ActionJournalRecord, *Record, string, string) (*IssueUndoPlan, error)
+	UpdateFence  func(*ActionJournalRecord, *Record) error
 	CommentFence func(*ActionJournalRecord, *Record, bool) error
 	OperationID  string
 	Fence        func() error
 	Member       func(*ActionJournalRecord) error
+}
+
+func checkGroupUpdateUndoGate(ctx context.Context, member *ActionJournalRecord, current *Record) error {
+	gate, _ := ctx.Value(groupUndoContextKey{}).(*groupUndoGate)
+	if gate != nil && gate.UpdateFence != nil {
+		return gate.UpdateFence(member, current)
+	}
+	return nil
 }
 
 func groupUndoContext(ctx context.Context) string {
@@ -42,6 +52,9 @@ func checkGroupUndoGate(ctx context.Context) error {
 }
 
 func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, session string) (*ActionUndoResult, error) {
+	if a.Group.updateActivityGroup() {
+		return c.undoUpdateActivity(ctx, a, session)
+	}
 	if a.Group.Ordered != nil {
 		return c.undoOrderedGroup(ctx, a, session)
 	}
@@ -263,16 +276,22 @@ func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord,
 		}
 	}
 	for op, group := range groups {
-		if group.Group.Ordered == nil {
+		if group.Group.Ordered == nil && !group.Group.updateActivityGroup() {
 			continue
 		}
 		if err := group.validate(); err != nil {
 			return nil, err
 		}
-		if _, err := orderedGroupEffects(&group, members[op]); err != nil {
+		chains, err := orderedGroupEffects(&group, members[op])
+		if err != nil {
 			return nil, err
 		}
-		if group.Phase != "prepared" {
+		if group.Group.updateActivityGroup() {
+			if err := validateUpdateActivityForward(&group, chains[group.IssueID]); err != nil {
+				return nil, err
+			}
+		}
+		if group.Phase != "prepared" && group.Group.Ordered != nil {
 			if len(members[op]) != len(group.Group.Ordered.Forward) {
 				return nil, fmt.Errorf("ordered history lost its frozen original membership")
 			}
@@ -300,7 +319,7 @@ func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord,
 			if !found {
 				return nil, fmt.Errorf("member %s has no observed group receipt", a.ID)
 			}
-			if group.Group.Ordered == nil {
+			if group.Group.Ordered == nil && !group.Group.updateActivityGroup() {
 				if err := validateGroupMember(&group, &a); err != nil {
 					return nil, err
 				}

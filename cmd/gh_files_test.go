@@ -46,7 +46,9 @@ elif '/comments?' in path:data=[s['comments']]
 elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
 elif path.endswith('/comments') and method=='POST':
  if os.environ.get('TD_FILE_FAIL_COMMENT'):sys.stderr.write('HTTP 403 comment denied');sys.exit(1)
- data={'id':100+len(s['comments']),'body':json.load(sys.stdin)['body'],'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'},'issue_url':'https://api.github.com/repos/owner/repo/issues/1'};s['comments'].append(data);s['issue']['updated_at']=fixture_tick(s['issue']['updated_at']);f.write_text(json.dumps(s))
+ clock=fixture_tick(max(s['issue']['updated_at'],journal['comments'][-1]['created_at'] if journal['comments'] else s['issue']['updated_at']))
+ comment_id=s.get('next_comment_id',20000);s['next_comment_id']=comment_id+1
+ data={'id':comment_id,'body':json.load(sys.stdin)['body'],'created_at':clock,'updated_at':clock,'user':{'login':'fixture-author'},'issue_url':'https://api.github.com/repos/owner/repo/issues/1'};s['comments'].append(data);s['issue']['updated_at']=clock;f.write_text(json.dumps(s))
 elif path.startswith('repos/owner/repo/issues/comments/') and method=='GET':
  n=int(path.rsplit('/',1)[1]);data=next((c for c in s['comments'] if c['id']==n),None)
  if data is None:sys.stderr.write('HTTP 404 comment missing');sys.exit(1)
@@ -127,7 +129,7 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 	}
 	t.Setenv("TD_FILE_FAIL_COMMENT", "1")
 	out, err := executeGitHubTest(githubFilesCommand(linkCmd), "1", filepath.Join(dir, "src/one.go"), "--json")
-	if err == nil || !strings.Contains(err.Error(), "are saved") || !strings.Contains(err.Error(), "earlier changes remain") {
+	if err == nil || !strings.Contains(err.Error(), "command group") || !strings.Contains(err.Error(), "earlier effects may remain") {
 		t.Fatal(out, err)
 	}
 	if out = execute(filesCmd, "1", "--changed"); strings.Contains(out, `"status":"modified"`) {

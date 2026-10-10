@@ -146,19 +146,14 @@ func init() {
 				if err := client.TrackActions(state.Session.ID); err != nil {
 					return err
 				}
-				result, noop, err := client.ReplaceLinkedFilesObserved(cmd.Context(), observed, files)
+				action, command := "Linked", "link"
+				if original == unlinkCmd {
+					action, command = "Unlinked", "unlink"
+				}
+				_, _, err = client.ReplaceLinkedFilesWithActivityObserved(cmd.Context(), observed, files,
+					models.Activity{Kind: "log", LogType: models.LogTypeProgress, SessionID: state.Session.ID, Message: action + " files: " + strings.Join(changed, ", ")}, command)
 				if err != nil {
 					return err
-				}
-				if !noop {
-					action := "Linked"
-					if original == unlinkCmd {
-						action = "Unlinked"
-					}
-					_, err = client.AppendActivity(cmd.Context(), result.ID, models.Activity{Kind: "log", LogType: models.LogTypeProgress, SessionID: state.Session.ID, Message: action + " files: " + strings.Join(changed, ", ")})
-					if err != nil {
-						return fmt.Errorf("%s file changes for %s are saved (%d files: %s), but the activity comment failed; earlier changes remain, inspect files before retrying: %w", action, result.ID, len(changed), strings.Join(changed, ", "), err)
-					}
 				}
 			}
 			action := "linked"

@@ -176,6 +176,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err := checkGroupUndoGate(ctx); err != nil {
 		return nil, err
 	}
+	if err := checkGroupUpdateUndoGate(ctx, prepared, current); err != nil {
+		return nil, err
+	}
 	data, err = c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", current.Number), plan.Payload, false)
 	if err != nil {
 		return nil, fmt.Errorf("undo %s has an uncertain result; inspect target and receipt before retrying: %w", pending.UndoOperationID, err)
@@ -214,6 +217,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	done := prepared.ActionJournal
 	done.Phase = "undone"
 	done.Restored = &state
+	if err := checkGroupUpdateUndoGate(ctx, prepared, restored); err != nil {
+		return nil, err
+	}
 	receipt, err := c.rewriteActionJournal(ctx, prepared, done)
 	if err != nil {
 		return nil, fmt.Errorf("undo target was verified but receipt is unverified; inspect %s before retrying: %w", pending.UndoOperationID, err)
@@ -233,6 +239,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	}
 	if err := c.checkEntityUndoCatalog(ctx, action, true); err != nil {
 		return nil, fmt.Errorf("undo receipt was verified but board catalog changed; inspect before retrying: %w", err)
+	}
+	if err := checkGroupUpdateUndoGate(ctx, receipt, restored); err != nil {
+		return nil, err
 	}
 	return &ActionUndoResult{Issue: restored, Journal: receipt, UndoOutcome: observedForwardInverseOutcome(receipt)}, nil
 }
