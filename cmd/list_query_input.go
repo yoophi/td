@@ -30,6 +30,9 @@ func fixedListType(cmd *cobra.Command) string {
 // Fixed-type shortcuts carry their mandatory constraint through the dispatch
 // callback's context without rewriting the caller's query flags.
 func listQueryInput(cmd *cobra.Command, args []string, fixed string) (string, error) {
+	if err := validateListOutput(cmd); err != nil {
+		return "", err
+	}
 	expression, _ := cmd.Flags().GetString("filter")
 	positional := strings.TrimSpace(strings.Join(args, " "))
 	if cmd.Flags().Changed("filter") && strings.TrimSpace(expression) == "" {
@@ -56,4 +59,27 @@ func listQueryInput(cmd *cobra.Command, args []string, fixed string) (string, er
 		expression = "type = " + fixed + " AND (" + expression + ")"
 	}
 	return expression, nil
+}
+
+func validateListOutput(cmd *cobra.Command) error {
+	format, _ := cmd.Flags().GetString("format")
+	switch format {
+	case "", "short", "long", "json":
+	default:
+		return fmt.Errorf("unsupported output format %q (use short, long or json)", format)
+	}
+	limit, _ := cmd.Flags().GetInt("limit")
+	if limit < 0 {
+		return fmt.Errorf("limit must be zero (unlimited) or positive")
+	}
+	// JSON has documented precedence over valid human display modifiers.
+	if jsonMode(cmd) || format == "json" {
+		return nil
+	}
+	short, _ := cmd.Flags().GetBool("short")
+	long, _ := cmd.Flags().GetBool("long")
+	if short && (long || format == "long") || long && format == "short" {
+		return fmt.Errorf("conflicting short/long list output options; choose one display format")
+	}
+	return nil
 }

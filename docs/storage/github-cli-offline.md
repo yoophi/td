@@ -173,3 +173,10 @@ constraint around the entire expression, preserving OR precedence; a query for
 other types returns no matches. Compatible explicit shortcut type flags remain
 accepted. The constraint travels through store dispatch without rewriting the
 user's query flag, retaining SQLite/GitHub behavior and repeated-call safety.
+All list modes validate `--format` (`short/long/json`) and reject a negative
+`--limit` before execution/store access. `--limit 0` remains unlimited. Human
+short/long selectors cannot conflict with each other or with an explicit human
+format. Global `--json` and `--format json` retain precedence over valid human
+display modifiers. Invalid formats still fail even when JSON is requested.
+These rules apply equally to root list/ls and task/epic shortcuts, ordinary
+filters and TDQ, and SQLite/GitHub paths.

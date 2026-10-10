@@ -20,7 +20,9 @@ var listCmd = &cobra.Command{
 	Long: `List issues with ordinary filter flags or a TDQ expression (--filter
 or positional query). Do not combine ordinary selection flags with TDQ:
 put all selection conditions in the expression instead. Sort, reverse, limit
-and output controls remain available in either mode.`,
+and output controls remain available in either mode. JSON output takes precedence
+over valid human display modifiers; otherwise choose one short/long format.
+Use --limit 0 for unlimited results; negative limits are invalid.`,
 	GroupID: "core",
 	Args: func(cmd *cobra.Command, args []string) error {
 		_, err := listQueryInput(cmd, args, "")
@@ -971,7 +973,7 @@ func registerListFlags(cmd *cobra.Command) {
 	cmd.Flags().String("closed", "", "Closed date filter")
 	cmd.Flags().String("sort", "", "Sort by field")
 	cmd.Flags().BoolP("reverse", "r", false, "Reverse sort order")
-	cmd.Flags().IntP("limit", "n", 50, "Limit results")
+	cmd.Flags().IntP("limit", "n", 50, "Limit results (0 = unlimited)")
 	cmd.Flags().Bool("long", false, "Detailed output")
 	cmd.Flags().Bool("short", false, "Compact output (default)")
 	cmd.Flags().BoolP("all", "a", false, "Include closed and deferred issues")
