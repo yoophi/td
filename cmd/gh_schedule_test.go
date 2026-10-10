@@ -115,6 +115,9 @@ elif '/comments?' in path:data=[state['comments']]
 elif path.endswith('/comments') and method=='POST':
  if os.environ.get('TD_SCHEDULE_FAIL_LOG'):sys.stderr.write('HTTP 403 log denied');sys.exit(1)
  body=json.load(sys.stdin)['body'];data={'id':len(state['comments'])+1,'body':body,'issue_url':'https://api.github.com/repos/owner/repo/issues/'+path.split('/issues/')[1].split('/')[0],'user':{'login':'fixture-author'},'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z'};state['comments'].append(data);n=path.split('/issues/')[1].split('/')[0];issues[n]['updated_at']=fixture_tick(issues[n]['updated_at']);f.write_text(json.dumps(state))
+elif path.startswith('repos/owner/repo/issues/comments/') and method=='GET':
+ n=int(path.rsplit('/',1)[1]);data=next((c for c in state['comments'] if c['id']==n),None)
+ if data is None:sys.stderr.write('HTTP 404 comment missing');sys.exit(1)
 elif path=='repos/owner/repo/issues' and method=='POST':
  n=str(max(map(int,issues))+1);data=issue(int(n));patch=json.load(sys.stdin)
  if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]

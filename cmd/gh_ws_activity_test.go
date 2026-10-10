@@ -39,11 +39,13 @@ func githubWSFixture(t *testing.T) (string, ghcontext.Scope) {
 import sys,os,json,pathlib
 args=sys.argv[1:]
 if args[0]=='auth':sys.exit(0)
-path=next(a for a in args if a.startswith('repos/owner/repo'))
+path=next(a for a in args if a.startswith('repos/owner/repo') or a=='user')
 method=args[args.index('--method')+1] if '--method' in args else 'GET'
-statepath=pathlib.Path(os.environ['TD_WS_STATE'])
+f=pathlib.Path(os.environ['TD_WS_STATE']);statepath=f
 comments=json.loads(statepath.read_text()) if statepath.exists() else {}
-issues=[{'number':n,'title':'Issue '+str(n),'state':'open','body':''} for n in [1,2]]
+issues=[{'number':n,'title':'Issue '+str(n),'state':'open','body':'','updated_at':'2026-10-09T00:00:00Z'} for n in [1,2]]
+for issue in issues:
+ for _ in comments.get(str(issue['number']),[]):issue['updated_at']=fixture_tick(issue['updated_at'])
 if os.environ.get('TD_WS_CLOSED'):
  issues[0]['state']='closed'
 if os.environ.get('TD_WS_DELETED'):
@@ -52,12 +54,21 @@ if os.environ.get('TD_WS_HOLDER'):
  issues[0]['body']='<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P2','points':0,'details':{'status':'in_progress','implementer_session':os.environ['TD_WS_HOLDER']}})+'\n-->'
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
 elif path.startswith('repos/owner/repo/issues?'):data=[issues]
+elif path.startswith('repos/owner/repo/issues/comments/') and method=='GET':
+ n=int(path.rsplit('/',1)[1]);data=next((c for rows in comments.values() for c in rows if c['id']==n),None)
+ if data is None:sys.stderr.write('HTTP 404 comment missing');sys.exit(1)
+elif path=='repos/owner/repo/issues/comments?per_page=100':
+ data=[[c for rows in comments.values() for c in rows]]
+ mutation=os.environ.get('TD_WS_MUTATE_CONTEXT')
+ if mutation:
+  target=pathlib.Path(mutation);current=json.loads(target.read_text());current['session']['name']='concurrent rename';temp=target.with_suffix('.pending');temp.write_text(json.dumps(current));temp.replace(target)
 elif '/comments' in path:
  n=path.split('/issues/')[1].split('/')[0]
  if method=='POST':
   if os.environ.get('TD_WS_FAIL')==n:sys.stderr.write('write unavailable');sys.exit(1)
   body=json.load(sys.stdin)['body']
-  data={'id':100+sum(len(a) for a in comments.values()),'body':body,'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture'}}
+  data={'id':100+sum(len(a) for a in comments.values()),'body':body,'created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'},'issue_url':'https://api.github.com/repos/owner/repo/issues/'+n}
+  data['created_at']=fixture_tick(issues[int(n)-1]['updated_at']);data['updated_at']=data['created_at']
   comments.setdefault(n,[]).append(data);statepath.write_text(json.dumps(comments))
  else:
   data=[comments.get(n,[])]
@@ -68,6 +79,7 @@ else:
  n=int(path.split('/issues/')[1]);data=issues[n-1]
 sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(data))
 `
+	script = githubJournalFixtureScript(t, script)
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}

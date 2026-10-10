@@ -240,6 +240,10 @@ func sameJournalIdentity(a, b *ActionJournalRecord) bool {
 }
 
 func (c *Client) completeActionJournal(ctx context.Context, prepared *ActionJournalRecord, after *Record) error {
+	return c.completeActionJournalResult(ctx, prepared, after, nil)
+}
+
+func (c *Client) completeActionJournalResult(ctx context.Context, prepared *ActionJournalRecord, after *Record, comment *ActionCommentState) error {
 	state, err := actionIssueState(after)
 	if err != nil {
 		return err
@@ -263,6 +267,7 @@ func (c *Client) completeActionJournal(ctx context.Context, prepared *ActionJour
 	applied := prepared.ActionJournal
 	applied.Phase = "applied"
 	applied.After = &state
+	applied.CommentAfter = comment
 	if applied.Action == "create" {
 		if prepared.IssueID != "" && prepared.IssueID != after.ID {
 			return fmt.Errorf("creation receipt target identity changed")

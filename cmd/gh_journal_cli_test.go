@@ -47,7 +47,7 @@ func journalCLI(t *testing.T) (string, string, func(...string) (string, string, 
 	}
 }
 
-func fixtureJournals(t *testing.T) []ghstore.ActionJournal {
+func fixtureAllJournals(t *testing.T) []ghstore.ActionJournal {
 	t.Helper()
 	data, err := os.ReadFile(os.Getenv("TD_GH_FIXTURE_JOURNAL"))
 	if err != nil {
@@ -59,7 +59,10 @@ func fixtureJournals(t *testing.T) []ghstore.ActionJournal {
 	}
 	result := []ghstore.ActionJournal{}
 	for _, comment := range remote.Comments {
-		parts := strings.SplitN(comment.Body, "<!-- td:action:v1\n", 2)
+		parts := strings.SplitN(comment.Body, "<!-- td:action:", 2)
+		if len(parts) == 2 {
+			parts[1] = strings.SplitN(parts[1], "\n", 2)[1]
+		}
 		if len(parts) != 2 {
 			t.Fatal("missing action marker", comment.Body)
 		}
@@ -68,6 +71,18 @@ func fixtureJournals(t *testing.T) []ghstore.ActionJournal {
 			t.Fatal(err)
 		}
 		result = append(result, action)
+	}
+	return result
+}
+
+// Existing assertions count issue effects independently of activity effects.
+func fixtureJournals(t *testing.T) []ghstore.ActionJournal {
+	t.Helper()
+	result := []ghstore.ActionJournal{}
+	for _, action := range fixtureAllJournals(t) {
+		if action.Action != "comment_create" {
+			result = append(result, action)
+		}
 	}
 	return result
 }
@@ -409,6 +424,33 @@ func TestGitHubJournalCLIUndoRejectsUnjournaledCommentClock(t *testing.T) {
 			t.Fatal(args, out, stderr, err)
 		}
 	}
+	// Simulate a native/pre-journal comment: remove its receipt, leaving the
+	// actual comment and advanced issue clock intact.
+	journalFile := os.Getenv("TD_GH_FIXTURE_JOURNAL")
+	encoded, err := os.ReadFile(journalFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw struct {
+		Comments []map[string]any `json:"comments"`
+	}
+	if err := json.Unmarshal(encoded, &raw); err != nil {
+		t.Fatal(err)
+	}
+	kept := []map[string]any{}
+	for _, comment := range raw.Comments {
+		if !strings.Contains(comment["body"].(string), "<!-- td:action:v2") {
+			kept = append(kept, comment)
+		}
+	}
+	raw.Comments = kept
+	encoded, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(journalFile, encoded, 0600); err != nil {
+		t.Fatal(err)
+	}
 	before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
 	if err != nil {
 		t.Fatal(err)
@@ -435,5 +477,80 @@ func TestGitHubJournalCLIUndoRejectsUnjournaledCommentClock(t *testing.T) {
 	}
 	if !bytes.Equal(before, after) || fixtureJournals(t)[1].Phase != "applied" {
 		t.Fatal("conflict mutated target or receipt")
+	}
+}
+
+func TestGitHubJournalCLITracksDirectAutomaticAndFanoutActivities(t *testing.T) {
+	_, sessionID, run := journalCLI(t)
+	for _, args := range [][]string{
+		{"create", "First activity target"}, {"create", "Second activity target"},
+		{"comment", "gh-6", "Direct comment"}, {"comments", "add", "gh-6", "Nested comment"},
+		{"log", "--issue", "gh-6", "Saved log"}, {"handoff", "gh-6", "--done", "Saved handoff"},
+		{"due", "gh-6", "2026-12-01"}, {"update", "gh-6", "--title", "Updated target", "--comment", "Update explanation"},
+		{"ws", "start", "Fanout activity"}, {"ws", "tag", "gh-6", "gh-7", "--no-start"},
+		{"ws", "log", "Shared work-session log"},
+	} {
+		out, stderr, err := run(append(args, "--json")...)
+		if err != nil || !json.Valid([]byte(out)) {
+			t.Fatal(args, out, stderr, err)
+		}
+	}
+	comments := []ghstore.ActionJournal{}
+	for _, action := range fixtureAllJournals(t) {
+		if action.Action == "comment_create" {
+			if action.Phase != "applied" || action.SessionID != sessionID || action.CommentAfter == nil || action.CommentAfter.Body != action.CommentInput.Body || action.CommentAfter.Author != "fixture-author" {
+				t.Fatal("missing verified native comment", action)
+			}
+			comments = append(comments, action)
+		}
+	}
+	if len(comments) != 8 {
+		t.Fatal("direct/automatic/fanout activity not journaled", comments)
+	}
+	first, second := comments[6], comments[7]
+	if first.CommentInput.OperationID != second.CommentInput.OperationID || first.OperationID == second.OperationID || first.IssueID == second.IssueID {
+		t.Fatal("work-session fanout identity corrupted", first, second)
+	}
+	before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, err := run("undo", "--json")
+	if err == nil || !strings.Contains(out+stderr, "unsupported_operation") {
+		t.Fatal("comment undo became an issue PATCH", out, stderr, err)
+	}
+	after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("unsupported comment undo mutated native state", err)
+	}
+}
+
+func TestGitHubJournalCLICommentReceiptFailurePreservesNativeComment(t *testing.T) {
+	_, _, run := journalCLI(t)
+	if out, stderr, err := run("create", "Comment receipt target", "--json"); err != nil {
+		t.Fatal(out, stderr, err)
+	}
+	t.Setenv("TD_GH_JOURNAL_FAIL", "receipt-denied")
+	out, stderr, err := run("comment", "gh-6", "Saved before receipt failure", "--json")
+	if err == nil || !strings.Contains(out+stderr, "HTTP 403 journal receipt denied") || !strings.Contains(out+stderr, "unverified") {
+		t.Fatal("comment partial result hidden", out, stderr, err)
+	}
+	actions := fixtureAllJournals(t)
+	if len(actions) != 2 || actions[1].Action != "comment_create" || actions[1].Phase != "prepared" || actions[1].CommentAfter != nil {
+		t.Fatal("false applied receipt", actions)
+	}
+	data, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var remote struct {
+		Comments []struct{ Body string }
+	}
+	if err := json.Unmarshal(data, &remote); err != nil || len(remote.Comments) != 1 || !strings.Contains(remote.Comments[0].Body, "Saved before receipt failure") {
+		t.Fatal("comment missing or automatically retried", remote, err)
+	}
+	out, stderr, err = run("undo", "--json")
+	if err == nil || !strings.Contains(out+stderr, "unverified outcome") {
+		t.Fatal("partial activity skipped", out, stderr, err)
 	}
 }

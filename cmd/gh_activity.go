@@ -55,6 +55,11 @@ func init() {
 			if err != nil {
 				return err
 			}
+			if original != commentsCmd {
+				if err := client.TrackActions(state.Session.ID); err != nil {
+					return err
+				}
+			}
 			return runGitHubActivity(original, cmd, args, &gitHubActivityTracker{ActivityStore: client, Scope: scope}, state, scope.Worktree)
 		}
 	}

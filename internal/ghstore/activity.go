@@ -258,6 +258,9 @@ func (c *Client) AppendActivity(ctx context.Context, id string, input models.Act
 			return nil, err
 		}
 	}
+	if c.journal != nil {
+		return c.appendJournaledActivity(ctx, issue, data, body)
+	}
 	response, err := c.request(ctx, "POST", fmt.Sprintf("/issues/%d/comments", issue.Number), map[string]string{"body": body}, false)
 	if err != nil {
 		return nil, fmt.Errorf("%w; operation %s identifies this activity in comments on %s", err, input.OperationID, issue.ID)

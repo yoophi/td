@@ -328,9 +328,12 @@
     {
       "command": "td comment",
       "owner": "#2",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures cover selected journaled activity creation, automatic comments and work-session fan-out; comment inverse/deletion journaling, complete flags and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksDirectAutomaticAndFanoutActivities",
+        "TestGitHubJournalCLICommentReceiptFailurePreservesNativeComment"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -354,9 +357,12 @@
     {
       "command": "td comments add",
       "owner": "#2",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures cover selected journaled activity creation, automatic comments and work-session fan-out; comment inverse/deletion journaling, complete flags and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksDirectAutomaticAndFanoutActivities",
+        "TestGitHubJournalCLICommentReceiptFailurePreservesNativeComment"
+      ],
       "flags": {
         "help": "pending",
         "json": "pending",
@@ -1028,9 +1034,12 @@
     {
       "command": "td handoff",
       "owner": "#2",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures cover selected journaled activity creation, automatic comments and work-session fan-out; comment inverse/deletion journaling, complete flags and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksDirectAutomaticAndFanoutActivities",
+        "TestGitHubJournalCLICommentReceiptFailurePreservesNativeComment"
+      ],
       "flags": {
         "decision": "pending",
         "done": "pending",
@@ -1200,9 +1209,12 @@
     {
       "command": "td log",
       "owner": "#2",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures cover selected journaled activity creation, automatic comments and work-session fan-out; comment inverse/deletion journaling, complete flags and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksDirectAutomaticAndFanoutActivities",
+        "TestGitHubJournalCLICommentReceiptFailurePreservesNativeComment"
+      ],
       "flags": {
         "blocker": "pending",
         "decision": "pending",
@@ -2359,9 +2371,12 @@
     {
       "command": "td ws log",
       "owner": "#15",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Actual CLI fixtures cover selected journaled activity creation, automatic comments and work-session fan-out; comment inverse/deletion journaling, complete flags and native acceptance remain pending.",
+      "evidence": [
+        "TestGitHubJournalCLITracksDirectAutomaticAndFanoutActivities",
+        "TestGitHubJournalCLICommentReceiptFailurePreservesNativeComment"
+      ],
       "flags": {
         "blocker": "pending",
         "decision": "pending",

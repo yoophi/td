@@ -83,15 +83,20 @@ path=next(a for a in args if a.startswith('repos/owner/repo') or a=='user');meth
 if os.environ.get('TD_TEST_REQUESTS'):
  with open(os.environ['TD_TEST_REQUESTS'],'a') as log:log.write(method+' '+path+'\n')
 f=pathlib.Path(os.environ['TD_TEST_ISSUE'])
+activities_file=f.with_suffix('.comments.json');activities=json.loads(activities_file.read_text()) if activities_file.exists() else []
 issue=json.loads(f.read_text());issue.setdefault('updated_at','2026-10-09T00:00:00Z');issue.setdefault('body','');issue.setdefault('labels',[]);issue.setdefault('user',{'login':'fixture-author'})
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
 elif path.startswith('repos/owner/repo/issues?'):data=[[issue]]
 elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
 elif '/events?' in path:data=[[{'id':1,'event':'closed'}]] if issue['state']=='closed' else [[]]
-elif '/comments?' in path:data=[[]]
+elif '/comments?' in path:data=[activities]
+elif path.startswith('repos/owner/repo/issues/comments/') and method=='GET':
+ n=int(path.rsplit('/',1)[1]);data=next((c for c in activities if c['id']==n),None)
+ if data is None:sys.stderr.write('HTTP 404 comment missing');sys.exit(1)
 elif path=='repos/owner/repo/issues/1/comments' and method=='POST':
  if os.environ.get('TD_TEST_COMMENT_FAIL')=='yes':sys.stderr.write('forbidden');sys.exit(1)
- data={'id':99,'body':json.load(sys.stdin)['body'],'issue_url':'https://api.github.com/repos/owner/repo/issues/1','created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'}}
+ data={'id':200+len(activities),'body':json.load(sys.stdin)['body'],'issue_url':'https://api.github.com/repos/owner/repo/issues/1','created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'}}
+ activities.append(data);activities_file.write_text(json.dumps(activities));issue['updated_at']=fixture_tick(issue['updated_at']);f.write_text(json.dumps(issue))
 elif path=='repos/owner/repo/issues/1':
  if method=='PATCH':
   patch=json.load(sys.stdin)

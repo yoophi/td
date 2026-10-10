@@ -12,7 +12,8 @@ import (
 // Comment input has no allocated GitHub identity. Native identities and clocks
 // belong only in the read-back state, never in caller-supplied activity data.
 type ActionCommentInput struct {
-	Body string `json:"body"`
+	Body        string `json:"body"`
+	OperationID string `json:"operation_id,omitempty"`
 }
 
 type ActionCommentState struct {
@@ -70,7 +71,7 @@ func (a ActionJournal) validateCommentAction() error {
 	// Decode the exact raw activity, including its canonical visible text. A
 	// journal cannot fabricate attribution through a detached JSON field.
 	activity, err := decodeActivity(apiComment{ID: 1, Body: a.CommentInput.Body}, a.IssueID)
-	if err != nil || activity.Native || activity.Kind == "action_journal" || activity.OperationID != a.OperationID || activity.SessionID != a.SessionID {
+	if err != nil || activity.Native || activity.Kind == "action_journal" || activity.OperationID != a.commentOperationID() || activity.SessionID != a.SessionID {
 		return fmt.Errorf("comment input requires canonical activity with matching operation/session")
 	}
 	if (a.Phase != "prepared") != (a.CommentAfter != nil) {
@@ -91,4 +92,13 @@ func (a ActionJournal) validateCommentAction() error {
 		return fmt.Errorf("comment inverse cannot change issue fields or reverse its clock")
 	}
 	return nil
+}
+
+// Work-session activity may share a logical operation across several issues;
+// each journal receipt has its own independent operation identity.
+func (a ActionJournal) commentOperationID() string {
+	if a.CommentInput != nil && a.CommentInput.OperationID != "" {
+		return a.CommentInput.OperationID
+	}
+	return a.OperationID
 }

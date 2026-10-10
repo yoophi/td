@@ -7,7 +7,8 @@ now request action tracking with the real device-local td session. Their issue
 writes use durable intent and verified result protocols; carrier bootstrap is
 lazy, after input and target validation. CLI transition, logical deletion,
 dependency, schedule, file and label-repair writers also request tracking.
-HTTP/monitor writers, activity/comment/note/board write protocols and coordinated
+Tracked activity creation now records v2 receipts. HTTP/monitor writers,
+comment deletion/note/board write protocols and coordinated
 workflow/graph undo remain pending.
 `td undo` executes the supported scalar inverse. This document is
 an implementation boundary, not an acceptance or completion declaration.
@@ -236,13 +237,15 @@ by inspecting fresh history, rather than repeating the mutation.
 ## Comment-create schema and readers (v2)
 
 `td:action:v2` currently defines `action=comment_create`. It stores exact
-`comment_input.body` for a canonical td activity with the same operation/session,
+`comment_input.body` for a canonical td activity with the same session,
 plus verified `comment_after` with repository-local `ghc-N` identity, canonical
 issue membership, complete raw body, native author, created/updated clocks and a
 consistency checksum. This checksum is not authentication. The containing
 journal's native GitHub author must match the recorded comment result author.
 The carrier must be distinct, and issue create input cannot be mixed with comment
-input. A prepared intent has neither an issue after-state nor a comment result.
+input. Optional `comment_input.operation_id` identifies the activity operation;
+without it, older v2 records use the journal operation. Work-session fan-out
+shares an activity operation across targets while each journal has its own ID. A prepared intent has neither an issue after-state nor a comment result.
 Later phases require both. Comment creation may advance the issue clock but
 cannot change its title/body/state/labels; neither resulting nor restored clocks
 may move backwards.
@@ -262,14 +265,47 @@ Their common before/after strings remain native issue snapshots with the existin
 per-comment queries. Actual CLI fixture tests cover v2 reads alongside v1 in both
 feature modes, including preserved native body and author.
 
-This is a schema/read stage. Activity creation does not yet emit v2 intents or
-verified receipts, and comment undo has no executor yet. Creation must next
-record intent before POST, check operation uniqueness from complete bulk history,
-recheck target immediately before write, validate native membership/author/body,
-read the comment and issue back, then verify the applied receipt. Lost/denied
-outcomes must remain explicitly uncertain without automatic POST retries.
-Deletion undo must verify exact current comment and issue state and preserve
-existing log/handoff protection. Recreating a deleted comment changes its ID,
-author attribution and server timestamps; that compensation needs an explicit
-limit rather than a claim of lossless restoration. These pending steps apply to
-automatic activity comments as well as direct comment/log/handoff commands.
+## Tracked activity creation
+
+On a tracked client, `AppendActivity` validates activity input and actor scope
+before carrier bootstrap. It records a separate prepared journal with the exact
+issue before-state, input and independent journal operation. A fresh complete
+bulk observation rejects an existing logical activity operation on the same
+target; the same work-session operation on another target is allowed. The
+original target revision is checked again after the intent, immediately before
+POST. The response must have correct native membership, body, author and clocks;
+its author must match the intent's native author. Direct comment readback,
+unchanged issue fields with a nondecreasing clock, fresh bulk result uniqueness,
+and applied receipt/readback are required. Comment readback is repeated after
+the receipt so a later comment edit is not hidden by issue state alone.
+
+CLI direct comment, comments add, log and handoff commands request tracking with
+the actual context actor. Existing tracked schedule, file, update/review and
+work-session activity paths share the same protocol. Local-only work-session
+entries do not create remote records. Untracked library clients retain the
+existing behavior until their writer integration supplies an actor; HTTP/monitor
+integration remains pending. Any lost/denied/unverified POST or receipt returns
+an explicit error with operation, target and journal identity, retaining raw
+errors. Prepared uncertainty is never success or an automatic retry. A verified
+receipt can precede an external later edit; the final conflict still returns an
+error and preserves that edit. Neither uniqueness checks nor revision/readback
+checks provide a GitHub distributed transaction or atomic reservation.
+
+Actual CLI fixtures cover direct and automatic writes, two-target work-session
+fan-out with distinct journal IDs, failed receipt after a saved native comment,
+and refusal to undo an unfinished or unsupported comment action. The fixture now
+stores native comments, membership/author/clocks, direct reads and issue clock
+changes. Separate library tests cover intent failures, stale targets, native
+POST denial/loss, unexpected membership/author, denied/changed readback, duplicate
+results, receipt failure/loss and a post-receipt external target edit. Fixture
+success does not substitute for actual GitHub acceptance.
+
+Comment undo still has no guarded executor. Deletion undo must verify exact
+current comment and issue state and preserve existing log/handoff protection.
+Recreating a deleted comment changes its ID, author attribution and server
+timestamps; that compensation needs an explicit limit rather than a claim of
+lossless restoration. Sequential field undo after activity creation requires
+comment inverse receipts with exact causal links; it must not simply ignore the
+issue clock. Comment deletion journaling, note/board state, coordinated policy/
+graph inverse operations, HTTP/monitor writers and portable journal transport
+remain required work.

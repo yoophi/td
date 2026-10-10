@@ -232,6 +232,9 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 				if err != nil {
 					return err
 				}
+				if err := client.TrackActions(current.Session.ID); err != nil {
+					return err
+				}
 				if _, err := client.AppendActivity(cmd.Context(), record.ID, entry); err != nil {
 					return err
 				}

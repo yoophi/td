@@ -42,7 +42,7 @@ with lazy bootstrap and real session attribution. CLI status transitions, logica
 delete/restore, dependencies, scheduling, linked files, label repairs and work-session
 auto-start/review writes now use the same journal protocol. Actual CLI tests cover
 receipt failures and no-op start/preview behavior. HTTP/monitor writers,
-comment/note/board journaling and coordinated cascade undo remain work.
+comment deletion/note/board journaling and coordinated cascade undo remain work.
 
 These writer hooks do not make workflow, relationship, file or deletion undo
 supported: their policy and graph checks still require dedicated inverse planning.
@@ -59,9 +59,11 @@ native comment identity, author, raw body and server clocks, alongside the
 issue before/after clock. They remain readable beside v1 issue records through
 the same bulk collections. `last` and `undo --list` JSON retain both the comment
 input/result and target issue identity. Actual subprocess tests exercise that
-read contract in both feature modes. This is a codec/read stage only: default
-activity writers do not emit v2 receipts yet, and a comment action cannot be
-planned as an issue PATCH. Its guarded creation/deletion executor remains work.
+read contract in both feature modes. Tracked CLI clients now emit v2 receipts
+for direct comments/logs/handoffs and automatic activity comments, including
+work-session fan-out. Intent/POST/readback/uniqueness/receipt checks preserve
+uncertain outcomes without automatic retries. A comment action cannot be
+planned as an issue PATCH; guarded comment undo/deletion journaling remain work.
 
 Workflow history provides selected transitions but cannot reconstruct arbitrary
 issue, relationship, note or board changes. An activity feed is insufficient
