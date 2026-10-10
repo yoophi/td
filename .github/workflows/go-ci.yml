@@ -59,7 +59,7 @@ jobs:
         run: ./scripts/test-release-tag.sh
 
       - name: Test
-        run: env -u TD_FEATURE_SYNC_AUTOSYNC -u TD_FEATURE_SYNC_CLI go test ./...
+        run: make test
 
   # The test job only builds for the runner's own platform, so code that fails
   # to compile elsewhere lands silently. That happened: config.go called

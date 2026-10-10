@@ -38,6 +38,10 @@ formula also installs `gh`, needed by GitHub Issues storage.
 ## Release procedure
 
 1. Merge intended changes into `main`. Run `make test` and `make lint`.
+   `make test` uses a 30-minute timeout per Go package, including the CLI's
+   subprocess integration suite. Local, Go CI and release verification use
+   this same target. Override the finite budget when needed with
+   `make test TEST_TIMEOUT=45m`; this does not exclude any tests.
 2. Choose a new, unused `vX.Y.Z` tag. Add and commit a matching
    `## [vX.Y.Z] - YYYY-MM-DD` section to `CHANGELOG.md`.
 3. Push `main`, then release from a clean checkout:
