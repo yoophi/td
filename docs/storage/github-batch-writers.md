@@ -22,6 +22,7 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | `config sync-state-labels` / `config sync-priority-labels --apply` with multiple repairs | v17 planned scalar `update` group fixes every repair's complete labels and original revision, including closed/deleted tasks | No local context change |
 | Multi-edge `dep add` / `dep rm` (`remove`) | One source PATCH and one existing update receipt for the full prevalidated delta; shared reachable targets are observed once per fence | No local context change |
 | File `link` / `unlink`, `due` / `defer` | v21 update/activity group freezes both complete inputs before writes; v22 members bind the actual field result to the following activity | File commands retain their local path/hash checks; schedule activities retain work-session attribution |
+| `ws handoff --review` | v23 command fixes all handoffs and review templates; v24 ordered effects bind each review to its actual preceding handoff | Tags, history membership and work-session end state remain device-local |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -116,14 +117,6 @@ partial forward/inverse paths, read-only confirmation, invalid activity input,
 and foreign source/comment/original-receipt changes. Native acceptance and the
 full command/flag audit remain separate verification gates.
 
-## Remaining writer integration
-
-| Writer | Current effects requiring an aggregate |
-|---|---|
-| Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |
-| Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
-| `ws handoff --review` | Activity fanout followed by task review requests |
-
 `ws handoff --review` now preflights all handoff bodies and review inputs before
 the first comment or journal write. It freezes review selection from the
 original tagged-task observations, including tasks that receive only a handoff.
@@ -135,9 +128,33 @@ events stop submission. A failed or uncertain effect is never replayed by the
 same in-memory plan, and the work session stays active on partial failure.
 Capacity probes reuse the captured event baseline without additional API calls;
 execution still reads fresh evidence before a review write.
-This preparation is a prerequisite for the remaining persistent mixed-effect
-group: the command still has individual receipts and does **not** yet provide
-command-wide recovery or undo. Device-local work-session state remains separate.
+The v23 command persists these inputs before the first effect, including when
+only one task is tagged. All handoffs precede all selected reviews. Each v24
+review receipt must reference its own verified handoff receipt, actual native
+comment ID and timestamp; another handoff cannot establish that edge. `last`
+and `undo --list` collapse effects into one command. Direct member undo is refused.
+
+Recovery observes uncertain results and writes receipts only; it never repeats
+an issue PATCH, handoff POST or comment DELETE. Whole-command undo first checks
+the remaining inverses, restores review states in reverse order, then deletes
+only the command's exact handoff comments. Foreign task/comment changes,
+replaced original receipts and changed native state events stop the operation.
+A recovered review inverse can bridge only its own handoff clock; it cannot
+serve as a causal witness for an unrelated command. Observed evidence remains
+weaker than a verified target write. Device-local work-session state is not
+restored by remote undo.
+
+The v23/v24 semantics use the existing bounded v9 compression and v20 multipart
+transport. Upgrade and restart every monitor/server reading this repository
+before writing these formats; replacing the installed executable does not
+upgrade an already-running process.
+
+## Remaining writer integration
+
+| Writer | Current effects requiring an aggregate |
+|---|---|
+| Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |
+| Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 
 These remaining paths need a shared mixed-effect contract, including complete
 command inputs fixed before the first write, original target identity, partial

@@ -50,7 +50,7 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 		if i > 0 && a.CreatedAt.Before(ordered[i-1].CreatedAt) {
 			return nil, fmt.Errorf("ordered effect creation clocks regress")
 		}
-		if group.Group.Ordered != nil || group.Group.updateActivityGroup() {
+		if group.Group.sequencedGroup() {
 			previous := ""
 			chain := chains[a.IssueID]
 			if len(chain) > 0 {
@@ -76,10 +76,15 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 		if group.Group.activityGroup() && len(chain) > 0 {
 			return nil, fmt.Errorf("activity group member has repeated attempts")
 		}
+		if group.Group.handoffReviewGroup() {
+			if err := validateHandoffReviewBinding(group, a, chain); err != nil {
+				return nil, err
+			}
+		}
 		if len(chain) > 0 {
 			previous := chain[len(chain)-1]
 			if previous.UpdateIntent != nil && previous.UpdateIntent.NativeEvents != nil && !group.Group.updateActivityGroup() {
-				if a.UpdateIntent.NativeEvents == nil {
+				if a.UpdateIntent == nil || a.UpdateIntent.NativeEvents == nil {
 					return nil, fmt.Errorf("ordered effect omitted its predecessor's native event continuation")
 				}
 				if err := updateEventProof(previous.ActionJournal, *a.UpdateIntent.NativeEvents); err != nil {

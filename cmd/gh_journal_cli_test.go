@@ -287,10 +287,14 @@ func TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSess
 	execute("ws", "start", "Journal bundle")
 	execute("ws", "tag", "gh-6")
 	execute("ws", "handoff", "--review", "--done", "fixture handoff")
-	if len(fixtureJournals(t)) != count+3 {
-		t.Fatal("work session transitions were not journaled", fixtureJournals(t))
-	}
 	last := fixtureJournals(t)
+	if len(last) != count+4 { // unstart, tag/start, command group, review effect
+		t.Fatalf("work-session journal count: got %d, want %d", len(last), count+4)
+	}
+	group, review := last[len(last)-2], last[len(last)-1]
+	if group.Group == nil || group.Group.HandoffReview == nil || group.Group.Command != "ws-handoff-review" || group.Phase != "applied" || review.GroupOperationID != group.OperationID || review.Action != "update" {
+		t.Fatal("work-session review lost its complete command group")
+	}
 	originalBody := last[len(last)-1].Before.Body
 	out, stderr, err := run("undo", "--json")
 	if err != nil || !json.Valid([]byte(out)) {

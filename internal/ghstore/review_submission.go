@@ -17,11 +17,11 @@ import (
 // actual handoff identity and timestamp are bound later; actor, contents,
 // transition identity, review clock and native event baseline remain fixed.
 type reviewSubmissionInput struct {
-	Before          ActionIssueState
-	Details         IssueDetails
-	Reason          string
-	Events          []nativeStateEvent
-	RequiresHandoff bool
+	Before          ActionIssueState   `json:"before"`
+	Details         IssueDetails       `json:"details"`
+	Reason          string             `json:"reason"`
+	Events          []nativeStateEvent `json:"events"`
+	RequiresHandoff bool               `json:"requires_handoff"`
 }
 
 func (c *Client) prepareReviewSubmission(ctx context.Context, observed *Record, o TransitionOptions) (*reviewSubmissionInput, error) {

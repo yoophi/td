@@ -21,25 +21,7 @@ func TestGitHubWorkSessionPreparedHandoffReview(t *testing.T) {
 		t.Run(failure, func(t *testing.T) {
 			dir, _, run := journalCLI(t)
 			useNativeCommentOrderFixture(t)
-			// The shared fixture historically returned all activity from the
-			// issue-specific endpoint. Fanout reuses an operation ID on distinct
-			// tasks, so this fixture must honor the real endpoint's membership.
-			gh, err := exec.LookPath("gh")
-			if err != nil {
-				t.Fatal(err)
-			}
-			body, err := os.ReadFile(gh)
-			if err != nil {
-				t.Fatal(err)
-			}
-			old := "elif '/comments?' in path:data=[state['comments']]"
-			if !strings.Contains(string(body), old) {
-				t.Fatal("fixture comment listing changed; inspect its target scope")
-			}
-			updated := strings.Replace(string(body), old, "elif '/comments?' in path:\n n=path.split('/issues/')[1].split('/')[0];data=[state['comments'] if n.startswith('comments?') else [c for c in state['comments'] if c['issue_url'].endswith('/'+n)]]", 1)
-			if err := os.WriteFile(gh, []byte(updated), 0755); err != nil {
-				t.Fatal(err)
-			}
+			useHandoffReviewFixture(t)
 			execute := func(args ...string) string {
 				t.Helper()
 				out, stderr, err := run(append(args, "--json")...)
@@ -142,4 +124,38 @@ func TestGitHubWorkSessionPreparedHandoffReview(t *testing.T) {
 			}
 		})
 	}
+}
+
+func useHandoffReviewFixture(t *testing.T) {
+	t.Helper()
+	// The shared fixture historically returned all activity from the
+	// issue-specific endpoint. Fanout reuses an operation ID on distinct
+	// tasks, so this fixture must honor the real endpoint's membership.
+	gh, err := exec.LookPath("gh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(gh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := "elif '/comments?' in path:data=[state['comments']]"
+	if !strings.Contains(string(body), old) {
+		t.Fatal("fixture comment listing changed; inspect its target scope")
+	}
+	updated := strings.Replace(string(body), old, "elif '/comments?' in path:\n n=path.split('/issues/')[1].split('/')[0];data=[state['comments'] if n.startswith('comments?') else [c for c in state['comments'] if c['issue_url'].endswith('/'+n)]]", 1)
+
+	for needle, extra := range map[string]string{
+		"issues[n]['updated_at']=clock;f.write_text(json.dumps(state))": "\n if os.environ.get('TD_GH_JOURNAL_FAIL')=='second-comment-lost' and n=='7':sys.stderr.write('connection lost after second comment');sys.exit(1)",
+		"f.write_text(json.dumps(state));data=None":                     "\n if os.environ.get('TD_GH_JOURNAL_FAIL')=='delete-lost':sys.stderr.write('connection lost after DELETE');sys.exit(1)",
+	} {
+		if !strings.Contains(updated, needle) {
+			t.Fatal("handoff fixture failure seam missing", needle)
+		}
+		updated = strings.Replace(updated, needle, needle+extra, 1)
+	}
+	if err := os.WriteFile(gh, []byte(updated), 0755); err != nil {
+		t.Fatal(err)
+	}
+
 }

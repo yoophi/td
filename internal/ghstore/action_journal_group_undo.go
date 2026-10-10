@@ -52,6 +52,9 @@ func checkGroupUndoGate(ctx context.Context) error {
 }
 
 func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, session string) (*ActionUndoResult, error) {
+	if a.Group.handoffReviewGroup() {
+		return c.undoHandoffReview(ctx, a, session)
+	}
 	if a.Group.updateActivityGroup() {
 		return c.undoUpdateActivity(ctx, a, session)
 	}
@@ -276,7 +279,7 @@ func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord,
 		}
 	}
 	for op, group := range groups {
-		if group.Group.Ordered == nil && !group.Group.updateActivityGroup() {
+		if !group.Group.sequencedGroup() {
 			continue
 		}
 		if err := group.validate(); err != nil {
@@ -285,6 +288,13 @@ func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord,
 		chains, err := orderedGroupEffects(&group, members[op])
 		if err != nil {
 			return nil, err
+		}
+		if group.Group.handoffReviewGroup() {
+			ordered := slices.Clone(members[op])
+			slices.SortFunc(ordered, func(a, b *ActionJournalRecord) int { return a.GroupSequence - b.GroupSequence })
+			if err := validateHandoffReviewForward(&group, ordered); err != nil {
+				return nil, err
+			}
 		}
 		if group.Group.updateActivityGroup() {
 			if err := validateUpdateActivityForward(&group, chains[group.IssueID]); err != nil {
@@ -319,7 +329,7 @@ func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord,
 			if !found {
 				return nil, fmt.Errorf("member %s has no observed group receipt", a.ID)
 			}
-			if group.Group.Ordered == nil && !group.Group.updateActivityGroup() {
+			if !group.Group.sequencedGroup() {
 				if err := validateGroupMember(&group, &a); err != nil {
 					return nil, err
 				}

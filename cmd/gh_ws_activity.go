@@ -222,7 +222,7 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 		return active, nil
 	}
 	completed := []string{}
-	grouped := len(records) > 1 && !review
+	grouped := len(records) > 1 || review
 	inputs := make([]ghstore.ActivityGroupInput, 0, len(records))
 	for _, record := range records {
 		entry := activity
@@ -248,6 +248,9 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 			}
 			if err := client.TrackActions(current.Session.ID); err != nil {
 				return err
+			}
+			if review {
+				return client.BeginHandoffReviewGroup(cmd.Context(), reviewPlans)
 			}
 			return client.BeginActivityGroup(cmd.Context(), "ws-"+activity.Kind, inputs)
 		})
@@ -301,11 +304,6 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 		}
 	}
 	reviewed := []string{}
-	if grouped {
-		if _, err := client.CompleteActionGroup(cmd.Context()); err != nil {
-			return err
-		}
-	}
 	if review {
 		for i, record := range records {
 			requested := false
@@ -326,6 +324,11 @@ func writeGitHubWorkSessionActivity(original, cmd *cobra.Command, args []string,
 			if requested {
 				reviewed = append(reviewed, record.ID)
 			}
+		}
+	}
+	if grouped {
+		if _, err := client.CompleteActionGroup(cmd.Context()); err != nil {
+			return err
 		}
 	}
 	continuing, _ := cmd.Flags().GetBool("continue")

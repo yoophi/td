@@ -88,6 +88,7 @@ func (s ActionIssueState) validate() error {
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
 	CommentObservation     *ActionCommentObservation `json:"comment_observation,omitempty"`
+	GroupContract          string                    `json:"group_contract,omitempty"`
 	GroupMixed             bool                      `json:"group_mixed,omitempty"`
 	GroupSequence          int                       `json:"group_sequence,omitempty"`
 	GroupPreviousReceiptID string                    `json:"group_previous_receipt_id,omitempty"`
@@ -153,10 +154,13 @@ func (a ActionJournal) validate() error {
 	}
 	if a.GroupOperationID != "" {
 		update := a.UpdateIntent != nil && a.Action == "update"
-		activity := a.CommentInput != nil && a.Action == "comment_create" && (a.GroupMixed || a.GroupSequence == 0 && a.GroupPreviousReceiptID == "")
+		activity := a.CommentInput != nil && a.Action == "comment_create" && (a.GroupMixed || a.GroupContract == handoffReviewContract || a.GroupSequence == 0 && a.GroupPreviousReceiptID == "")
 		if !identity(a.GroupOperationID) || a.GroupOperationID == a.OperationID || !update && !activity {
 			return fmt.Errorf("group member requires its distinct immutable group and full effect input")
 		}
+	}
+	if a.GroupContract != "" && (a.GroupContract != handoffReviewContract || a.GroupMixed || a.GroupOperationID == "" || a.GroupSequence < 1) {
+		return fmt.Errorf("unknown or invalid member group contract")
 	}
 	if a.GroupMixed && (a.GroupOperationID == "" || a.GroupSequence < 1 || a.GroupSequence > 2) {
 		return fmt.Errorf("update/activity member requires an immutable group and declared effect sequence")
@@ -289,6 +293,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		if a.Group.updateActivityGroup() {
 			start = actionUpdateActivityJournalStart
 		}
+		if a.Group.handoffReviewGroup() {
+			start = actionHandoffReviewJournalStart
+		}
 	} else if a.GroupOperationID != "" {
 		start = actionGroupMemberJournalStart
 		if a.GroupSequence > 0 {
@@ -299,6 +306,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 		}
 		if a.GroupMixed {
 			start = actionUpdateActivityMemberJournalStart
+		}
+		if a.GroupContract == handoffReviewContract {
+			start = actionHandoffReviewMemberStart
 		}
 	} else if a.CommentObservation != nil {
 		start = actionCommentObservedJournalStart
@@ -341,7 +351,11 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionUpdateActivityJournalStart) {
+	if strings.HasPrefix(block, actionHandoffReviewJournalStart) {
+		start = actionHandoffReviewJournalStart
+	} else if strings.HasPrefix(block, actionHandoffReviewMemberStart) {
+		start = actionHandoffReviewMemberStart
+	} else if strings.HasPrefix(block, actionUpdateActivityJournalStart) {
 		start = actionUpdateActivityJournalStart
 	} else if strings.HasPrefix(block, actionUpdateActivityMemberJournalStart) {
 		start = actionUpdateActivityMemberJournalStart
@@ -399,14 +413,18 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	activityGroup := start == actionActivityGroupJournalStart
 	activityRoot := a.Group != nil && a.Group.activityGroup()
 	activityMember := a.GroupOperationID != "" && a.Action == "comment_create"
+	handoffRoot, handoffMember := a.Group.handoffReviewGroup(), a.GroupContract == handoffReviewContract
+	if handoffRoot != (start == actionHandoffReviewJournalStart) || handoffMember != (start == actionHandoffReviewMemberStart) {
+		return nil, fmt.Errorf("handoff review version differs from payload")
+	}
 	mixedRoot := a.Group.updateActivityGroup()
 	if mixedRoot != (start == actionUpdateActivityJournalStart) || a.GroupMixed != (start == actionUpdateActivityMemberJournalStart) {
 		return nil, fmt.Errorf("update/activity version differs from payload")
 	}
-	if activityGroup != (activityRoot || activityMember && !a.GroupMixed) {
+	if activityGroup != (activityRoot || activityMember && !a.GroupMixed && !handoffMember) {
 		return nil, fmt.Errorf("activity group version differs from payload")
 	}
-	if (a.Group != nil) != (start == actionGroupJournalStart || start == actionReviewGroupJournalStart || start == actionNativeGroupJournalStart || start == actionOrderedGroupJournalStart || start == actionPlannedUpdateGroupJournalStart || start == actionPlannedTaskGroupJournalStart || activityRoot || mixedRoot) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart || activityMember || a.GroupMixed) || !groupNativeAuthor(a, comment.User.Login) {
+	if (a.Group != nil) != (start == actionGroupJournalStart || start == actionReviewGroupJournalStart || start == actionNativeGroupJournalStart || start == actionOrderedGroupJournalStart || start == actionPlannedUpdateGroupJournalStart || start == actionPlannedTaskGroupJournalStart || activityRoot || mixedRoot || handoffRoot) || (a.GroupOperationID != "") != (start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart || activityMember || a.GroupMixed || handoffMember) || !groupNativeAuthor(a, comment.User.Login) {
 		return nil, fmt.Errorf("group version or native attribution differs from payload")
 	}
 	if (a.Group != nil && a.Group.Ordered == nil && a.Group.Command == "review") != (start == actionReviewGroupJournalStart) {
@@ -415,7 +433,7 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if (a.Group != nil && a.Group.Ordered == nil && nativeGroupCommand(a.Group.Command)) != (start == actionNativeGroupJournalStart) {
 		return nil, fmt.Errorf("native group version differs")
 	}
-	if (a.Group != nil && a.Group.Ordered != nil) != (start == actionOrderedGroupJournalStart) || (a.GroupSequence > 0 && !a.GroupMixed) != (start == actionOrderedGroupMemberJournalStart) {
+	if (a.Group != nil && a.Group.Ordered != nil) != (start == actionOrderedGroupJournalStart) || (a.GroupSequence > 0 && !a.GroupMixed && !handoffMember) != (start == actionOrderedGroupMemberJournalStart) {
 		return nil, fmt.Errorf("ordered group version differs from payload")
 	}
 	if (a.Group != nil && a.Group.Command == "update" && !a.Group.Planned) != (start == actionPlannedUpdateGroupJournalStart) {
@@ -424,7 +442,7 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if (a.Group != nil && a.Group.Planned) != (start == actionPlannedTaskGroupJournalStart) {
 		return nil, fmt.Errorf("planned task group version differs from payload")
 	}
-	planned := start == actionUpdateIntentJournalStart || start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart || a.GroupMixed && a.Action == "update"
+	planned := start == actionUpdateIntentJournalStart || start == actionGroupMemberJournalStart || start == actionOrderedGroupMemberJournalStart || (a.GroupMixed || handoffMember) && a.Action == "update"
 	commentObserved := start == actionCommentObservedJournalStart
 	if !activityMember && (a.CommentObservation != nil) != commentObserved || a.CommentObservation != nil && !strings.EqualFold(a.CommentObservation.Actor, comment.User.Login) {
 		return nil, fmt.Errorf("comment observation version or native author differs from payload")

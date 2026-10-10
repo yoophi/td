@@ -161,6 +161,9 @@ func (c *Client) bindActivityGroupIntent(a *ActionJournal) error {
 		return nil
 	}
 	active := c.journal.Group
+	if active.Journal.Group.handoffReviewGroup() {
+		return c.bindHandoffReviewMember(a)
+	}
 	if active.Journal.Group.updateActivityGroup() {
 		return c.bindUpdateActivityMember(a)
 	}

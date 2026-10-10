@@ -13,7 +13,7 @@ import (
 // PreparedHandoffReview keeps requested inputs separate from actual GitHub
 // results. It is deliberately opaque: callers cannot replace its selected task,
 // review intent or published handoff between the two effects.
-// Persistent command-wide recovery/undo is a separate journal integration.
+// BeginHandoffReviewGroup persists these inputs for command-wide recovery/undo.
 type PreparedHandoffReview struct {
 	client           *Client
 	observed         *Record
@@ -157,7 +157,8 @@ func (c *Client) checkPreparedHandoff(p *PreparedHandoffReview) error {
 
 // AppendPreparedHandoff publishes the frozen activity against its original
 // observation. An uncertain attempt cannot be replayed through this plan.
-func (c *Client) AppendPreparedHandoff(ctx context.Context, p *PreparedHandoffReview) error {
+func (c *Client) AppendPreparedHandoff(ctx context.Context, p *PreparedHandoffReview) (err error) {
+	defer func() { err = c.handoffReviewFailure(err) }()
 	if err := c.checkPreparedHandoff(p); err != nil {
 		return err
 	}
@@ -175,7 +176,8 @@ func (c *Client) AppendPreparedHandoff(ctx context.Context, p *PreparedHandoffRe
 
 // SubmitPreparedHandoffReview binds only the verified comment from this plan.
 // It never searches for the latest handoff or adopts a changed task revision.
-func (c *Client) SubmitPreparedHandoffReview(ctx context.Context, p *PreparedHandoffReview) (bool, error) {
+func (c *Client) SubmitPreparedHandoffReview(ctx context.Context, p *PreparedHandoffReview) (requested bool, err error) {
+	defer func() { err = c.handoffReviewFailure(err) }()
 	if err := c.checkPreparedHandoff(p); err != nil {
 		return false, err
 	}
@@ -203,4 +205,11 @@ func (c *Client) SubmitPreparedHandoffReview(ctx context.Context, p *PreparedHan
 	}
 	_, err = c.writeIssueUpdate(ctx, plan)
 	return err == nil, err
+}
+
+func (c *Client) handoffReviewFailure(err error) error {
+	if err != nil && c.journal != nil && c.journal.Group != nil && c.journal.Group.Journal.Group.handoffReviewGroup() {
+		return fmt.Errorf("handoff review group %s stopped; earlier effects may remain; inspect and reconcile this group before retrying: %w", c.journal.Group.Journal.ID, err)
+	}
+	return err
 }
