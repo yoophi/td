@@ -304,6 +304,72 @@ func TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSess
 	}
 }
 
+func TestGitHubJournalCLIUndoesFileLinkAndUnlinkAfterOwnAuditLog(t *testing.T) {
+	for _, enabled := range []string{"false", "true"} {
+		t.Run(enabled, func(t *testing.T) {
+			t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
+			dir, _, run := journalCLI(t)
+			if err := os.WriteFile(filepath.Join(dir, "linked.go"), []byte("package fixture\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			execute := func(args ...string) {
+				t.Helper()
+				out, stderr, err := run(append(args, "--json")...)
+				if err != nil || !json.Valid([]byte(out)) {
+					t.Fatal(args, out, stderr, err)
+				}
+			}
+			execute("create", "File undo CLI fixture")
+			for _, unlink := range []bool{false, true} {
+				if unlink {
+					execute("link", "gh-6", "linked.go", "--role", "test")
+				}
+				var before map[string]any
+				data, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(data, &before); err != nil {
+					t.Fatal(err)
+				}
+				body := before["issues"].(map[string]any)["6"].(map[string]any)["body"]
+				if unlink {
+					execute("unlink", "gh-6", "linked.go")
+				} else {
+					execute("link", "gh-6", "linked.go", "--role", "test")
+				}
+				// File commands have two distinct tracked effects: issue metadata,
+				// then their own audit comment. Undo them in reverse order.
+				execute("undo")
+				execute("undo")
+				data, err = os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var after map[string]any
+				if err := json.Unmarshal(data, &after); err != nil {
+					t.Fatal(err)
+				}
+				if after["issues"].(map[string]any)["6"].(map[string]any)["body"] != body {
+					t.Fatal("file metadata was not restored after sequential audit-comment/file undo")
+				}
+				journals := fixtureAllJournals(t)
+				last := journals[len(journals)-1]
+				if last.Phase != "undone" || last.Action != "comment_create" {
+					t.Fatal("audit comment inverse not recorded", last)
+				}
+				last = journals[len(journals)-2]
+				if last.Phase != "undone" || last.Action != "update" || last.Restored == nil {
+					t.Fatal("file inverse not recorded", last)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("unexpected SQLite fallback", err)
+			}
+		})
+	}
+}
+
 func TestGitHubJournalCLITracksLabelRepairWritesButNotPreview(t *testing.T) {
 	_, sessionID, run := journalCLI(t)
 	execute := func(args ...string) {

@@ -9,9 +9,10 @@ lazy, after input and target validation. CLI transition, logical deletion,
 dependency, schedule, file and label-repair writers also request tracking.
 Tracked activity creation now records v2 receipts. HTTP and monitor client
 factories now enable the same issue/activity protocols with their actual scoped
-actors. Comment deletion and coordinated
-workflow/graph undo remain pending.
-`td undo` executes supported scalar and own comment-creation inverses. This document is
+actors. Raw comment deletion now preserves v4 original comment snapshots;
+single-target linked-file undo also restores verified original review state.
+Coordinated workflow/graph undo remains pending.
+`td undo` executes supported scalar, linked-file and own comment-creation inverses. This document is
 an implementation boundary, not an acceptance or completion declaration.
 
 An issue journal is a versioned `td:action:v1` block on a repository carrier's GitHub
@@ -201,12 +202,45 @@ look like the old values.
 Current scope includes title, visible description, acceptance, type, priority,
 points, labels and minor/sprint/date scalar data when workflow/graph/review data
 remains unchanged. Native state changes, session/review/transition/history or
-parent/dependency/file changes and multi-target effects
+parent/dependency changes and multi-target effects
 still require coordinated undo integration. They return an explicit scope
 error before target writes. Legacy per-target journals also need separate-carrier
 migration before execution, avoiding receipt writes on the target itself.
 Creation retains the explicit logical-delete alternative. These are pending
 implementation boundaries, not SQLite-only exemptions or proof of #9 completion.
+
+## Linked-file inverse and original review verification
+
+Single-target `link`/`unlink` changes restore the exact original native issue
+body and labels, including file IDs, paths, roles, linked SHA and times. The
+scope recognizer permits only the file writer's complete effect: file-set
+replacement, reserved label mirroring, clearing current review pointers and
+superseding existing active review rows at one instant. Changed participation,
+parent/dependencies, review authors/decisions, native state, other metadata or
+new/deleted review rows cannot be smuggled into that inverse. Both recorded
+file sets must pass the same repository-relative path, role, ownership and
+uniqueness checks as the ordinary writer. Legacy unlabelled issues retain their
+exact original body/labels after undo.
+
+Restoring a review uses its original identity and attribution; it does not
+create a new approval. If before-state contains an active approval or review
+basis, the executor revalidates the original content basis, native close/reopen
+event digest and handoff identity/update time before intent, before target
+PATCH, after target readback and after receipt verification. Closed approvals
+must still satisfy the recorded-close event proof. Stale evidence produces a
+conflict; API/permission/rate-limit errors retain their original cause. A failure
+after a target write reports uncertainty, never replaying the inverse. Receipt
+chains and already-undone no-ops recheck file review evidence too.
+
+The original before/after snapshots remain immutable. A successful `undone`
+receipt proves a new restored revision, allowing sequential undo only through
+unambiguous verified same-session/author/carrier edges. Restoration touches
+metadata links, not repository files or commits. GitHub does not provide an
+atomic transaction across issue state, handoff comments and events, so checks
+at these fences remain best-effort conflict detection. Explicit reconciliation
+of an `undo_prepared` file/scalar result is still pending; it cannot be treated
+as success just because fields look restored. This is a completed implementation
+stage within #9, not closure of the whole task.
 
 The scalar executor is connected to CLI `undo`, with latest-action selection,
 scope/conflict error mapping and subprocess command tests in both feature modes.

@@ -283,10 +283,17 @@ func (c *Client) verifyReview(ctx context.Context, record *Record, details Issue
 	if events != details.ReviewEvents {
 		return "", workflowStateError("native close/reopen history changed for %s; submit a new review cycle", record.ID)
 	}
+	if err := c.verifyReviewHandoff(ctx, record, details); err != nil {
+		return "", err
+	}
+	return events, nil
+}
+
+func (c *Client) verifyReviewHandoff(ctx context.Context, record *Record, details IssueDetails) error {
 	if details.ReviewHandoffID != "" {
 		entries, err := c.ListActivity(ctx, record.ID)
 		if err != nil {
-			return "", err
+			return err
 		}
 		found := false
 		for _, a := range entries {
@@ -295,10 +302,10 @@ func (c *Client) verifyReview(ctx context.Context, record *Record, details Issue
 			}
 		}
 		if !found {
-			return "", workflowStateError("review handoff was edited or deleted for %s; submit a new review cycle", record.ID)
+			return workflowStateError("review handoff was edited or deleted for %s; submit a new review cycle", record.ID)
 		}
 	}
-	return events, nil
+	return nil
 }
 
 func (c *Client) reviewTransition(ctx context.Context, id, action string, o TransitionOptions) (*Record, bool, error) {

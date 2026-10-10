@@ -75,9 +75,26 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 		return nil, err
 	}
 	if plan.AlreadyUndone {
+		if err := c.checkFileUndoReview(ctx, action, false); err != nil {
+			return nil, err
+		}
+		if fileChange, err := fileUndoScope(action); err != nil {
+			return nil, err
+		} else if fileChange {
+			latest, err := c.readJournalTarget(ctx, current.ID)
+			if err != nil {
+				return nil, err
+			}
+			if latest.revision != current.revision {
+				return nil, &ConflictError{ID: current.ID}
+			}
+		}
 		return &ActionUndoResult{Issue: current, Journal: action, AlreadyUndone: true}, nil
 	}
 	if err := scalarUndoScope(action); err != nil {
+		return nil, err
+	}
+	if err := c.checkFileUndoReview(ctx, action, false); err != nil {
 		return nil, err
 	}
 	if err := c.checkEntityUndoCatalog(ctx, action, false); err != nil {
@@ -96,6 +113,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 		return nil, fmt.Errorf("undo intent is unverified; no target write attempted: %w", err)
 	}
 	if err := c.recheckUndoWitnesses(ctx, witnesses); err != nil {
+		return nil, err
+	}
+	if err := c.checkFileUndoReview(ctx, action, false); err != nil {
 		return nil, err
 	}
 	if err := c.checkEntityUndoCatalog(ctx, action, false); err != nil {
@@ -134,6 +154,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if err != nil {
 		return nil, err
 	}
+	if err := c.checkFileUndoReview(ctx, action, true); err != nil {
+		return nil, err
+	}
 	if err := c.checkEntityUndoCatalog(ctx, action, true); err != nil {
 		return nil, fmt.Errorf("undo target was accepted but board catalog verification failed; inspect before retrying: %w", err)
 	}
@@ -143,6 +166,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	receipt, err := c.rewriteActionJournal(ctx, prepared, done)
 	if err != nil {
 		return nil, fmt.Errorf("undo target was verified but receipt is unverified; inspect %s before retrying: %w", pending.UndoOperationID, err)
+	}
+	if err := c.checkFileUndoReview(ctx, action, true); err != nil {
+		return nil, err
 	}
 	latest, err = c.readJournalTarget(withReadbackCost(ctx), current.ID)
 	if err != nil {
@@ -208,6 +234,9 @@ func (c *Client) rewriteActionJournal(ctx context.Context, old *ActionJournalRec
 func scalarUndoScope(action *ActionJournalRecord) error {
 	if action.entityKind() != "" {
 		return entityUndoScope(action)
+	}
+	if supported, err := fileUndoScope(action); err != nil || supported {
+		return err
 	}
 	unsupported := func() error {
 		return &UndoScopeError{Reason: "workflow, graph and multi-target undo integration is still pending; no target write attempted"}

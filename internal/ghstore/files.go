@@ -25,20 +25,9 @@ func (c *Client) ReplaceLinkedFilesObserved(ctx context.Context, observed *Recor
 	if err != nil {
 		return nil, false, err
 	}
-	files = append([]models.IssueFile{}, files...)
-	seen := map[string]bool{}
-	for i, f := range files {
-		if f.FilePath == "" || f.FilePath == "." || path.IsAbs(f.FilePath) || path.Clean(f.FilePath) != f.FilePath || strings.Contains(f.FilePath, "\\") || strings.HasPrefix(f.FilePath, "../") || seen[f.FilePath] {
-			return nil, false, fmt.Errorf("linked file path must be unique and repository-relative: %q", f.FilePath)
-		}
-		if f.IssueID != "" && f.IssueID != observed.ID {
-			return nil, false, fmt.Errorf("linked file belongs to a different issue")
-		}
-		if !slices.Contains([]models.FileRole{models.FileRoleImplementation, models.FileRoleTest, models.FileRoleReference, models.FileRoleConfig}, f.Role) {
-			return nil, false, fmt.Errorf("invalid file role %q", f.Role)
-		}
-		files[i].IssueID = observed.ID
-		seen[f.FilePath] = true
+	files, err = validatedLinkedFiles(observed.ID, files)
+	if err != nil {
+		return nil, false, err
 	}
 	if (len(details.Files) == 0 && len(files) == 0) || reflect.DeepEqual(details.Files, files) {
 		return observed, true, nil
@@ -53,4 +42,23 @@ func (c *Client) ReplaceLinkedFilesObserved(ctx context.Context, observed *Recor
 	details.ReviewBasis = ""
 	result, err := c.UpdateObserved(ctx, observed, Changes{Details: &details})
 	return result, false, err
+}
+
+func validatedLinkedFiles(issueID string, files []models.IssueFile) ([]models.IssueFile, error) {
+	files = append([]models.IssueFile{}, files...)
+	seen := map[string]bool{}
+	for i, f := range files {
+		if f.FilePath == "" || f.FilePath == "." || path.IsAbs(f.FilePath) || path.Clean(f.FilePath) != f.FilePath || strings.Contains(f.FilePath, "\\") || strings.HasPrefix(f.FilePath, "../") || seen[f.FilePath] {
+			return nil, fmt.Errorf("linked file path must be unique and repository-relative: %q", f.FilePath)
+		}
+		if f.IssueID != "" && f.IssueID != issueID {
+			return nil, fmt.Errorf("linked file belongs to a different issue")
+		}
+		if !slices.Contains([]models.FileRole{models.FileRoleImplementation, models.FileRoleTest, models.FileRoleReference, models.FileRoleConfig}, f.Role) {
+			return nil, fmt.Errorf("invalid file role %q", f.Role)
+		}
+		files[i].IssueID = issueID
+		seen[f.FilePath] = true
+	}
+	return files, nil
 }

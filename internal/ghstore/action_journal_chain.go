@@ -166,6 +166,11 @@ func (c *Client) planUndo(ctx context.Context, action *ActionJournalRecord, curr
 	if err := verifyCommentUndoWitnesses(snapshot, witnesses); err != nil {
 		return nil, nil, err
 	}
+	for i := range witnesses {
+		if err := c.checkFileUndoReview(ctx, &witnesses[i], false); err != nil {
+			return nil, nil, err
+		}
+	}
 	return plan, witnesses, nil
 }
 
@@ -194,6 +199,11 @@ func (c *Client) recheckUndoWitnesses(ctx context.Context, witnesses []ActionJou
 	}
 	if err := verifyUndoWitnesses(witnesses, history); err != nil {
 		return err
+	}
+	for i := range witnesses {
+		if err := c.checkFileUndoReview(ctx, &witnesses[i], false); err != nil {
+			return err
+		}
 	}
 	return verifyCommentUndoWitnesses(snapshot, witnesses)
 }
