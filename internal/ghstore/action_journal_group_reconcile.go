@@ -42,6 +42,7 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 		}
 		out.Records[record.ID] = record
 	}
+	attempts := []*ActionJournalRecord{}
 	for i := range history {
 		record := &history[i]
 		if record.ID == a.ID {
@@ -51,14 +52,20 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 			}
 		}
 		if record.GroupOperationID == a.OperationID {
-			if err := validateGroupMember(a, record); err != nil {
-				return nil, err
-			}
-			if out.Receipts[record.IssueID] != nil {
-				return nil, fmt.Errorf("group member has duplicate attempts; inspect before retrying")
-			}
-			out.Receipts[record.IssueID] = record
+			attempts = append(attempts, record)
 		}
+	}
+	chains, err := orderedGroupEffects(a, attempts)
+	if err != nil {
+		return nil, err
+	}
+	for id, chain := range chains {
+		// v10/v12/v13 keep their original one-attempt-per-target contract.
+		// Forward chain validation alone does not authorize inverse bridges.
+		if len(chain) != 1 {
+			return nil, fmt.Errorf("group member has duplicate attempts; inspect before retrying")
+		}
+		out.Receipts[id] = chain[0]
 	}
 	if carriers != 1 || found != 1 {
 		return nil, fmt.Errorf("group needs one original carrier and its exact receipt")

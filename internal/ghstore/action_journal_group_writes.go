@@ -145,6 +145,22 @@ func (c *Client) verifyGroupExpected(ctx context.Context, expected map[string]Ac
 }
 
 func validateGroupMember(group *ActionJournalRecord, member *ActionJournalRecord) error {
+	if group == nil || group.Group == nil || member == nil {
+		return fmt.Errorf("member requires original group and receipt")
+	}
+	var before *ActionIssueState
+	for _, m := range group.Group.Members {
+		if m.IssueID == member.IssueID {
+			copy := m.Before
+			before = &copy
+		}
+	}
+	return validateGroupMemberAtState(group, member, before)
+}
+
+// The sequence validator supplies only an actual initial or predecessor After
+// observation. The legacy member contract always uses immutable initial state.
+func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJournalRecord, before *ActionIssueState) error {
 	if group.Group == nil || member.GroupOperationID != group.OperationID || member.Action != "update" || member.UpdateIntent == nil || member.Before == nil || member.SessionID != group.SessionID || member.CarrierID != group.CarrierID || !strings.EqualFold(member.Author, group.Author) {
 		return fmt.Errorf("member receipt differs from original group scope or native author")
 	}
@@ -153,12 +169,8 @@ func validateGroupMember(group *ActionJournalRecord, member *ActionJournalRecord
 	if member.ID != "" && (groupErr != nil || memberErr != nil || memberNumber <= groupNumber || member.CreatedAt.Before(group.CreatedAt)) {
 		return fmt.Errorf("member attempt predates group intent")
 	}
-	var before *ActionIssueState
-	for _, m := range group.Group.Members {
-		if m.IssueID == member.IssueID {
-			copy := m.Before
-			before = &copy
-		}
+	if err := member.Before.validate(); err != nil {
+		return err
 	}
 	if before == nil || member.Before.Revision != before.Revision {
 		return fmt.Errorf("member initial revision differs from immutable group membership")
