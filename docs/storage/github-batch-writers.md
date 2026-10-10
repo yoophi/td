@@ -19,6 +19,7 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | Multi-ID `reject` | v17 planned independent task group; existing review and inverse checkpoint checks | Focus cleared after actual rejection/no-op, as before |
 | Multi-ID `delete` / `restore` | v17 planned independent task group; native open/closed state retained; deleted tasks included in selection | Existing device-local context |
 | Multi-target `ws log` / `ws handoff` without `--review` | v19 activity group fixes all complete inputs; partial recovery observes comments without replay; undo checks and removes actual results | Tags, history membership and end state remain local |
+| `config sync-state-labels` / `config sync-priority-labels --apply` with multiple repairs | v17 planned scalar `update` group fixes every repair's complete labels and original revision, including closed/deleted tasks | No local context change |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -50,6 +51,17 @@ Deletion permits native tasks with missing or older detail metadata and uses
 effective native state for the visibility transition and labels. Inverse review
 validation still rejects restoration of invalid historical review evidence.
 
+Label repair batches use the existing v17 `update` primitive, without a new
+journal schema. Selection and every per-task payload are prepared before label
+setup, journal bootstrap or task writes. The priority preview and explicit-ID
+validation remain read-only; already-correct tasks create no receipt. Both
+mirrors follow authoritative metadata/native state, and custom labels remain
+intact. A failed batch reports the verified repair count, original cause and
+group receipt for reconciliation. Recovery observes actual results without
+replaying repairs, and undo restores the original labels (including missing or
+incorrect mirrors) without changing task metadata, native state or deletion.
+Repository label definitions created during setup are not removed by undo.
+
 ## Remaining writer integration
 
 | Writer | Current effects requiring an aggregate |
@@ -60,7 +72,6 @@ validation still rejects restoration of invalid historical review evidence.
 | `ws handoff --review` | Activity fanout followed by task review requests |
 | File link/unlink | One whole file-set update followed by an automatic activity comment |
 | Due/defer | Task schedule update followed by an automatic activity comment |
-| State/priority label repair | Multiple selected task repairs, including closed/deleted tasks |
 
 These remaining paths need a shared mixed-effect contract, including complete
 command inputs fixed before the first write, original target identity, partial
@@ -77,6 +88,7 @@ aggregate membership, execution and inverse checks.
 Board/note operations currently mutate one entity per command; rendering and
 filter loops do not constitute batch writes. Session cleanup and work-session
 start/end/tag removal change device-local JSON; remote journal undo must not
-claim to restore those local records. Portable history and multipart storage
-remain #66/#67. In particular, a large closure watch set can exceed the current
-single-comment limit even when only one task would actually change.
+claim to restore those local records. Portable history remains #66. Multipart
+storage (#67) now publishes large journals across verified part comments and a
+manifest, including large closure watch sets; it does not complete the remaining
+writer integrations above.

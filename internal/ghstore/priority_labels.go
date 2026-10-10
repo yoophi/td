@@ -87,8 +87,8 @@ type PriorityLabelSyncResult struct {
 }
 
 // SyncPriorityLabels previews by default. Apply uses the observations from its
-// own fresh full listing, then normal revision checks before each PATCH. It is
-// not a transaction: earlier repairs remain if a later repair fails.
+// own fresh full listing, freezes every input in a tracked batch, then checks
+// revisions before each PATCH. Earlier repairs remain if a later repair fails.
 func (c *Client) SyncPriorityLabels(ctx context.Context, apply bool, ids ...string) (*PriorityLabelSyncResult, error) {
 	selected := map[string]bool{}
 	for _, id := range ids {
@@ -103,6 +103,7 @@ func (c *Client) SyncPriorityLabels(ctx context.Context, apply bool, ids ...stri
 		return nil, err
 	}
 	result := &PriorityLabelSyncResult{Apply: apply, Repairs: []PriorityLabelRepair{}}
+	repairs := []Record{}
 	for _, record := range records {
 		if len(selected) > 0 {
 			if _, exists := selected[record.ID]; !exists {
@@ -120,6 +121,7 @@ func (c *Client) SyncPriorityLabels(ctx context.Context, apply bool, ids ...stri
 		// payload in the preview rather than hiding this existing side effect.
 		labels := mirroredPriorityLabels(mirroredLabels(record.Labels, record.Status), record.Priority)
 		result.Repairs = append(result.Repairs, PriorityLabelRepair{ID: record.ID, Priority: record.Priority, Before: record.Labels, After: labels})
+		repairs = append(repairs, record)
 	}
 	for id, found := range selected {
 		if !found {
@@ -129,19 +131,6 @@ func (c *Client) SyncPriorityLabels(ctx context.Context, apply bool, ids ...stri
 	if !apply {
 		return result, nil
 	}
-	observations := map[string]*Record{}
-	for i := range records {
-		observations[records[i].ID] = &records[i]
-	}
-	for _, repair := range result.Repairs {
-		if err := c.ensurePriorityLabel(ctx, repair.Priority); err != nil {
-			return result, fmt.Errorf("%d priority label repairs saved; %s failed (inspect current state before retrying): %w", result.Applied, repair.ID, err)
-		}
-		labels := repair.After
-		if _, err := c.UpdateObserved(ctx, observations[repair.ID], Changes{Labels: &labels}); err != nil {
-			return result, fmt.Errorf("%d priority label repairs saved; %s failed (the failed write may also have applied; inspect current state before retrying): %w", result.Applied, repair.ID, err)
-		}
-		result.Applied++
-	}
-	return result, nil
+	result.Applied, err = c.repairLabels(ctx, repairs, "priority")
+	return result, err
 }

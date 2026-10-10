@@ -95,24 +95,21 @@ func (c *Client) ensureStateLabel(ctx context.Context, label string) error {
 }
 
 // SyncStateLabels repairs only td-managed issues, including closed/deleted ones.
-// Each repair uses the normal revision checks; earlier repairs remain on error.
+// Tracked batches freeze every input in one group; earlier repairs remain on
+// error and can be reconciled without replaying writes.
 func (c *Client) SyncStateLabels(ctx context.Context) (int, error) {
 	records, err := c.ListIncludingDeleted(ctx, true)
 	if err != nil {
 		return 0, err
 	}
-	count := 0
+	selected := []Record{}
 	for _, record := range records {
 		if record.StateLabelWarning() == "" {
 			continue
 		}
-		labels := mirroredLabels(record.Labels, record.Status)
-		if _, err := c.UpdateObserved(ctx, &record, Changes{Labels: &labels}); err != nil {
-			return count, fmt.Errorf("%d state label repairs saved; %s failed: %w", count, record.ID, err)
-		}
-		count++
+		selected = append(selected, record)
 	}
-	return count, nil
+	return c.repairLabels(ctx, selected, "state")
 }
 
 func sameLabels(a, b []string) bool {
