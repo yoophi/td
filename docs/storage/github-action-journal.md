@@ -847,18 +847,19 @@ of the group is later undone through verified writes. Groups remain non-causal.
 Repeated completed verification is read-only. The API still supplies no atomic
 transaction or CAS over this hierarchy.
 
-Multiple effects on the same issue in one compound command, remaining writers,
-claim sweeps/work-session fanout, portable history and multipart transport still
-need integration; this group support does not declare the whole undo task done.
+The v13 format permits one effect per issue. The ordered format below supports
+repeated native compound effects. Remaining writers, claim sweeps/work-session
+fanout, portable history and multipart transport still need integration; this
+group support does not declare the whole undo task done.
 
-### Ordered effect format under development (#64)
+### Ordered compound effects (#64)
 
 The v14 group and v15 member formats provide the storage and planning contract
 for repeated effects on one issue. Native close, approve and reopen command
 groups now emit these formats. The source executor compensates frozen ordered
-groups through the public undo entrypoint; live GitHub verification remains
-unfinished.
-The installed, verified command behavior remains the v10/v12/v13 integration.
+groups through the public undo entrypoint. Code from 4e88db0 was verified on
+actual GitHub, with existing v10/v12/v13 compatibility covered by regressions.
+The managed build was activated and its shell resolutions verified separately.
 
 The source implementation supports observation and receipt-only reconciliation
 of v14 records.
@@ -920,5 +921,13 @@ capacity before saving its member intent. A later capacity failure may retain
 earlier completed effects; the command does not promise an atomic transaction.
 The CLI regression covers dependency unblock followed by explicit close on the
 same target and three inverse steps, including read-only completed confirmation.
-Further command-path regressions and actual GitHub/installed-binary verification
-remain. Synthetic tests do not establish live GitHub behavior.
+Actual GitHub validation on yoophi/td-sample #177/#178 recorded three forward
+effects and three reverse steps (receipt ghc-6099287187). A locally injected
+inverse completion-receipt failure was recovered without task writes, then
+continued with the original undo operation ID and weaker observed proof
+(receipt ghc-6099351245). Completed native effects were not replayed; completed
+confirmation changed neither task revisions nor the root receipt. Original
+member comments and native event prefixes remained intact. No SQLite database
+was created. The managed install and shell resolutions were verified separately.
+Remaining batch and mixed-effect writers are tracked in #65; portable history
+and multipart transport remain #66/#67, followed by the full #9 audit in #68.
