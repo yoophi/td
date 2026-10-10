@@ -48,7 +48,12 @@ These writer hooks do not make workflow, relationship, file or deletion undo
 supported: their policy and graph checks still require dedicated inverse planning.
 Activity comments appended after a field receipt may also advance the native
 issue revision; comment-aware causal receipts remain necessary before those
-changes can safely participate in sequential undo.
+changes can safely participate in sequential undo. The subprocess fixture now
+advances the target clock on activity creation;
+`TestGitHubJournalCLIUndoRejectsUnjournaledCommentClock` verifies that a schedule
+write followed by its activity comment fails undo with a conflict, without
+changing the issue or marking the action undone. This validates the current
+safety boundary, not support for reversing the complete schedule operation.
 Workflow history provides selected transitions but cannot reconstruct arbitrary
 issue, relationship, note or board changes. An activity feed is insufficient
 to fulfill #9.

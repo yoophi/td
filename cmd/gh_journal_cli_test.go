@@ -398,3 +398,42 @@ func TestGitHubJournalCLIWriterReceiptFailuresRetainUnverifiedHistory(t *testing
 		})
 	}
 }
+
+// A comment may advance the native issue clock without changing title/body.
+// It must not become an implicit exemption from revision conflict detection.
+func TestGitHubJournalCLIUndoRejectsUnjournaledCommentClock(t *testing.T) {
+	_, _, run := journalCLI(t)
+	for _, args := range [][]string{{"create", "Comment clock fixture"}, {"due", "gh-6", "2026-12-01"}} {
+		out, stderr, err := run(append(args, "--json")...)
+		if err != nil {
+			t.Fatal(args, out, stderr, err)
+		}
+	}
+	before, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	journals := fixtureJournals(t)
+	var state struct {
+		Issues map[string]struct {
+			UpdatedAt time.Time `json:"updated_at"`
+		} `json:"issues"`
+	}
+	if err := json.Unmarshal(before, &state); err != nil {
+		t.Fatal(err)
+	}
+	if !state.Issues["6"].UpdatedAt.After(journals[1].After.UpdatedAt) {
+		t.Fatal("fixture comment did not advance target revision")
+	}
+	out, stderr, err := run("undo", "--json")
+	if err == nil || !strings.Contains(out+stderr, "conflict") {
+		t.Fatal("unjournaled clock bypass", out, stderr, err)
+	}
+	after, err := os.ReadFile(os.Getenv("TD_SCHEDULE_STATE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) || fixtureJournals(t)[1].Phase != "applied" {
+		t.Fatal("conflict mutated target or receipt")
+	}
+}
