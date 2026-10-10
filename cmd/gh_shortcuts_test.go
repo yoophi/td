@@ -94,6 +94,9 @@ fi
 		{epicListCmd, []string{"--all"}, []string{"gh-2"}},
 		{taskListCmd, []string{"--all", "--limit", "1", "--reverse", "--sort", "id"}, []string{"gh-4"}},
 		{taskListCmd, []string{"--type", "task"}, []string{"gh-1"}},
+		{taskListCmd, []string{"--filter", "status = open"}, []string{"gh-1"}},
+		{epicListCmd, []string{"--filter", "status = open"}, []string{"gh-2"}},
+		{taskListCmd, []string{"--filter", "type = bug OR type = epic"}, []string{}},
 	} {
 		cmd := shortcutTestCommand(tc.cmd, false)
 		out, err := executeGitHubTest(cmd, append(tc.args, "--json")...)

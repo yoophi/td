@@ -40,15 +40,22 @@ Examples:
 var epicListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all epics",
-	Long:  `List all epics. Shorthand for 'td list --type epic'. The type filter is fixed; a conflicting --type is rejected.`,
+	Long: `List all epics. Shorthand for 'td list --type epic'. The type filter is
+fixed; a conflicting --type is rejected. --filter always includes type=epic.
+Do not combine TDQ with other ordinary selection flags.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if err := cobra.NoArgs(cmd, args); err != nil {
 			return err
 		}
-		return validateShortcutType(cmd, "epic", true)
+		if err := validateShortcutType(cmd, "epic", true); err != nil {
+			return err
+		}
+		_, err := listQueryInput(cmd, args, "epic")
+		return err
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Replace rather than append: repeated invocations must keep a fixed type.
+		setFixedListType(cmd, "epic")
 		if err := cmd.Flags().Lookup("type").Value.(pflag.SliceValue).Replace([]string{"epic"}); err != nil {
 			return err
 		}

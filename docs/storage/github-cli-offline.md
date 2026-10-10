@@ -156,3 +156,14 @@ are rejected with a quoting hint instead of being discarded. The existing
 explicit/fixed type fails rather than silently dropping the positional type.
 Shortcuts retain `--title` directly instead of synthesizing a positional title
 that would obscure which input was provided.
+
+`list` TDQ selection (`--filter` or positional query, including `ls`) is separate
+from ordinary selection flags. Explicit ordinary filters such as status/type,
+priority, hierarchy, ownership, dates, `--all` or deferral selectors are rejected
+with a TDQ query instead of silently ignored; express all conditions in the
+query or use ordinary list filters. Sort/reverse/limit/output controls remain
+available. Task/epic `list --filter` always adds its fixed type as an AND
+constraint around the entire expression, preserving OR precedence; a query for
+other types returns no matches. Compatible explicit shortcut type flags remain
+accepted. The constraint travels through store dispatch without rewriting the
+user's query flag, retaining SQLite/GitHub behavior and repeated-call safety.

@@ -17,16 +17,9 @@ import (
 
 func listGitHubIssues(cmd *cobra.Command, args []string, cfg *models.Config) error {
 	cmd.SetOut(cmd.OutOrStdout())
-	expression, _ := cmd.Flags().GetString("filter")
-	positional := strings.TrimSpace(strings.Join(args, " "))
-	if cmd.Flags().Changed("filter") && expression == "" {
-		return fmt.Errorf("--filter requires a non-empty query expression")
-	}
-	if expression != "" && positional != "" {
-		return fmt.Errorf("cannot use both --filter and positional query")
-	}
-	if positional != "" {
-		expression = positional
+	expression, err := listQueryInput(cmd, args, fixedListType(cmd))
+	if err != nil {
+		return err
 	}
 	if expression != "" {
 		return listGitHubTDQ(cmd, expression, cfg)

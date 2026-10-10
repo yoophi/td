@@ -17,8 +17,20 @@ var listCmd = &cobra.Command{
 	Use:     "list [filters]",
 	Aliases: []string{"ls"},
 	Short:   "List issues matching given filters",
+	Long: `List issues with ordinary filter flags or a TDQ expression (--filter
+or positional query). Do not combine ordinary selection flags with TDQ:
+put all selection conditions in the expression instead. Sort, reverse, limit
+and output controls remain available in either mode.`,
 	GroupID: "core",
+	Args: func(cmd *cobra.Command, args []string) error {
+		_, err := listQueryInput(cmd, args, "")
+		return err
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		queryStr, err := listQueryInput(cmd, args, fixedListType(cmd))
+		if err != nil {
+			return err
+		}
 		baseDir := getBaseDir()
 
 		database, err := db.Open(baseDir)
@@ -27,30 +39,6 @@ var listCmd = &cobra.Command{
 			return err
 		}
 		defer func() { _ = database.Close() }()
-
-		// Handle --filter flag (TDQ query expression)
-		filterQuery, _ := cmd.Flags().GetString("filter")
-		filterFlagProvided := cmd.Flags().Changed("filter")
-		positionalQuery := ""
-		if len(args) > 0 {
-			positionalQuery = strings.TrimSpace(strings.Join(args, " "))
-		}
-
-		// Error if --filter provided but empty
-		if filterFlagProvided && filterQuery == "" {
-			output.Error("--filter requires a non-empty query expression")
-			return fmt.Errorf("--filter requires a non-empty query expression")
-		}
-
-		if filterQuery != "" && positionalQuery != "" {
-			output.Error("cannot use both --filter and positional query")
-			return fmt.Errorf("cannot use both --filter and positional query")
-		}
-
-		queryStr := filterQuery
-		if positionalQuery != "" {
-			queryStr = positionalQuery
-		}
 
 		if queryStr != "" {
 			// Use TDQ query engine

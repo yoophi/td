@@ -43,15 +43,22 @@ Examples:
 var taskListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tasks",
-	Long:  `List all tasks. Shorthand for 'td list --type task'. The type filter is fixed; a conflicting --type is rejected.`,
+	Long: `List all tasks. Shorthand for 'td list --type task'. The type filter is
+fixed; a conflicting --type is rejected. --filter always includes type=task.
+Do not combine TDQ with other ordinary selection flags.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if err := cobra.NoArgs(cmd, args); err != nil {
 			return err
 		}
-		return validateShortcutType(cmd, "task", true)
+		if err := validateShortcutType(cmd, "task", true); err != nil {
+			return err
+		}
+		_, err := listQueryInput(cmd, args, "task")
+		return err
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Replace rather than append: repeated invocations must keep a fixed type.
+		setFixedListType(cmd, "task")
 		if err := cmd.Flags().Lookup("type").Value.(pflag.SliceValue).Replace([]string{"task"}); err != nil {
 			return err
 		}

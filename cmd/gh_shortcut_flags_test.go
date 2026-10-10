@@ -67,6 +67,9 @@ func TestGitHubShortcutConflictingTypesCLIJSONBeforeGH(t *testing.T) {
 	for _, enabled := range []string{"false", "true"} {
 		t.Setenv("TD_FEATURE_SYNC_CLI", enabled)
 		for _, args := range [][]string{
+			{"list", "--filter", "status = open", "--priority", "P1"},
+			{"ls", "type = task", "--all"},
+			{"task", "list", "--filter", "status = open", "--mine"},
 			{"create", "Positional title", "--title", "Flag title"},
 			{"add", "Fixture", "title"},
 			{"new", "task", "Fixture title", "--type", "bug"},
