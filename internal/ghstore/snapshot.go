@@ -180,7 +180,6 @@ func (c *Client) assembleSnapshot(pages [][]apiIssue, comments [][]apiComment, i
 	}
 	if includeActivity && len(s.entries) > 0 {
 		seenComments := map[int64]bool{}
-		operations := map[int]map[string]bool{}
 		for _, page := range comments {
 			if page == nil {
 				return nil, fmt.Errorf("snapshot comment page is null")
@@ -201,22 +200,33 @@ func (c *Client) assembleSnapshot(pages [][]apiIssue, comments [][]apiComment, i
 				if !ok {
 					return nil, fmt.Errorf("comment %d refers to issue %d absent from the snapshot; repository changed during observation, retry the read", comment.ID, number)
 				}
-				id := s.records[pos].ID
-				activity, err := decodeActivity(comment, id)
+				s.entries[pos].Comments = append(s.entries[pos].Comments, comment)
+			}
+		}
+		// Resolve manifests only after all pages have been collected. Parts can
+		// precede or follow a root in native ordering, especially after a rewrite.
+		for _, entry := range s.entries {
+			id := fmt.Sprintf("gh-%d", entry.Issue.Number)
+			parts, err := collectJournalParts(entry.Comments)
+			if err != nil {
+				return nil, err
+			}
+			operations := map[string]bool{}
+			for _, comment := range entry.Comments {
+				activity, err := decodeActivityWithJournalParts(comment, id, parts)
 				if err != nil {
 					return nil, err
 				}
+				if activity.Kind == "action_journal_part" {
+					continue // Storage transport is not user activity.
+				}
 				if activity.OperationID != "" {
-					if operations[number] == nil {
-						operations[number] = map[string]bool{}
-					}
-					if operations[number][activity.OperationID] {
+					if operations[activity.OperationID] {
 						return nil, fmt.Errorf("duplicate activity operation %s on %s", activity.OperationID, id)
 					}
-					operations[number][activity.OperationID] = true
+					operations[activity.OperationID] = true
 				}
 				s.activities[id] = append(s.activities[id], activity)
-				s.entries[pos].Comments = append(s.entries[pos].Comments, comment)
 			}
 		}
 	}

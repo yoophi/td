@@ -316,6 +316,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		return nil, nil
 	}
 	block := strings.TrimSpace(comment.Body[index:])
+	if strings.HasPrefix(block, actionMultipartJournalStart) {
+		return nil, fmt.Errorf("multipart journal requires its complete carrier comment collection")
+	}
 	compressed := strings.HasPrefix(block, actionCompressedJournalStart)
 	if compressed {
 		if len(comment.Body) > actionCommentBudget {
@@ -470,8 +473,12 @@ func (s *Snapshot) ActionHistory(sessionID string) ([]ActionJournalRecord, error
 	result := []ActionJournalRecord{}
 	seen := map[string]bool{}
 	for _, entry := range s.entries {
+		parts, err := collectJournalParts(entry.Comments)
+		if err != nil {
+			return nil, err
+		}
 		for _, comment := range entry.Comments {
-			a, err := decodeActionJournal(comment, fmt.Sprintf("gh-%d", entry.Issue.Number))
+			a, err := decodeJournalFromCollection(comment, fmt.Sprintf("gh-%d", entry.Issue.Number), parts)
 			if err != nil {
 				return nil, err
 			}

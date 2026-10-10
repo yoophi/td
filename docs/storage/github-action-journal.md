@@ -1000,3 +1000,35 @@ behavior. `ws handoff --review` still needs mixed comment/workflow grouping;
 this activity-only integration does not complete #65. A monitor or server must
 run a v19-capable build before reading these groups; restart already-running
 processes after upgrading the executable.
+
+## Multipart transport reader and publication plan (#67, in progress)
+
+The v20 transport wraps the existing action schemas. A pure publication plan
+retains inline/plain or v9 compressed bytes when they fit. Larger valid archives
+are split into base64 parts of at most 48,000 characters, up to 128 parts, with
+the existing 4 MiB decoded/archive limits still enforced. Every physical
+comment, including its manifest, must fit the conservative 60,000-byte budget.
+
+Parts use `td:action-part:v1`. A manifest binds each part's actual native comment
+ID, creation timestamp and body checksum, plus the action operation, carrier,
+encoded size and full transfer checksum. Part authors must match the manifest
+author, native ownership must agree, and edited parts are rejected even when
+their body bytes are unchanged. Binding cannot invent IDs or complete a partial
+upload. Writers must publish and verify the parts before publishing the manifest
+and before authorizing any target mutation.
+
+Bulk snapshots resolve manifests from the existing paginated comment collection;
+there are no per-part API requests. Incremental snapshots resolve them after
+merging the delta with the complete baseline. Corrupt or incomplete manifests
+fail the read without publishing a partial snapshot or advancing the cache
+cursor. Native entries and the exact manifest body remain available for cache,
+change-token and receipt checks. Physical deletion still requires a fresh/full
+collection under the existing incremental-cache policy. Well-formed parts that
+have no published manifest do not become actions or user activity.
+
+This stage implements the bounded codec, pure publication plan and collection
+readers. Remote multipart publication, point-read write guards, reconciliation
+and inverse capacity integration are still pending; current writers retain the
+single-comment limit. It does not complete #67 or unblock #64 yet. Portable
+export/restore (#66) will consume this transport and is not a prerequisite for
+implementing it.

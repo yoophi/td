@@ -107,12 +107,24 @@ func renderActivity(a activityData) (string, error) {
 }
 
 func decodeActivity(comment apiComment, issueID string) (models.Activity, error) {
+	return decodeActivityWithJournalParts(comment, issueID, nil)
+}
+
+func decodeActivityWithJournalParts(comment apiComment, issueID string, parts *journalPartCollection) (models.Activity, error) {
 	result := models.Activity{ID: fmt.Sprintf("ghc-%d", comment.ID), IssueID: issueID, Kind: "comment", Message: comment.Body, Author: comment.User.Login, CreatedAt: comment.CreatedAt, UpdatedAt: comment.UpdatedAt, URL: comment.URL, Native: true, Edited: comment.UpdatedAt.After(comment.CreatedAt)}
 	if comment.ID <= 0 {
 		return result, fmt.Errorf("invalid GitHub comment identity")
 	}
+	if strings.Contains(comment.Body, actionJournalPartPrefix) {
+		part, err := decodeJournalPart(comment.Body)
+		if err != nil || part == nil || part.CarrierID != issueID || !validJournalPartNative(comment) || !journalNativeCarrierMatches(comment, issueID) {
+			return result, fmt.Errorf("invalid journal part on %s: %v", issueID, err)
+		}
+		result.Kind, result.Native, result.Message = "action_journal_part", false, "Journal storage part"
+		return result, nil
+	}
 	if strings.Contains(comment.Body, actionJournalPrefix) {
-		journal, err := decodeActionJournal(comment, issueID)
+		journal, err := decodeJournalFromCollection(comment, issueID, parts)
 		if err != nil {
 			return result, err
 		}
@@ -215,19 +227,28 @@ func (c *Client) readIssueActivity(ctx context.Context, issue *Record) ([]models
 				return nil, fmt.Errorf("comment pagination repeated %d; retry the read", comment.ID)
 			}
 			seen[comment.ID] = true
-			activity, err := decodeActivity(comment, issue.ID)
-			if err != nil {
-				return nil, err
-			}
-			if activity.OperationID != "" {
-				if previous, exists := operations[activity.OperationID]; exists {
-					return nil, fmt.Errorf("duplicate activity operation %s in %s and %s; inspect comments before continuing", activity.OperationID, previous, activity.ID)
-				}
-				operations[activity.OperationID] = activity.ID
-			}
-			result = append(result, activity)
 			comments = append(comments, comment)
 		}
+	}
+	parts, err := collectJournalParts(comments)
+	if err != nil {
+		return nil, err
+	}
+	for _, comment := range comments {
+		activity, err := decodeActivityWithJournalParts(comment, issue.ID, parts)
+		if err != nil {
+			return nil, err
+		}
+		if activity.Kind == "action_journal_part" {
+			continue
+		}
+		if activity.OperationID != "" {
+			if previous, exists := operations[activity.OperationID]; exists {
+				return nil, fmt.Errorf("duplicate activity operation %s in %s and %s; inspect comments before continuing", activity.OperationID, previous, activity.ID)
+			}
+			operations[activity.OperationID] = activity.ID
+		}
+		result = append(result, activity)
 	}
 	snapshot := &Snapshot{entries: []snapshotEntry{{Issue: apiIssue{Number: issue.Number}, Comments: comments}}, activities: map[string][]models.Activity{issue.ID: result}}
 	if err := annotateImportHistory(snapshot); err != nil {

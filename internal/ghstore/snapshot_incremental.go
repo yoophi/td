@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -112,8 +113,12 @@ func (c *Client) readSnapshotIncremental(ctx context.Context, baseline *Snapshot
 					unknownOwner = true
 					continue
 				}
-				if _, err := decodeActivity(comment, fmt.Sprintf("gh-%d", number)); err != nil {
-					return nil, err
+				// A manifest can reference unchanged parts absent from this delta.
+				// The merged complete collection below validates it before publish.
+				if !strings.Contains(comment.Body, actionMultipartJournalStart) {
+					if _, err := decodeActivity(comment, fmt.Sprintf("gh-%d", number)); err != nil {
+						return nil, err
+					}
 				}
 				if old, ok := deltaComments[comment.ID]; ok {
 					if old.IssueURL != comment.IssueURL {

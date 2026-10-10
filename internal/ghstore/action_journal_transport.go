@@ -39,6 +39,17 @@ func actionSchemaStart(schema string) (string, bool) {
 // New writes may use a bounded compressed envelope. Keep the plain renderer
 // for original legacy bodies, so adding compression cannot rewrite history.
 func renderWriteActionJournal(a ActionJournal) (string, error) {
+	body, err := renderEncodedActionJournal(a)
+	if err == nil && len(body) > actionCommentBudget {
+		return "", fmt.Errorf("compressed action journal exceeds the %d-byte single-comment transport budget; multipart transport is required", actionCommentBudget)
+	}
+	return body, err
+}
+
+// The encoded representation may need multiple comments. The legacy writer
+// above continues to enforce a single comment until publication is requested
+// through a multipart-aware path.
+func renderEncodedActionJournal(a ActionJournal) (string, error) {
 	body, err := renderActionJournal(a)
 	if err != nil || len(body) <= actionCommentBudget {
 		return body, err
@@ -73,14 +84,15 @@ func renderWriteActionJournal(a ActionJournal) (string, error) {
 		return "", err
 	}
 	body = body[:index] + actionCompressedJournalStart + string(data) + markerEnd
-	if len(body) > actionCommentBudget {
-		return "", fmt.Errorf("compressed action journal exceeds the %d-byte single-comment transport budget; multipart transport is required", actionCommentBudget)
-	}
 	return body, nil
 }
 
 func decodeJournalEnvelope(block string) (string, error) {
-	if !strings.HasPrefix(block, actionCompressedJournalStart) || !strings.HasSuffix(block, markerEnd) || len(block) > actionCommentBudget {
+	return decodeJournalEnvelopeBounded(block, actionCommentBudget)
+}
+
+func decodeJournalEnvelopeBounded(block string, encodedBudget int) (string, error) {
+	if !strings.HasPrefix(block, actionCompressedJournalStart) || !strings.HasSuffix(block, markerEnd) || len(block) > encodedBudget {
 		return "", fmt.Errorf("compressed action journal framing or size is invalid")
 	}
 	data := strings.TrimSuffix(strings.TrimPrefix(block, actionCompressedJournalStart), markerEnd)
