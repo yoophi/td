@@ -1019,8 +1019,8 @@ write. Local work-session end state, tags and history membership remain separate
 
 `last` and `undo --list` expose one command. These semantic formats retain the
 bounded v9 compression and v20 multipart transport; running readers must be
-upgraded and restarted before writing them. Updates involving relationships or
-status and creation with relationships remain separate #65 work; see
+upgraded and restarted before writing them. Relationship-only combinations use
+the later v27/v28 contract below. Updates involving status and creation with relationships remain separate #65 work; see
 [compound writer coverage](github-batch-writers.md).
 
 ## Scalar updates with inline comments (#65)
@@ -1044,6 +1044,26 @@ writers and are not covered by this scalar/comment contract.
 
 These semantics retain bounded v9 compression and v20 multipart transport.
 Upgrade and restart running readers before creating v25/v26 records.
+
+## Relationship updates with optional inline comments (#65)
+
+Updates with `--depends-on`, `--blocks` or `--parent`, without `--status`, use
+v27 command roots and v28 effects. Membership includes selected tasks and
+changed reverse-dependency targets. Each member receives at most one combined
+field/relation update and an optional selected-task comment. Shared targets
+receive the complete delta once. The frozen execution order avoids temporary
+cycles; immutable inputs preserve the original graph observations. References
+to earlier changed members bind only their actual observed command results.
+
+External graph watches and reverse membership are fenced throughout execution,
+recovery and undo. Undo checks the complete reverse graph before its first
+mutation, preserves unrelated activity, and repeats the per-effect conflict
+checks. Receipt-only recovery never replays uncertain task/comment writes or
+promotes observed outcomes to verified writes. Unchanged relation-only requests
+write nothing. Upgrade and restart readers before publishing this format;
+v9 compression and v20 multipart limits remain unchanged. Updates involving
+status, creation with relationships, and the complete adapter audit remain #65
+work and are not declared complete by this integration.
 
 ## Multipart transport (#67)
 

@@ -79,7 +79,7 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 				return nil, err
 			}
 		} else {
-			if root.Group.updateCommentsGroup() {
+			if root.Group.fieldCommentGroup() {
 				if err := scalarUndoScope(r); err != nil {
 					return nil, err
 				}
@@ -93,6 +93,9 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 				return nil, err
 			}
 		}
+	}
+	if err := c.preflightRelationGroupInverse(ctx, root, observed); err != nil {
+		return nil, err
 	}
 	if root.Phase == "applied" {
 		next := root.ActionJournal
@@ -136,7 +139,7 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 				return nil
 			},
 			Plan: func(actual *ActionJournalRecord, current *Record, session, author string) (*IssueUndoPlan, error) {
-				if root.Group.updateCommentsGroup() {
+				if root.Group.fieldCommentGroup() {
 					chain := []*ActionJournalRecord{}
 					for _, receipt := range observed.Receipts {
 						if receipt.IssueID == actual.IssueID {

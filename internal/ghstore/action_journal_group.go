@@ -45,17 +45,18 @@ type ActionGroupObservation struct {
 // any target write. Every attempted member independently records its complete
 // update input before its write; future unattempted inputs are never invented.
 type ActionGroup struct {
-	UpdateComments *ActionUpdateComments   `json:"update_comments,omitempty"`
-	HandoffReview  *ActionHandoffReview    `json:"handoff_review,omitempty"`
-	UpdateActivity *ActionUpdateActivity   `json:"update_activity,omitempty"`
-	Planned        bool                    `json:"planned,omitempty"`
-	Ordered        *ActionOrderedGroup     `json:"ordered,omitempty"`
-	Command        string                  `json:"command"`
-	Roots          []string                `json:"roots,omitempty"`
-	Cascade        bool                    `json:"cascade,omitempty"`
-	Members        []ActionGroupMember     `json:"members"`
-	Forward        *ActionGroupObservation `json:"forward,omitempty"`
-	Inverse        *ActionGroupObservation `json:"inverse,omitempty"`
+	RelationUpdates *ActionRelationUpdates  `json:"relation_updates,omitempty"`
+	UpdateComments  *ActionUpdateComments   `json:"update_comments,omitempty"`
+	HandoffReview   *ActionHandoffReview    `json:"handoff_review,omitempty"`
+	UpdateActivity  *ActionUpdateActivity   `json:"update_activity,omitempty"`
+	Planned         bool                    `json:"planned,omitempty"`
+	Ordered         *ActionOrderedGroup     `json:"ordered,omitempty"`
+	Command         string                  `json:"command"`
+	Roots           []string                `json:"roots,omitempty"`
+	Cascade         bool                    `json:"cascade,omitempty"`
+	Members         []ActionGroupMember     `json:"members"`
+	Forward         *ActionGroupObservation `json:"forward,omitempty"`
+	Inverse         *ActionGroupObservation `json:"inverse,omitempty"`
 }
 
 func groupBasicCommand(command string) bool {
@@ -220,6 +221,9 @@ func (a ActionJournal) validateGroupAction() error {
 	if err := a.validateUpdateCommentsGroup(); err != nil {
 		return err
 	}
+	if err := a.validateUpdateRelationsGroup(); err != nil {
+		return err
+	}
 	return a.validateOrderedGroup()
 }
 
@@ -240,6 +244,9 @@ func validateGroupRewrite(old, next ActionJournal) error {
 		return err
 	}
 	if err := validateUpdateCommentsRewrite(old.Group.UpdateComments, next.Group.UpdateComments, old.Group.Forward != nil); err != nil {
+		return err
+	}
+	if err := validateUpdateRelationsRewrite(old.Group.RelationUpdates, next.Group.RelationUpdates, old.Group.Forward != nil); err != nil {
 		return err
 	}
 	if err := validateOrderedGroupRewrite(old.Group.Ordered, next.Group.Ordered); err != nil {

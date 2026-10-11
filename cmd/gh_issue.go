@@ -193,6 +193,19 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		activity = models.Activity{Kind: "comment", SessionID: local.Session.ID, Message: comment}
 	}
 	completedIssues := []string{}
+	if (relations.changed() || change.ParentID != nil) && change.Status == nil {
+		var inline *models.Activity
+		if comment != "" {
+			inline = &activity
+		}
+		completed, updateErr := client.UpdateWithRelations(cmd.Context(), args, change, ghstore.RelationChanges{DependsOn: relations.depends, Blocks: relations.blocks}, inline)
+		for i := range completed {
+			if err := emitGitHubMutation(cmd, action, &completed[i]); err != nil {
+				return fmt.Errorf("relationship update results could not be printed (inspect GitHub; do not repeat the update): %w; command result: %v", err, updateErr)
+			}
+		}
+		return updateErr
+	}
 	if !relations.changed() && change.ParentID == nil && change.Status == nil && comment != "" && (change.HasFields() || len(args) > 1) {
 		completed, updateErr := client.UpdateWithComments(cmd.Context(), args, change, activity)
 		for i := range completed {

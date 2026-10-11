@@ -81,9 +81,14 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 				return nil, err
 			}
 		}
+		if group.Group.updateRelationsGroup() {
+			if err := validateRelationUpdateBindings(group, a, expected); err != nil {
+				return nil, err
+			}
+		}
 		if len(chain) > 0 {
 			previous := chain[len(chain)-1]
-			if previous.UpdateIntent != nil && previous.UpdateIntent.NativeEvents != nil && !group.Group.updateActivityGroup() && !group.Group.updateCommentsGroup() {
+			if previous.UpdateIntent != nil && previous.UpdateIntent.NativeEvents != nil && !group.Group.updateActivityGroup() && !group.Group.fieldCommentGroup() {
 				if a.UpdateIntent == nil || a.UpdateIntent.NativeEvents == nil {
 					return nil, fmt.Errorf("ordered effect omitted its predecessor's native event continuation")
 				}

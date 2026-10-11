@@ -106,6 +106,9 @@ func (c *Client) bindPairedGroupMember(a *ActionJournal) error {
 	if active.Journal.Group.updateCommentsGroup() {
 		contract = updateCommentsContract
 	}
+	if active.Journal.Group.updateRelationsGroup() {
+		contract = updateRelationsContract
+	}
 	a.GroupContract, a.GroupOperationID, a.GroupSequence, a.CarrierID = contract, active.Journal.OperationID, len(active.Receipts)+1, active.Journal.CarrierID
 	chain := []*ActionJournalRecord{}
 	for _, r := range active.Receipts {
@@ -122,12 +125,15 @@ func (c *Client) bindPairedGroupMember(a *ActionJournal) error {
 	if active.Journal.Group.handoffReviewGroup() {
 		return validateHandoffReviewBinding(active.Journal, probe, chain)
 	}
+	if active.Journal.Group.updateRelationsGroup() {
+		return validateRelationUpdateBindings(active.Journal, probe, active.Expected)
+	}
 	return nil
 }
 
 func (c *Client) verifyPairedGroupEvents(ctx context.Context, root *ActionJournalRecord) error {
-	if root.Group.updateCommentsGroup() {
-		for i, input := range root.Group.UpdateComments.Inputs {
+	if root.Group.fieldCommentGroup() {
+		for i, input := range root.Group.fieldCommentInputs() {
 			if input.Update == nil || input.Update.NativeEvents == nil {
 				continue
 			}

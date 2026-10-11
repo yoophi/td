@@ -235,6 +235,9 @@ func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJourna
 	if group.Group.updateCommentsGroup() {
 		return validateUpdateCommentsMember(group, member)
 	}
+	if group.Group.updateRelationsGroup() {
+		return validateUpdateRelationsMember(group, member)
+	}
 	if group.Group.handoffReviewGroup() {
 		return validateHandoffReviewMember(group, member)
 	}

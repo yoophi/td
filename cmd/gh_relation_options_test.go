@@ -31,15 +31,12 @@ path=next(a for a in args if a.startswith('repos/owner/repo'));method=args[args.
 f=pathlib.Path(os.environ['TD_RO_STATE'])
 def issue(n):return {'number':n,'title':'Fixture '+str(n),'state':'open','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'},'labels':[{'name':'td:open'}],'body':'<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P2','points':0,'details':{'minor':True}})+'\n-->'}
 issues=json.loads(f.read_text()) if f.exists() else {str(n):issue(n) for n in [1,2,3]}
+def inject_membership():
+ issues['3']['body']='<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P2','points':0,'details':{'minor':True,'dependencies':['gh-4']}})+'\n-->';f.write_text(json.dumps(issues))
 if path=='repos/owner/repo':data={'full_name':'owner/repo','has_issues':True}
 elif '/comments?' in path:data=[[]]
 elif '/labels?' in path:data=[[{'name':'td:'+v} for v in ['open','in_progress','blocked','in_review','closed']]+[{'name':'td:priority:P'+str(v)} for v in range(5)]]
 elif path.startswith('repos/owner/repo/issues?'):
- trigger=os.environ.get('TD_RO_MEMBERSHIP')
- if trigger:
-  counter=f.with_suffix('.reads');reads=int(counter.read_text())+1 if counter.exists() else 1;counter.write_text(str(reads))
-  if reads==int(trigger):
-   issues['3']['body']='<!-- td:issue:v1\n'+json.dumps({'type':'task','priority':'P2','points':0,'details':{'minor':True,'dependencies':['gh-4']}})+'\n-->';f.write_text(json.dumps(issues))
  data=[list(issues.values())]
 elif path=='repos/owner/repo/issues' and method=='POST':
  n=str(max(map(int,issues))+1);patch=json.load(sys.stdin);patch['labels']=[{'name':v} for v in patch.get('labels',[])];data=issue(int(n));data.update(patch);issues[n]=data;f.write_text(json.dumps(issues))
@@ -47,11 +44,13 @@ elif '/events?' in path:data=[[]]
 else:
  n=path.split('/issues/')[1]
  if n not in issues:sys.stderr.write('HTTP 404 missing issue');sys.exit(1)
+ if n=='2' and method=='GET' and os.environ.get('TD_RO_MEMBERSHIP')=='before':inject_membership()
  if method=='PATCH':
   if os.environ.get('TD_RO_FAIL')==n:sys.stderr.write('HTTP 403 permission denied');sys.exit(1)
   patch=json.load(sys.stdin)
   if 'labels' in patch:patch['labels']=[{'name':v} for v in patch['labels']]
   issues[n].update(patch);issues[n]['updated_at']=fixture_tick(issues[n]['updated_at']);f.write_text(json.dumps(issues))
+  if n=='2' and os.environ.get('TD_RO_MEMBERSHIP')=='after':inject_membership()
  data=issues[n]
 sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(data))
 `
@@ -154,7 +153,9 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 	if readErr != nil || string(after) != string(before) {
 		t.Fatal("invalid later relationship changed an earlier task", readErr)
 	}
-	for _, trigger := range []string{"2", "3"} {
+	// Inject at actual source read/write boundaries, independent of how many
+	// complete collections are needed to validate a compound command.
+	for _, trigger := range []string{"before", "after"} {
 		data, err := os.ReadFile(os.Getenv("TD_RO_STATE"))
 		if err != nil {
 			t.Fatal(err)
@@ -171,7 +172,6 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 		if err := os.WriteFile(os.Getenv("TD_RO_STATE"), data, 0600); err != nil {
 			t.Fatal(err)
 		}
-		_ = os.Remove(strings.TrimSuffix(os.Getenv("TD_RO_STATE"), ".json") + ".reads")
 		t.Setenv("TD_RO_MEMBERSHIP", trigger)
 		_, err = executeGitHubTest(githubTestCommand(updateCmd), "4", "--blocks", "2", "--json")
 		if err == nil || (!strings.Contains(err.Error(), "membership") && !strings.Contains(err.Error(), "conflict")) || !strings.Contains(err.Error(), "earlier") {
@@ -180,10 +180,10 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 		if strings.Join(deps("3"), ",") != "gh-4" {
 			t.Fatal("lost external membership change")
 		}
-		if trigger == "2" && strings.Contains(strings.Join(deps("2"), ","), "gh-4") {
+		if trigger == "before" && strings.Contains(strings.Join(deps("2"), ","), "gh-4") {
 			t.Fatal("membership conflict wrote own edge")
 		}
-		if trigger == "3" && !strings.Contains(strings.Join(deps("2"), ","), "gh-4") {
+		if trigger == "after" && !strings.Contains(strings.Join(deps("2"), ","), "gh-4") {
 			t.Fatal("post-write conflict hid applied edge")
 		}
 	}

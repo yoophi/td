@@ -19,9 +19,9 @@ type ActionUpdateComments struct {
 }
 
 func (g *ActionGroup) updateCommentsGroup() bool { return g != nil && g.UpdateComments != nil }
-func (g *ActionGroup) pairedGroup() bool         { return g.handoffReviewGroup() || g.updateCommentsGroup() }
+func (g *ActionGroup) pairedGroup() bool         { return g.handoffReviewGroup() || g.fieldCommentGroup() }
 func (g *ActionGroup) pairedEffectCount() int {
-	if g.updateCommentsGroup() {
+	if g.fieldCommentGroup() {
 		return len(g.updateCommentEffects())
 	}
 	return len(g.handoffEffects())
@@ -34,28 +34,46 @@ type updateCommentEffect struct {
 
 func (g *ActionGroup) updateCommentEffects() []updateCommentEffect {
 	order := []updateCommentEffect{}
-	for i, input := range g.UpdateComments.Inputs {
+	inputs := g.fieldCommentInputs()
+	indices := make([]int, len(inputs))
+	for i := range indices {
+		indices[i] = i
+	}
+	if g.updateRelationsGroup() {
+		indices = g.RelationUpdates.Order
+	}
+	for _, i := range indices {
+		input := inputs[i]
 		if input.Update != nil {
 			order = append(order, updateCommentEffect{i, "update"})
 		}
-		order = append(order, updateCommentEffect{i, "comment_create"})
+		if input.Comment != nil {
+			order = append(order, updateCommentEffect{i, "comment_create"})
+		}
 	}
 	return order
 }
 func (g *ActionGroup) pairedComment(i int) *ActionCommentInput {
-	if g.updateCommentsGroup() {
-		return g.UpdateComments.Inputs[i].Comment
+	if g.fieldCommentGroup() {
+		return g.fieldCommentInputs()[i].Comment
 	}
 	return g.HandoffReview.Inputs[i].Comment
 }
 func (g *ActionGroup) pairedDigests() []string {
+	if g.updateRelationsGroup() {
+		return g.RelationUpdates.ForwardDigests
+	}
 	if g.updateCommentsGroup() {
 		return g.UpdateComments.ForwardDigests
 	}
 	return g.HandoffReview.ForwardDigests
 }
 func (g *ActionGroup) setPairedDigests(digests []string) {
-	if g.updateCommentsGroup() {
+	if g.updateRelationsGroup() {
+		input := *g.RelationUpdates
+		input.ForwardDigests = digests
+		g.RelationUpdates = &input
+	} else if g.updateCommentsGroup() {
 		input := *g.UpdateComments
 		input.ForwardDigests = digests
 		g.UpdateComments = &input

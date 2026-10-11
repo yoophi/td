@@ -24,6 +24,7 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | File `link` / `unlink`, `due` / `defer` | v21 update/activity group freezes both complete inputs before writes; v22 members bind the actual field result to the following activity | File commands retain their local path/hash checks; schedule activities retain work-session attribution |
 | `ws handoff --review` | v23 command fixes all handoffs and review templates; v24 ordered effects bind each review to its actual preceding handoff | Tags, history membership and work-session end state remain device-local |
 | `update` with scalar fields and `--comment` / `--note`; multi-ID comment-only update | v25 command fixes every selected task's optional field input and complete comment; v26 effects bind comments to actual preceding field results | No local context change |
+| `update` with parent/dependency changes, optional scalar fields and inline comments, without `--status` | v27 command includes selected tasks and shared reverse-edge targets; v28 effects bind graph observations to actual earlier results | No local context change |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -168,6 +169,30 @@ than a verified write, and completed confirmation is read-only. The v25/v26
 formats use bounded v9 compression and v20 multipart transport. Upgrade and
 restart readers before publishing these records.
 
+## Relationship updates with optional inline comments
+
+Relationship updates without `--status` use one command even for a single
+selected task. The group includes all selected tasks and every reverse-edge
+target whose dependencies change. It freezes the complete final delta and
+writes each target at most once, combining its field and relationship changes.
+Execution can differ from selection order to avoid temporary dependency cycles;
+successful output retains the user's selection order. Inline comments belong
+only to selected tasks and follow their own field change, when present.
+
+All input, graph and archive checks run before target writes. The command keeps
+original graph observations and reverse membership; a member may reference only
+an original external target or an actual earlier result of this command. It
+does not persist projected revisions. External watched revisions and new or
+removed outside dependents remain conflicts. Unrelated tasks may change.
+
+Undo preflights the entire reverse graph before deleting comments, then restores
+actual effects in reverse order with fresh per-effect checks. Recovery observes
+uncertain outcomes without repeating target writes. Original receipts and weak
+observer provenance remain immutable. An unchanged relation-only request
+does not create a journal or synthetic task write. The v27/v28 semantics retain
+bounded v9 compression and v20 multipart transport; upgrade and restart running
+readers before publishing them.
+
 ## Remaining writer integration
 
 Mixed `update` commands preflight all distinct live selected tasks, field payloads,
@@ -175,10 +200,10 @@ status requests (including blocked/foreign claim restrictions), individual
 relationship requests and comment publication sizes before their first write.
 Selection uses one fresh paginated issue collection rather than one GET per
 selected task; relationship validation may require additional graph reads.
-Parent-only batches use the relationship-capable path instead of the scalar
-group contract. Single-task inline comments also receive the size preflight.
+Parent-only batches use the relationship group above. Single-task inline
+comments also receive the size preflight.
 
-This preparation does not persist a mixed command plan or predict cascade,
+For updates involving status, this preparation does not persist a mixed command plan or predict cascade,
 review-policy or native-write results. Execution still reads and fences actual
 states, applies relationship changes before evaluating review policy, and
 reports partial results on later operational/policy failures. Shared reverse
@@ -187,7 +212,7 @@ undo for these paths remain unfinished, as listed below.
 
 | Writer | Current effects requiring an aggregate |
 |---|---|
-| Update with relationships or status, with or without comments | Mixed task, relationship, workflow and optional activity effects; scalar-only and scalar/comment batches are connected above |
+| Update involving status, with or without relationships/comments | Mixed task, relationship, workflow and optional activity effects; field/comment and relationship groups are connected above |
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 
 These remaining paths need a shared mixed-effect contract, including complete

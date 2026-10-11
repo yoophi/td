@@ -80,6 +80,9 @@ func (c *Client) readPairedGroup(ctx context.Context, root *ActionJournalRecord)
 		return nil, err
 	}
 	for i, m := range root.Group.Members {
+		if root.Group.pairedComment(i) == nil {
+			continue
+		}
 		probe := *root
 		probe.IssueID = m.IssueID
 		probe.CommentInput = root.Group.pairedComment(i)
@@ -113,6 +116,9 @@ func (c *Client) readPairedGroup(ctx context.Context, root *ActionJournalRecord)
 		}
 	}
 	if err := c.verifyPairedGroupEvents(ctx, root); err != nil {
+		return nil, err
+	}
+	if err := verifyRelationGroupGraph(root.Group, snapshot.Issues(false)); err != nil {
 		return nil, err
 	}
 	return out, nil
