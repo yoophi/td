@@ -62,7 +62,7 @@ func (a ActionJournal) validateOrderedGroup() error {
 		}
 		switch effect.Status {
 		case "applied", "observed":
-			if r.Phase != "applied" || (r.UpdateObservation != nil) != (effect.Status == "observed") {
+			if r.Phase != "applied" || effectWasObserved(r) != (effect.Status == "observed") {
 				return fmt.Errorf("ordered forward proof differs from original receipt")
 			}
 			if effect.Status == "observed" && a.Group.Forward.Proof == "verified-group-receipts" {
@@ -115,9 +115,9 @@ func (a ActionJournal) validateOrderedGroup() error {
 	}
 	for id, chain := range byID {
 		last := chain[len(chain)-1]
-		if last.Status == "unapplied" && last.Record.UpdateIntent.NativeEvents != nil {
+		if last.Status == "unapplied" && workflowEffectEvents(&last.Record.ActionJournal) != nil {
 			baseline, found := o.Events[id]
-			if !found || !reflect.DeepEqual(baseline, *last.Record.UpdateIntent.NativeEvents) {
+			if !found || !reflect.DeepEqual(baseline, *workflowEffectEvents(&last.Record.ActionJournal)) {
 				return fmt.Errorf("unapplied ordered input replaced its original native event baseline")
 			}
 		}
@@ -129,8 +129,8 @@ func (a ActionJournal) validateOrderedGroup() error {
 			if !found || baseline == nil {
 				return fmt.Errorf("ordered forward effect omitted its event observation")
 			}
-			if last.Record.UpdateIntent.NativeEvents != nil {
-				if err := updateEventProof(last.Record.ActionJournal, baseline); err != nil {
+			if workflowEffectEvents(&last.Record.ActionJournal) != nil {
+				if err := workflowEffectEventProof(last.Record.ActionJournal, baseline); err != nil {
 					return err
 				}
 			}

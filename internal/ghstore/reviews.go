@@ -225,6 +225,9 @@ func supersedeReviews(details *IssueDetails, now time.Time) {
 }
 
 func (c *Client) reviewHandoff(ctx context.Context, observed *Record, o TransitionOptions) (*Record, *models.Activity, error) {
+	if c.journal != nil && c.journal.Group != nil && c.journal.Group.Journal.Group.workflowUpdateGroup() {
+		return c.workflowReviewHandoff(ctx, observed)
+	}
 	entries, err := c.ListActivity(ctx, observed.ID)
 	if err != nil {
 		return nil, nil, err

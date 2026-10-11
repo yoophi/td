@@ -17,6 +17,11 @@ import (
 
 func journalCLI(t *testing.T) (string, string, func(...string) (string, string, error)) {
 	t.Helper()
+	return journalCLIWithTimeout(t, 30*time.Second)
+}
+
+func journalCLIWithTimeout(t *testing.T, timeout time.Duration) (string, string, func(...string) (string, string, error)) {
+	t.Helper()
 	dir := githubScheduleTestDir(t)
 	t.Setenv("TD_SESSION_ID", "journal-cli-fixture")
 	t.Setenv("TD_GH_CONTEXT_ROOT", t.TempDir())
@@ -36,7 +41,7 @@ func journalCLI(t *testing.T) (string, string, func(...string) (string, string, 
 		t.Fatal(err)
 	}
 	return dir, state.Session.ID, func(args ...string) (string, string, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		child := exec.CommandContext(ctx, executable, append([]string{"-test.run=^TestGitHubSyncCLIHelperProcess$", "--", "--work-dir", dir}, args...)...)
 		child.Dir = dir
@@ -911,8 +916,8 @@ func TestGitHubJournalCLIUndoesReviewTransitions(t *testing.T) {
 			original := body()
 			execute("review", "gh-6")
 			execute("undo")
-			if body() != original {
-				t.Fatal("review inverse lost original body")
+			if !sameFixtureTaskContentsWithoutAudit(t, body(), original) {
+				t.Fatal("review inverse lost original task fields")
 			}
 			execute("review", "gh-6")
 			original = body()
@@ -1523,7 +1528,7 @@ func TestGitHubJournalCLIReviewCascadeGroupUndoAndHierarchyFence(t *testing.T) {
 				Group *ghstore.ActionGroup
 			}
 			latest := execute("last", "--n", "1")
-			if json.Unmarshal([]byte(latest), &rows) != nil || len(rows) != 1 || rows[0].Group == nil || rows[0].Group.Command != "review" {
+			if json.Unmarshal([]byte(latest), &rows) != nil || len(rows) != 1 || rows[0].Group == nil || (rows[0].Group.WorkflowUpdates == nil || rows[0].Group.WorkflowUpdates.Status != "in_review") {
 				t.Fatal(latest)
 			}
 			rid := rows[0].ID
@@ -1572,7 +1577,10 @@ func TestGitHubJournalCLIReviewCascadeGroupUndoAndHierarchyFence(t *testing.T) {
 				t.Fatal("fixture")
 			}
 			for _, id := range []string{"6", "7", "8"} {
-				for _, field := range []string{"body", "title", "state", "labels"} {
+				if !sameFixtureTaskContentsWithoutAudit(t, a.Issues[id]["body"].(string), b.Issues[id]["body"].(string)) {
+					t.Fatal("cascade inverse lost task fields", mode, id)
+				}
+				for _, field := range []string{"title", "state", "labels"} {
 					x, _ := json.Marshal(a.Issues[id][field])
 					y, _ := json.Marshal(b.Issues[id][field])
 					if !bytes.Equal(x, y) {

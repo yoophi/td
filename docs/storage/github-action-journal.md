@@ -1,5 +1,8 @@
 # GitHub action journal implementation
 
+This document retains incremental protocol notes. For current command coverage
+and remaining writer integration, use [the writer matrix](github-batch-writers.md).
+
 This work belongs to #9. The codec, bulk reader, inverse planner and an opt-in
 issue-update write protocol are present. `last` and `undo --list` have GitHub
 dispatch. CLI create/update (including creation shortcuts and the edit alias)
@@ -1064,6 +1067,29 @@ write nothing. Upgrade and restart readers before publishing this format;
 v9 compression and v20 multipart limits remain unchanged. Updates involving
 status, creation with relationships, and the complete adapter audit remain #65
 work and are not declared complete by this integration.
+
+## Mixed workflow update commands (#65)
+
+The v29 root and v30 effect formats add one command boundary for field edits,
+parent/dependency changes, status requests and inline comments. Tracked review
+commands include existing or automatic handoffs and actual cascade effects.
+The command freezes requested inputs, original graph membership and event
+baselines before task writes; ordered receipts bind actual predecessor results.
+It never records a projected native clock or an approval of future contents.
+
+Policy runs after field edits. A denied transition can leave verified field
+effects and an unfinished root; explicit recovery records only observed results.
+Undo preflights the inverse graph, checks original receipts/comments/events and
+uses ordered compensation without reviving old approval authority. Removal of a
+command-created handoff is recognized only after its exact saved inverse and
+actual native absence have been observed. Existing handoffs remain required.
+
+CLI mixed updates, tracked single/multi review, HTTP review and monitor edits
+use these paths. Monitor saves retain their original observation and omit an
+unchanged status. Creation combined with relationships still needs its own
+pre-allocation command contract. The detailed behavior and validation boundaries
+are in [mixed workflow updates](github-batch-writers.md#mixed-workflow-updates).
+Restart compatible readers before publishing v29/v30 records.
 
 ## Multipart transport (#67)
 

@@ -184,7 +184,8 @@ func (c *Client) reconcileForwardComment(ctx context.Context, a *ActionJournalRe
 	if err != nil {
 		return nil, err
 	}
-	verified, err := c.publishJournal(ctx, path, publication, a, nil)
+	guard, _ := ctx.Value(orderedReceiptFenceContextKey{}).(func() error)
+	verified, err := c.publishJournal(ctx, path, publication, a, guard)
 	if err != nil {
 		return nil, fmt.Errorf("comment recovery receipt is unverified; inspect before retrying, no target replay: %w", err)
 	}

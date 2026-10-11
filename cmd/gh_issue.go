@@ -193,6 +193,34 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		activity = models.Activity{Kind: "comment", SessionID: local.Session.ID, Message: comment}
 	}
 	completedIssues := []string{}
+	if change.Status != nil {
+		var inline *models.Activity
+		if comment != "" {
+			inline = &activity
+		}
+		completed, updateErr := client.UpdateWorkflowCommand(cmd.Context(), args, change, ghstore.RelationChanges{DependsOn: relations.depends, Blocks: relations.blocks}, options, inline)
+		for i := range completed {
+			record := &completed[i]
+			_, err := scope.Update(cmd.Context(), func(current *ghcontext.State) error {
+				if current.Session.ID != local.Session.ID {
+					return fmt.Errorf("local session changed during update")
+				}
+				if record.Status == models.StatusInProgress {
+					current.Focus = record.ID
+				} else if record.Status != models.StatusBlocked && current.Focus == record.ID {
+					current.Focus = ""
+				}
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("%s was updated, but local focus update failed; inspect GitHub before retrying: %w; command result: %v", record.ID, err, updateErr)
+			}
+			if err := emitGitHubMutation(cmd, action, record); err != nil {
+				return fmt.Errorf("workflow update results could not be printed; inspect GitHub without replay: %w; command result: %v", err, updateErr)
+			}
+		}
+		return updateErr
+	}
 	if (relations.changed() || change.ParentID != nil) && change.Status == nil {
 		var inline *models.Activity
 		if comment != "" {
@@ -229,16 +257,9 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 		if comment != "" {
 			commentInput = &activity
 		}
-		selected, err := client.PreflightUpdate(cmd.Context(), args, change, options, commentInput)
+		_, err := client.PreflightUpdate(cmd.Context(), args, change, options, commentInput)
 		if err != nil {
 			return err
-		}
-		if relations.changed() {
-			for i := range selected {
-				if _, err := prepareGitHubRelations(cmd.Context(), client, &selected[i], relations); err != nil {
-					return fmt.Errorf("update relationship preflight %s (no write attempted): %w", selected[i].ID, err)
-				}
-			}
 		}
 	}
 	for _, id := range args {
@@ -249,61 +270,13 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 			return fmt.Errorf("update failed for %s; completed issues=%v; earlier changes remain: %w", id, completedIssues, err)
 		}
 		var record *ghstore.Record
-		var relationPlan *gitHubRelationPlan
-		if relations.changed() {
-			observed, readErr := client.Get(cmd.Context(), id)
-			if readErr != nil {
-				return batchError(readErr)
-			}
-			relationPlan, err = prepareGitHubRelations(cmd.Context(), client, observed, relations)
-			if err != nil {
-				return batchError(err)
-			}
-			fields := change
-			fields.Status = nil
-			if fields.HasFields() {
-				record, err = writer.UpdateObserved(cmd.Context(), observed, fields)
-			} else {
-				record = observed
-			}
-		} else if change.Status != nil {
-			record, err = client.UpdateWorkflow(cmd.Context(), id, change, options)
-		} else if hasGitHubChanges(change) {
+		if hasGitHubChanges(change) {
 			record, err = client.Update(cmd.Context(), id, change)
 		} else {
 			record, err = client.Get(cmd.Context(), id)
 		}
 		if err != nil {
 			return batchError(fmt.Errorf("%s %s: %w", operation, id, err))
-		}
-
-		if relationPlan != nil {
-			record, err = applyGitHubRelations(cmd.Context(), client, relationPlan, record, local.Session.ID)
-			if err != nil {
-				return batchError(err)
-			}
-		}
-		if relationPlan != nil && change.Status != nil {
-			record, err = client.UpdateWorkflowObserved(cmd.Context(), record, ghstore.Changes{Status: change.Status}, options)
-			if err != nil {
-				return batchError(fmt.Errorf("%s field/relation changes were saved, but requested status transition failed; earlier changes remain: %w", id, err))
-			}
-		}
-		if change.Status != nil {
-			_, err = scope.Update(cmd.Context(), func(current *ghcontext.State) error {
-				if current.Session.ID != local.Session.ID {
-					return fmt.Errorf("local session changed during update")
-				}
-				if record.Status == models.StatusInProgress {
-					current.Focus = record.ID
-				} else if record.Status != models.StatusBlocked && current.Focus == record.ID {
-					current.Focus = ""
-				}
-				return nil
-			})
-			if err != nil {
-				return batchError(fmt.Errorf("%s was updated, but local focus update failed: %w", record.ID, err))
-			}
 		}
 
 		if comment != "" {

@@ -18,8 +18,7 @@ type MonitorEditWriter interface {
 }
 type githubFormWriter interface {
 	githubObservedReader
-	UpdateWorkflowObserved(context.Context, *ghstore.Record, ghstore.Changes, ghstore.TransitionOptions) (*ghstore.Record, error)
-	ChangeDependencyObserved(context.Context, *ghstore.Record, string, bool, string) (*ghstore.Record, error)
+	UpdateCommandObserved(context.Context, *ghstore.Record, ghstore.Changes, ghstore.RelationChanges, ghstore.TransitionOptions) (*ghstore.Record, error)
 }
 
 func (t *githubIssueTransition) SaveEdit(issue models.Issue, deps []string) error {
@@ -103,50 +102,18 @@ func (t *githubIssueTransition) SaveEdit(issue models.Issue, deps []string) erro
 		change.Minor = &issue.Minor
 	}
 	options := ghstore.TransitionOptions{SessionID: t.source.actor, AgentType: "monitor", Mode: mode}
-	saved := false
-	fail := func(err error) error {
-		if saved {
-			return fmt.Errorf("%s some form changes were saved; inspect GitHub and reopen the form before retrying: %w", issue.ID, err)
-		}
-		return err
-	}
-	if change.HasFields() {
-		root, err = c.UpdateWorkflowObserved(t.source.ctx, root, change, options)
-		if err != nil {
-			return err
-		}
-		saved = true
-	}
 	details, err := root.CopyDetails()
 	if err != nil {
-		return fail(err)
-	}
-	// Remove first so the intended graph does not temporarily retain old edges.
-	for _, id := range details.Dependencies {
-		if !slices.Contains(desired, id) {
-			root, err = c.ChangeDependencyObserved(t.source.ctx, root, id, false, t.source.actor)
-			if err != nil {
-				return fail(err)
-			}
-			saved = true
-		}
-	}
-	for _, id := range desired {
-		if !slices.Contains(details.Dependencies, id) {
-			root, err = c.ChangeDependencyObserved(t.source.ctx, root, id, true, t.source.actor)
-			if err != nil {
-				return fail(err)
-			}
-			saved = true
-		}
+		return err
 	}
 	if issue.Status != old.Status {
-		_, err = c.UpdateWorkflowObserved(t.source.ctx, root, ghstore.Changes{Status: &issue.Status}, options)
-		if err != nil {
-			return fail(err)
-		}
+		change.Status = &issue.Status
 	}
-	return nil
+	if !change.HasFields() && change.Status == nil && slices.Equal(details.Dependencies, desired) {
+		return nil
+	}
+	_, err = c.UpdateCommandObserved(t.source.ctx, root, change, ghstore.RelationChanges{DependsOn: &desired}, options)
+	return err
 }
 
 type MonitorFormSavedMsg struct {

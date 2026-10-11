@@ -143,6 +143,9 @@ func (c *Client) beginGraphActionGroup(ctx context.Context, g *ActionGroup) erro
 }
 
 func verifyGraphGroupMembership(g *ActionGroup, records []Record) error {
+	if g.workflowUpdateGroup() {
+		return verifyWorkflowGraphMembership(g, records)
+	}
 	if len(g.Roots) == 0 {
 		return nil
 	}
@@ -195,5 +198,12 @@ func (c *Client) deferredReviewGroupRoot(id, current string) bool {
 		return false
 	}
 	active := c.journal.Group
+	if active.Journal.Group.workflowUpdateGroup() {
+		for index, step := range active.Journal.Group.WorkflowUpdates.Steps {
+			if step.Kind == "workflow" && step.IssueID == id {
+				return index+1 > active.WorkflowStep
+			}
+		}
+	}
 	return active.Journal.Group.Command == "review" && slices.Contains(active.Journal.Group.Roots, id) && !active.Attempted[id]
 }

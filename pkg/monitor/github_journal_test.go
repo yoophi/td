@@ -76,13 +76,16 @@ func TestGitHubMonitorProductionFactoryJournalsCreateEditAndDelete(t *testing.T)
 		t.Fatal(err)
 	}
 	actions := f.Journals(t)
-	if len(actions) != 7 {
+	if len(actions) != 9 {
 		t.Fatal(actions)
 	}
 	for _, a := range actions {
 		if a.Phase != "applied" || a.SessionID != "actual-monitor" {
 			t.Fatal(a)
 		}
+	}
+	if actions[1].Group == nil || actions[1].Group.Command != "update-relations" || actions[2].GroupOperationID != actions[1].OperationID || actions[4].Group == nil || actions[4].Group.Command != "workflow-update" || actions[5].GroupOperationID != actions[4].OperationID || actions[6].GroupOperationID != actions[4].OperationID {
+		t.Fatal("monitor edit or review effects escaped their command", actions)
 	}
 }
 func TestGitHubMonitorJournalFailuresPreserveNativeUncertainty(t *testing.T) {

@@ -23,7 +23,7 @@ func orderedAppliedEffects(a *ActionJournalRecord) []*ActionJournalRecord {
 
 // Historical handoff clocks are independent of task revisions. Check them
 // against original Before records, never a rebased compensation checkpoint.
-func (c *Client) checkOrderedHistoricalHandoffs(ctx context.Context, a *ActionJournalRecord) error {
+func (c *Client) checkOrderedHistoricalHandoffs(ctx context.Context, a *ActionJournalRecord, observed *orderedGroupObservation) error {
 	for _, effect := range orderedAppliedEffects(a) {
 		original, err := actionStateRecord(effect.Before, effect.IssueID)
 		if err != nil {
@@ -34,6 +34,9 @@ func (c *Client) checkOrderedHistoricalHandoffs(ctx context.Context, a *ActionJo
 			return err
 		}
 		if details.ReviewBasis != "" {
+			if workflowHandoffRemovalObserved(a, effect, &details, observed) {
+				continue
+			}
 			if err := c.verifyReviewHandoffObserved(withReviewCost(ctx), original, details, false); err != nil {
 				return fmt.Errorf("ordered original handoff proof failed: %w", err)
 			}
@@ -43,7 +46,10 @@ func (c *Client) checkOrderedHistoricalHandoffs(ctx context.Context, a *ActionJo
 }
 
 func (c *Client) fenceOrderedInverse(ctx context.Context, a *ActionJournalRecord, observed *orderedGroupObservation) error {
-	if err := c.checkOrderedHistoricalHandoffs(ctx, a); err != nil {
+	if err := preflightWorkflowInverseGraph(a, observed); err != nil {
+		return err
+	}
+	if err := c.checkOrderedHistoricalHandoffs(ctx, a, observed); err != nil {
 		return err
 	}
 	return c.fenceOrderedObservation(ctx, a, observed, false)
@@ -218,14 +224,35 @@ func (c *Client) undoOrderedGroup(ctx context.Context, a *ActionJournalRecord, s
 			}
 			return nil, &ConflictError{ID: effect.IssueID}
 		}
-		payload := map[string]any{"title": step.Input.Title, "body": step.Input.Body, "state": step.Input.State, "labels": step.Input.Labels}
-		data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", current.Number), payload, false)
-		if err != nil {
-			return nil, fmt.Errorf("ordered inverse %s has an uncertain result; inspect and reconcile before continuing, no automatic replay: %w", step.OperationID, err)
-		}
-		result, err := decodeIssue(data)
-		if err != nil {
-			return nil, fmt.Errorf("ordered inverse response unreadable; no automatic replay: %w", err)
+		var result *Record
+		if step.Comment != nil {
+			if err := c.readNativeComment(ctx, step.Comment); err != nil {
+				return nil, err
+			}
+			n, err := CommentNumber(step.Comment.ID)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := c.request(ctx, "DELETE", fmt.Sprintf("/issues/comments/%d", n), nil, false); err != nil {
+				return nil, fmt.Errorf("ordered companion deletion has an uncertain result; reconcile without replay: %w", err)
+			}
+			if err := c.verifyDeletedComment(ctx, effect); err != nil {
+				return nil, err
+			}
+			result, err = c.readJournalTarget(withReadbackCost(ctx), effect.IssueID)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			payload := map[string]any{"title": step.Input.Title, "body": step.Input.Body, "state": step.Input.State, "labels": step.Input.Labels}
+			data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", current.Number), payload, false)
+			if err != nil {
+				return nil, fmt.Errorf("ordered inverse %s has an uncertain result; inspect and reconcile before continuing, no automatic replay: %w", step.OperationID, err)
+			}
+			result, err = decodeIssue(data)
+			if err != nil {
+				return nil, fmt.Errorf("ordered inverse response unreadable; no automatic replay: %w", err)
+			}
 		}
 		state, err := actionIssueState(result)
 		if err != nil {

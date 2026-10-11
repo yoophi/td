@@ -152,8 +152,14 @@ func init() {
 					return fmt.Errorf("capture start snapshot: %w", err)
 				}
 			}
+			var reviewResults []ghstore.Record
+			var reviewErr error
+			if command == reviewCmd {
+				status := models.StatusInReview
+				reviewResults, reviewErr = client.UpdateWorkflowCommand(cmd.Context(), args, ghstore.Changes{Status: &status}, ghstore.RelationChanges{}, options, nil)
+			}
 			planned := len(args) > 1 && command == rejectCmd
-			grouped := len(args) > 1 && (command == reviewCmd || slices.Contains([]string{"close", "approve", "reopen"}, command.Name()) || slices.Contains([]string{"start", "unstart", "block", "unblock"}, command.Name()))
+			grouped := len(args) > 1 && command != reviewCmd && (slices.Contains([]string{"close", "approve", "reopen"}, command.Name()) || slices.Contains([]string{"start", "unstart", "block", "unblock"}, command.Name()))
 			if planned {
 				if err := client.BeginPlannedCommand(cmd.Context(), command.Name(), args, options); err != nil {
 					return err
@@ -165,10 +171,18 @@ func init() {
 				}
 			}
 			completed := []string{}
-			for _, id := range args {
+			for index, id := range args {
 				var record *ghstore.Record
 				var noop bool
-				if planned {
+				if command == reviewCmd {
+					if index >= len(reviewResults) {
+						if reviewErr != nil {
+							return reviewErr
+						}
+						return fmt.Errorf("review result is incomplete; inspect GitHub without replay")
+					}
+					record = &reviewResults[index]
+				} else if planned {
 					record, noop, err = client.ApplyPlannedCommandMember(cmd.Context(), id)
 				} else {
 					record, noop, err = client.TransitionWithCascades(cmd.Context(), id, command.Name(), options)
@@ -218,6 +232,9 @@ func init() {
 				if _, err := client.CompleteActionGroup(cmd.Context()); err != nil {
 					return err
 				}
+			}
+			if command == reviewCmd {
+				return reviewErr
 			}
 			return nil
 		}

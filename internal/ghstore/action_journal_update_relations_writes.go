@@ -13,6 +13,10 @@ import (
 // UpdateWithRelations freezes one complete command, including reverse-edge
 // targets, before writing any task. Repeated shared targets are written once.
 func (c *Client) UpdateWithRelations(ctx context.Context, ids []string, change Changes, relations RelationChanges, activity *models.Activity) ([]Record, error) {
+	return c.updateWithRelations(ctx, ids, change, relations, activity, nil)
+}
+
+func (c *Client) updateWithRelations(ctx context.Context, ids []string, change Changes, relations RelationChanges, activity *models.Activity, observed *Record) ([]Record, error) {
 	if c.journal == nil || c.journal.Group != nil || change.Status != nil || change.Details != nil || change.Reason != nil || len(change.journalRelated) != 0 || activity != nil && (activity.Kind != "comment" || activity.SessionID != c.journal.SessionID) {
 		return nil, fmt.Errorf("relationship update requires a tracked field/relationship command and optional inline comments; no write attempted")
 	}
@@ -23,6 +27,11 @@ func (c *Client) UpdateWithRelations(ctx context.Context, ids []string, change C
 	records := map[string]Record{}
 	for _, r := range snapshot.Issues(false) {
 		records[r.ID] = r
+	}
+	if observed != nil {
+		if err := c.checkCommandObservation(records, observed); err != nil {
+			return nil, err
+		}
 	}
 	graph, err := planRelationUpdates(records, ids, relations)
 	if err != nil {

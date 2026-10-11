@@ -14,11 +14,18 @@ type orderedReceiptFenceContextKey struct{}
 func sameOrderedObservation(a, b *orderedGroupObservation) bool {
 	return equalGroupMemberResults(a.Members, b.Members) &&
 		reflect.DeepEqual(a.Effects, b.Effects) && reflect.DeepEqual(a.Events, b.Events) &&
+		reflect.DeepEqual(a.Comments, b.Comments) &&
 		a.PendingReceipt == b.PendingReceipt && a.PendingStep == b.PendingStep &&
 		a.PendingApplied == b.PendingApplied && a.Remaining == b.Remaining && a.Partial == b.Partial
 }
 
 func (c *Client) fenceOrderedObservation(ctx context.Context, a *ActionJournalRecord, observed *orderedGroupObservation, normal bool) error {
+	if err := c.fenceWorkflowHandoffs(ctx, a); err != nil {
+		return err
+	}
+	if err := c.fenceWorkflowCompanions(ctx, observed); err != nil {
+		return err
+	}
 	for _, effect := range observed.Effects {
 		if err := c.pointOrderedEffect(ctx, effect); err != nil {
 			return err
@@ -111,8 +118,14 @@ func (c *Client) reconcileOrderedGroup(ctx context.Context, a *ActionJournalReco
 		guarded := context.WithValue(ctx, orderedReceiptFenceContextKey{}, func() error {
 			return c.fenceOrderedObservation(ctx, a, observed, false)
 		})
-		if _, err := c.reconcileForwardUpdate(guarded, member, session, actor, true); err != nil {
-			return nil, fmt.Errorf("ordered forward receipt recovery stopped; no target replay: %w", err)
+		var recoveryErr error
+		if member.CommentInput != nil {
+			_, recoveryErr = c.reconcileForwardComment(guarded, member, session, actor, true)
+		} else {
+			_, recoveryErr = c.reconcileForwardUpdate(guarded, member, session, actor, true)
+		}
+		if recoveryErr != nil {
+			return nil, fmt.Errorf("ordered forward receipt recovery stopped; no target replay: %w", recoveryErr)
 		}
 		result.Applied = true
 		observed, err = c.observeOrderedGroup(ctx, a, false)

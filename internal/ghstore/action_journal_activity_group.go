@@ -161,6 +161,9 @@ func (c *Client) bindActivityGroupIntent(a *ActionJournal) error {
 		return nil
 	}
 	active := c.journal.Group
+	if active.Journal.Group.workflowUpdateGroup() {
+		return c.bindWorkflowGroupMember(a)
+	}
 	if active.Journal.Group.pairedGroup() {
 		return c.bindPairedGroupMember(a)
 	}

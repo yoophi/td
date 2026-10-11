@@ -15,6 +15,7 @@ import (
 // compensation and its eventual result. A pending input cannot authorize the
 // next step. These records are not ordinary causal undo receipts.
 type OrderedGroupUndoStep struct {
+	Comment              *ActionCommentState `json:"comment,omitempty"`
 	GroupOperationID     string              `json:"group_operation_id"`
 	GroupUndoOperationID string              `json:"group_undo_operation_id"`
 	ForwardReceiptID     string              `json:"forward_receipt_id"`
@@ -49,12 +50,22 @@ func orderedEffectCompensation(effect *ActionJournalRecord, source ActionIssueSt
 	if err := orderedUndoIdentity(op, session, effect.IssueID); err != nil {
 		return nil, err
 	}
+	if effect.Action == "comment_create" && effect.GroupContract == workflowUpdateContract {
+		if effect.CommentAfter == nil || effect.CommentInput == nil {
+			return nil, fmt.Errorf("workflow compensation omitted its exact companion result")
+		}
+		comment := *effect.CommentAfter
+		if err := comment.validate(); err != nil {
+			return nil, err
+		}
+		return &OrderedGroupUndoStep{Comment: &comment, GroupOperationID: effect.GroupOperationID, GroupUndoOperationID: groupUndo, ForwardReceiptID: effect.ID, OperationID: op, SessionID: session, Actor: actor, At: at, Source: source, Input: ActionUpdateInput{Title: source.Title, Body: source.Body, State: source.State, Labels: slices.Clone(source.Labels)}}, nil
+	}
 	desc, original, _, err := decodeBody(effect.Before.Body)
 	if err != nil {
 		return nil, err
 	}
 	_, current, _, err := decodeBody(source.Body)
-	if err != nil || current.Details == nil || len(current.Details.Transitions) == 0 {
+	if err != nil || effect.GroupContract != workflowUpdateContract && (current.Details == nil || len(current.Details.Transitions) == 0) {
 		return nil, fmt.Errorf("ordered compensation requires observed forward audit")
 	}
 	// JSON copying prevents review supersession from modifying original receipts
@@ -73,10 +84,13 @@ func orderedEffectCompensation(effect *ActionJournalRecord, source ActionIssueSt
 		}
 	}
 	_, forward, _, err := decodeBody(effect.After.Body)
-	if err != nil || forward.Details == nil || len(forward.Details.Transitions) == 0 {
+	if err != nil || effect.GroupContract != workflowUpdateContract && (forward.Details == nil || len(forward.Details.Transitions) == 0) {
 		return nil, fmt.Errorf("ordered compensation requires its original writer transition")
 	}
-	originalTransition := forward.Details.Transitions[len(forward.Details.Transitions)-1]
+	originalOperation := effect.OperationID
+	if forward.Details != nil && len(forward.Details.Transitions) != 0 && effect.GroupContract != workflowUpdateContract {
+		originalOperation = forward.Details.Transitions[len(forward.Details.Transitions)-1].OperationID
+	}
 	d := IssueDetails{Status: models.Status(effect.Before.State)}
 	if original.Details != nil {
 		data, err := json.Marshal(original.Details)
@@ -99,7 +113,7 @@ func orderedEffectCompensation(effect *ActionJournalRecord, source ActionIssueSt
 	if effect.Before.State == "closed" {
 		d.ClosedBySession = session
 	}
-	reason := "Group undo compensation for " + effect.ID + " (" + originalTransition.OperationID + "); forward and inverse audit retained, previous approvals invalidated"
+	reason := "Group undo compensation for " + effect.ID + " (" + originalOperation + "); forward and inverse audit retained, previous approvals invalidated"
 	d.Transitions = append(d.Transitions, TransitionRecord{OperationID: op, Action: "undo_group", From: nativeUndoStatus(current, source.State), To: d.Status, SessionID: session, Reason: reason, At: at})
 	original.Details, original.LastStateReason = &d, reason
 	body, err := encodeBody(desc, original)
@@ -184,8 +198,8 @@ func PlanOrderedGroupUndoStep(group *ActionJournalRecord, effects []*ActionJourn
 		if !found || baseline == nil {
 			return nil, fmt.Errorf("ordered undo omitted its frozen forward event observation")
 		}
-		if last.UpdateIntent.NativeEvents != nil {
-			if err := updateEventProof(last.ActionJournal, baseline); err != nil {
+		if workflowEffectEvents(&last.ActionJournal) != nil {
+			if err := workflowEffectEventProof(last.ActionJournal, baseline); err != nil {
 				return nil, err
 			}
 		}
@@ -195,11 +209,11 @@ func PlanOrderedGroupUndoStep(group *ActionJournalRecord, effects []*ActionJourn
 		expectedEvents[id] = baseline
 	}
 	for _, effect := range ordered {
-		if effect.UpdateIntent.NativeEvents == nil {
+		if workflowEffectEvents(&effect.ActionJournal) == nil {
 			continue
 		}
 		actual := forwardEvents[effect.IssueID]
-		before := *effect.UpdateIntent.NativeEvents
+		before := *workflowEffectEvents(&effect.ActionJournal)
 		end := len(before)
 		native := effect.Before.State != effect.After.State
 		if native {
@@ -209,7 +223,7 @@ func PlanOrderedGroupUndoStep(group *ActionJournalRecord, effects []*ActionJourn
 			return nil, fmt.Errorf("ordered original forward event prefix is missing")
 		}
 		prefix := actual[:end]
-		if err := updateEventProof(effect.ActionJournal, prefix); err != nil {
+		if err := workflowEffectEventProof(effect.ActionJournal, prefix); err != nil {
 			return nil, err
 		}
 		if native {
@@ -225,7 +239,7 @@ func PlanOrderedGroupUndoStep(group *ActionJournalRecord, effects []*ActionJourn
 			if err != nil {
 				return nil, err
 			}
-			if details.ReviewBasis != "" && (details.ReviewBasis != reviewBasis(original, details) || details.ReviewEvents != stateEventDigest(prefix)) {
+			if details.ReviewBasis != "" && (!group.Group.workflowUpdateGroup() || effect.GroupPreviousReceiptID == "") && (details.ReviewBasis != reviewBasis(original, details) || details.ReviewEvents != stateEventDigest(prefix)) {
 				return nil, fmt.Errorf("ordered original review checkpoint cannot be verified")
 			}
 		}
@@ -242,7 +256,7 @@ func PlanOrderedGroupUndoStep(group *ActionJournalRecord, effects []*ActionJourn
 		if err != nil {
 			return nil, err
 		}
-		if step.Actor != want.Actor || step.SessionID != want.SessionID || step.RequiresNewReview != want.RequiresNewReview || !reflect.DeepEqual(step.Input, want.Input) || step.Result == nil || step.EventsAfter == nil {
+		if step.Actor != want.Actor || step.SessionID != want.SessionID || step.RequiresNewReview != want.RequiresNewReview || !reflect.DeepEqual(step.Input, want.Input) || !reflect.DeepEqual(step.Comment, want.Comment) || step.Result == nil || step.EventsAfter == nil {
 			return nil, fmt.Errorf("compensation has no complete original plan and result")
 		}
 		if err := validateOrderedStepResult(step); err != nil {

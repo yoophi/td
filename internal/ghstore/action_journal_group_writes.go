@@ -10,6 +10,7 @@ import (
 )
 
 type activeActionGroup struct {
+	WorkflowStep int
 	Plans        map[string]*issueUpdatePlan
 	Journal      *ActionJournalRecord
 	Expected     map[string]ActionIssueState
@@ -228,6 +229,9 @@ func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJourna
 	}
 	if before == nil || member.Before.Revision != before.Revision {
 		return fmt.Errorf("member initial revision differs from immutable group membership")
+	}
+	if group.Group.workflowUpdateGroup() {
+		return validateWorkflowUpdateMember(group, member)
 	}
 	if group.Group.updateActivityGroup() {
 		return validateUpdateActivityMember(group, member)

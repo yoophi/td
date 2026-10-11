@@ -19,6 +19,12 @@ func checkOrderedInitialCapacity(a ActionJournal, expected map[string]ActionIssu
 	probe.Group, probe.Phase = &g, "applied"
 	g.Ordered = &ActionOrderedGroup{Events: map[string][]nativeStateEvent{}}
 	g.Forward = &ActionGroupObservation{SessionID: a.SessionID, Actor: strings.Repeat("x", 39), ObservedAt: time.Now().UTC(), Proof: "verified-group-receipts"}
+	if g.workflowUpdateGroup() {
+		g.Forward.Partial = true
+		for id, baseline := range g.WorkflowUpdates.Baselines {
+			g.Ordered.Events[id] = slices.Clone(baseline)
+		}
+	}
 	for _, member := range g.Members {
 		g.Forward.Members = append(g.Forward.Members, ActionGroupResultMember{IssueID: member.IssueID, Status: "noop", State: expected[member.IssueID]})
 	}
@@ -29,6 +35,11 @@ func checkOrderedInitialCapacity(a ActionJournal, expected map[string]ActionIssu
 
 func (c *Client) attachOrderedGroupMember(ctx context.Context, a *ActionJournal) error {
 	active := c.journal.Group
+	if active.Journal.Group.workflowUpdateGroup() {
+		if err := c.bindWorkflowGroupMember(a); err != nil {
+			return err
+		}
+	}
 	if n := len(active.Receipts); n > 0 && active.Receipts[n-1].Phase != "applied" {
 		return fmt.Errorf("ordered group has an uncertain earlier attempt; reconcile before continuing, no target write attempted")
 	}
@@ -44,15 +55,19 @@ func (c *Client) attachOrderedGroupMember(ctx context.Context, a *ActionJournal)
 		}
 	}
 	var events []nativeStateEvent
-	if a.UpdateIntent.NativeEvents != nil {
-		events = slices.Clone(*a.UpdateIntent.NativeEvents)
+	if baseline := workflowEffectEvents(a); baseline != nil {
+		events = slices.Clone(*baseline)
 	} else {
 		var err error
 		events, err = c.readStateEvents(withReviewCost(ctx), a.IssueID)
 		if err != nil {
 			return err
 		}
-		a.UpdateIntent.NativeEvents = &events
+		if a.UpdateIntent != nil {
+			a.UpdateIntent.NativeEvents = &events
+		} else {
+			a.WorkflowEvents = &events
+		}
 	}
 	if previous, known := active.NativeEvents[a.IssueID]; known && !reflect.DeepEqual(previous, events) {
 		return fmt.Errorf("ordered original event continuation changed; no target write attempted")
@@ -96,16 +111,29 @@ func orderedForwardSizingProbe(active *activeActionGroup, input *ActionJournal, 
 		events[id] = slices.Clone(value)
 	}
 	if applied {
-		state, err := input.UpdateIntent.Target.contents()
-		if err != nil {
-			return nil, nil, err
+		state := *input.Before
+		if input.UpdateIntent != nil {
+			var err error
+			state, err = input.UpdateIntent.Target.contents()
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		state.UpdatedAt = input.Before.UpdatedAt
+		var err error
 		state.Revision, err = state.checksum()
 		if err != nil {
 			return nil, nil, err
 		}
 		current.Phase, current.After, status = "applied", &state, "applied"
+		if input.CommentInput != nil {
+			comment := ActionCommentState{ID: "ghc-9223372036854775807", IssueID: input.IssueID, Body: input.CommentInput.Body, Author: active.Journal.Author, CreatedAt: clock, UpdatedAt: clock}
+			comment.Revision, err = comment.checksum()
+			if err != nil {
+				return nil, nil, err
+			}
+			current.CommentAfter = &comment
+		}
 		if input.Before.State != state.State {
 			baseline := events[input.IssueID]
 			last := int64(0)
@@ -138,6 +166,11 @@ func orderedForwardSizingProbe(active *activeActionGroup, input *ActionJournal, 
 	}
 	next.Group.Ordered.Forward = append(next.Group.Ordered.Forward, effect)
 	observation := &ActionGroupObservation{SessionID: next.SessionID, Actor: active.Journal.Author, ObservedAt: clock, Proof: "verified-group-receipts", Partial: !applied}
+	if active.Journal.Group.workflowUpdateGroup() {
+		// This is a capacity bound for an in-flight attempt, not proof that
+		// all requested future workflow/cascade/comment steps ran.
+		observation.Partial = true
+	}
 	for _, original := range next.Group.Members {
 		result := ActionGroupResultMember{IssueID: original.IssueID, State: active.Expected[original.IssueID], Status: "noop"}
 		if !applied {
@@ -221,7 +254,7 @@ func (c *Client) verifyOrderedForwardProgress(ctx context.Context, prepared *Act
 	for id, previous := range active.NativeEvents {
 		actual := observed.Events[id]
 		if id == prepared.IssueID && after != nil {
-			if err := updateEventProof(prepared.ActionJournal, actual); err != nil {
+			if err := workflowEffectEventProof(prepared.ActionJournal, actual); err != nil {
 				return nil, err
 			}
 		} else if !reflect.DeepEqual(actual, previous) {

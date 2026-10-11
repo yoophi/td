@@ -22,6 +22,26 @@ func (c *Client) TransitionObservedWithCascades(ctx context.Context, observed *R
 // TransitionWithCascades is the command-level transition entry point. Individual
 // writes remain optimistic: GitHub provides no transaction over a hierarchy.
 func (c *Client) TransitionWithCascades(ctx context.Context, id, action string, o TransitionOptions) (*Record, bool, error) {
+	if action == "review" && c.journal != nil && c.journal.Group == nil {
+		// A standalone review can create an automatic handoff before changing
+		// the root and its hierarchy. Keep all of those effects in one command.
+		observed, err := c.Get(ctx, id)
+		if err != nil {
+			return nil, false, err
+		}
+		if o.expectedRevision != nil && observed.revision != *o.expectedRevision {
+			return nil, false, &ConflictError{ID: observed.ID}
+		}
+		status := models.StatusInReview
+		results, err := c.updateWorkflowCommand(ctx, []string{observed.ID}, Changes{Status: &status}, RelationChanges{}, o, nil, observed)
+		if err != nil {
+			return nil, false, err
+		}
+		if len(results) != 1 {
+			return nil, false, fmt.Errorf("review command result is unverified; inspect before retrying")
+		}
+		return &results[0], false, nil
+	}
 	owned := (action == "review" || action == "close" || action == "approve" && !o.RecordOnly) && c.journal != nil && c.journal.Group == nil
 	if owned {
 		if c.journal.SessionID != o.SessionID {

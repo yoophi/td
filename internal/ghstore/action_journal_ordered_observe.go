@@ -11,6 +11,7 @@ import (
 )
 
 type orderedGroupObservation struct {
+	Comments       map[string]*ActionCommentState
 	Members        []ActionGroupResultMember
 	Records        map[string]Record
 	Effects        []OrderedGroupEffect
@@ -90,7 +91,7 @@ func (c *Client) observeOrderedGroup(ctx context.Context, a *ActionJournalRecord
 	if err != nil {
 		return nil, err
 	}
-	out := &orderedGroupObservation{Records: map[string]Record{}, Events: map[string][]nativeStateEvent{}}
+	out := &orderedGroupObservation{Records: map[string]Record{}, Events: map[string][]nativeStateEvent{}, Comments: map[string]*ActionCommentState{}}
 	carriers, roots := 0, 0
 	for _, record := range snapshot.records {
 		if record.meta.EntityKind == "journal" {
@@ -141,6 +142,11 @@ func (c *Client) observeOrderedGroup(ctx context.Context, a *ActionJournalRecord
 	for id := range a.Group.Ordered.Events {
 		eventTargets[id] = true
 	}
+	if a.Group.workflowUpdateGroup() {
+		for id := range a.Group.WorkflowUpdates.Baselines {
+			eventTargets[id] = true
+		}
+	}
 	for id := range eventTargets {
 		events, err := c.readStateEvents(withReviewCost(ctx), id)
 		if err != nil {
@@ -150,7 +156,12 @@ func (c *Client) observeOrderedGroup(ctx context.Context, a *ActionJournalRecord
 	}
 	for _, r := range attempts {
 		status := "applied"
-		if r.Phase == "prepared" {
+		if r.CommentInput != nil {
+			status, err = c.observeWorkflowCompanion(snapshot, a, r, states[r.IssueID], out)
+			if err != nil {
+				return nil, err
+			}
+		} else if r.Phase == "prepared" {
 			if a.Phase != "prepared" {
 				status = "unapplied"
 			} else if states[r.IssueID].Revision == r.Before.Revision {
@@ -172,7 +183,7 @@ func (c *Client) observeOrderedGroup(ctx context.Context, a *ActionJournalRecord
 			}
 		} else if r.Phase != "applied" {
 			return nil, fmt.Errorf("ordered original member acquired an individual inverse")
-		} else if r.UpdateObservation != nil {
+		} else if effectWasObserved(r) {
 			status = "observed"
 		}
 		effect, err := orderedEffectSnapshot(r, status)
@@ -223,13 +234,26 @@ func (c *Client) observeOrderedGroup(ctx context.Context, a *ActionJournalRecord
 			if result.Status != "pending-applied" && (want == nil || state.Revision != want.Revision) {
 				return nil, &ConflictError{ID: m.IssueID}
 			}
-			if last.Phase == "applied" && last.UpdateIntent.NativeEvents != nil {
-				if err := updateEventProof(last.ActionJournal, out.Events[m.IssueID]); err != nil {
+			if last.Phase == "applied" && workflowEffectEvents(&last.ActionJournal) != nil {
+				if err := workflowEffectEventProof(last.ActionJournal, out.Events[m.IssueID]); err != nil {
 					return nil, err
 				}
 			}
 		}
 		out.Members = append(out.Members, result)
+	}
+	if a.Group.workflowUpdateGroup() {
+		for id, baseline := range a.Group.WorkflowUpdates.Baselines {
+			if len(chains[id]) == 0 && !reflect.DeepEqual(baseline, out.Events[id]) {
+				return nil, fmt.Errorf("workflow untouched native event observation changed")
+			}
+		}
+		if completeErr := workflowCommandComplete(a, out.Effects, states); completeErr != nil {
+			if normal {
+				return nil, completeErr
+			}
+			out.Partial = true
+		}
 	}
 	return out, nil
 }
@@ -258,7 +282,8 @@ func (c *Client) observeOrderedInverse(_ context.Context, a *ActionJournalRecord
 			if err != nil {
 				return nil, err
 			}
-			if sameActionContents(want, state) && !state.UpdatedAt.Before(step.Source.UpdatedAt) {
+			commentDeleted := step.Comment == nil || out.Comments[step.ForwardReceiptID] == nil
+			if commentDeleted && sameActionContents(want, state) && !state.UpdatedAt.Before(step.Source.UpdatedAt) {
 				if err := orderedStepEventProof(step, out.Events[id], true); err != nil {
 					return nil, err
 				}

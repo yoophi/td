@@ -50,7 +50,7 @@ func TestGitHubHTTPProductionFactoryJournalsIssueAndActivityWrites(t *testing.T)
 	request("POST", "/v1/issues/gh-2/review", `{}`, 200)
 	request("POST", "/v1/issues/gh-2/approve", `{"self_review":true,"reason":"Fixture implementation self-review"}`, 200)
 	actions := f.Journals(t)
-	if len(actions) != 7 {
+	if len(actions) != 8 {
 		t.Fatal(actions)
 	}
 	for i, a := range actions {
@@ -60,6 +60,9 @@ func TestGitHubHTTPProductionFactoryJournalsIssueAndActivityWrites(t *testing.T)
 	}
 	if actions[0].Action != "create" || actions[1].Action != "update" || actions[2].Action != "comment_create" || actions[2].CommentAfter.Author != "fixture-author" {
 		t.Fatal(actions)
+	}
+	if actions[4].Group == nil || actions[4].Group.Command != "workflow-update" || actions[5].Action != "comment_create" || actions[6].Action != "update" || actions[5].GroupOperationID != actions[4].OperationID || actions[6].GroupOperationID != actions[4].OperationID {
+		t.Fatal("HTTP review handoff and task write are not one command", actions)
 	}
 }
 

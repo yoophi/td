@@ -3,6 +3,8 @@ package monitor
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -12,11 +14,12 @@ import (
 
 type formSaveFixture struct {
 	formEditFixture
-	root    *ghstore.Record
-	changes []ghstore.Changes
-	options ghstore.TransitionOptions
-	calls   []string
-	failAt  string
+	root      *ghstore.Record
+	changes   []ghstore.Changes
+	relations ghstore.RelationChanges
+	options   ghstore.TransitionOptions
+	calls     []string
+	failAt    string
 }
 
 func (f *formSaveFixture) ReadObserved(_ context.Context, r *ghstore.Record) (*ghstore.Record, error) {
@@ -26,20 +29,16 @@ func (f *formSaveFixture) ReadObserved(_ context.Context, r *ghstore.Record) (*g
 	f.calls = append(f.calls, "read")
 	return f.root, f.readErr
 }
-func (f *formSaveFixture) UpdateWorkflowObserved(_ context.Context, r *ghstore.Record, change ghstore.Changes, options ghstore.TransitionOptions) (*ghstore.Record, error) {
+func (f *formSaveFixture) UpdateCommandObserved(_ context.Context, r *ghstore.Record, change ghstore.Changes, relations ghstore.RelationChanges, options ghstore.TransitionOptions) (*ghstore.Record, error) {
 	if r != f.root {
-		return nil, errors.New("revision was not carried forward")
+		return nil, errors.New("original observation was not carried into command")
 	}
-	action := "fields"
-	if change.Status != nil {
-		action = "status"
-	}
-	f.calls = append(f.calls, action)
-	if f.failAt == action {
-		return nil, &ghstore.ConflictError{ID: r.ID}
-	}
+	f.calls = append(f.calls, "command")
 	f.changes = append(f.changes, change)
-	f.options = options
+	f.options, f.relations = options, relations
+	if f.failAt != "" {
+		return nil, fmt.Errorf("workflow group ghc-100 stopped; some form changes were saved; inspect and reconcile without replay: %w", &ghstore.ConflictError{ID: r.ID})
+	}
 	next := *r
 	if change.Title != nil {
 		next.Title = *change.Title
@@ -47,22 +46,6 @@ func (f *formSaveFixture) UpdateWorkflowObserved(_ context.Context, r *ghstore.R
 	if change.Status != nil {
 		next.Status = *change.Status
 	}
-	f.root = &next
-	return f.root, nil
-}
-func (f *formSaveFixture) ChangeDependencyObserved(_ context.Context, r *ghstore.Record, id string, add bool, actor string) (*ghstore.Record, error) {
-	if r != f.root || actor != "actual-monitor" {
-		return nil, errors.New("wrong revision or actor")
-	}
-	action := "remove:" + id
-	if add {
-		action = "add:" + id
-	}
-	f.calls = append(f.calls, action)
-	if f.failAt == action {
-		return nil, &ghstore.ConflictError{ID: r.ID}
-	}
-	next := *r
 	f.root = &next
 	return f.root, nil
 }
@@ -81,35 +64,40 @@ func TestGitHubFormSaveCarriesRevisionAcrossFieldsDependenciesAndStatus(t *testi
 	if err := store.SaveEdit(issue, []string{"3"}); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(f.calls, ",") != "read,fields,remove:gh-2,add:gh-3,status" || f.options.SessionID != "actual-monitor" || f.options.AgentType != "monitor" || f.options.SelfReview || f.options.ReviewedBy != "" {
+	if strings.Join(f.calls, ",") != "read,command" || f.options.SessionID != "actual-monitor" || f.options.AgentType != "monitor" || f.options.SelfReview || f.options.ReviewedBy != "" {
 		t.Fatalf("%v %+v", f.calls, f.options)
 	}
-	if f.changes[0].Title == nil || f.changes[0].Description != nil || f.changes[0].Details != nil || f.changes[1].Status == nil {
+	if f.changes[0].Title == nil || f.changes[0].Description != nil || f.changes[0].Details != nil || f.changes[0].Status == nil || f.relations.DependsOn == nil || !slices.Equal(*f.relations.DependsOn, []string{"gh-3"}) {
 		t.Fatal("changed untouched fields or workflow details")
 	}
 }
 func TestGitHubFormSavePartialFailureIsExplicitAndStops(t *testing.T) {
-	for _, step := range []string{"add:gh-3", "status"} {
-		t.Run(step, func(t *testing.T) {
-			f, store := newFormSaveFixture(t)
-			f.failAt = step
-			issue := store.ObservedIssue()
-			issue.Title = "saved fields"
-			issue.Status = models.StatusInProgress
-			err := store.SaveEdit(issue, []string{"gh-3"})
-			var conflict *ghstore.ConflictError
-			if !errors.As(err, &conflict) || !strings.Contains(err.Error(), "some form changes were saved") || f.root.Title != issue.Title || f.root.Status != models.StatusOpen {
-				t.Fatalf("%v %v", f.calls, err)
-			}
-			if f.calls[len(f.calls)-1] != step {
-				t.Fatal("continued after failure")
-			}
-		})
-	}
 	f, store := newFormSaveFixture(t)
+	f.failAt = "command"
+	issue := store.ObservedIssue()
+	issue.Title = "requested fields"
+	issue.Status = models.StatusInProgress
+	err := store.SaveEdit(issue, []string{"gh-3"})
+	var conflict *ghstore.ConflictError
+	if !errors.As(err, &conflict) || !strings.Contains(err.Error(), "ghc-100") || !strings.Contains(err.Error(), "without replay") || strings.Join(f.calls, ",") != "read,command" {
+		t.Fatalf("%v %v", f.calls, err)
+	}
+	f, store = newFormSaveFixture(t)
 	f.readErr = &ghstore.ConflictError{ID: "gh-1"}
 	if err := store.SaveEdit(store.ObservedIssue(), []string{"gh-2"}); err == nil || len(f.changes) != 0 || len(f.calls) != 1 {
 		t.Fatal("no-op form bypassed conflict check")
+	}
+}
+func TestGitHubFormSaveUnchangedReviewStatusAndNoop(t *testing.T) {
+	f, store := newFormSaveFixture(t)
+	f.root.Status, store.observed.Status = models.StatusInReview, models.StatusInReview
+	issue := store.ObservedIssue()
+	if err := store.SaveEdit(issue, []string{"gh-2"}); err != nil || strings.Join(f.calls, ",") != "read" {
+		t.Fatal("no-op form wrote", err, f.calls)
+	}
+	issue.Title = "field-only change"
+	if err := store.SaveEdit(issue, []string{"gh-2"}); err != nil || len(f.changes) != 1 || f.changes[0].Status != nil {
+		t.Fatal("field edit resubmitted review", err, f.changes)
 	}
 }
 func TestGitHubFormSaveRejectsInvalidInputBeforeOpening(t *testing.T) {
@@ -127,7 +115,7 @@ func TestGitHubFormSaveUIKeepsDraftOnErrorAndClosesOnlyAfterSuccess(t *testing.T
 		m.FormState.Title = "draft"
 		m.FormState.Dependencies = "gh-3"
 		if failed {
-			f.failAt = "add:gh-3"
+			f.failAt = "command"
 		}
 		pending, cmd := m.submitForm()
 		m = pending.(Model)
@@ -149,7 +137,7 @@ func TestGitHubFormSaveUIKeepsDraftOnErrorAndClosesOnlyAfterSuccess(t *testing.T
 			}
 			late, _ := m.handleFormUpdate(AutofillResultMsg{Request: m.FormAutofillRequest})
 			m = late.(Model)
-			if m.FormSaveError == nil || !strings.Contains(m.renderFormModal(), "some form changes were saved") {
+			if m.FormSaveError == nil || !strings.Contains(m.FormSaveError.Error(), "some form changes were saved") || !strings.Contains(m.renderFormModal(), "ghc-100") {
 				t.Fatal("late autocomplete erased save error")
 			}
 			if _, retry := m.submitForm(); retry != nil {

@@ -150,3 +150,42 @@ func TestWorkflowUpdateObservedSuccessfulEditAndUntrustedObservation(t *testing.
 		}
 	}
 }
+
+func TestCommandUpdateObservedRejectsStaleOrInvalidInputBeforeAnyWrite(t *testing.T) {
+	for _, mode := range []string{"stale-fields", "stale-workflow", "invalid-dependency", "wrong-number", "foreign-session"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newJournalWriteFixture(t, "")
+			ctx := context.Background()
+			if err := f.client.TrackActions("ses_actor"); err != nil {
+				t.Fatal(err)
+			}
+			original, err := f.client.Get(ctx, "gh-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			title, status := "Form edit", models.StatusInProgress
+			change := Changes{Title: &title}
+			relations := RelationChanges{}
+			options := TransitionOptions{SessionID: "ses_actor", Mode: reviewpolicy.ModeTrusted}
+			switch mode {
+			case "stale-fields", "stale-workflow":
+				r := f.issues[1]
+				r.Title = "Peer edit"
+				f.issues[1] = r
+				if mode == "stale-workflow" {
+					change.Status = &status
+				}
+			case "invalid-dependency":
+				deps := []string{"gh-999"}
+				relations.DependsOn = &deps
+			case "wrong-number":
+				original.Number = 2
+			case "foreign-session":
+				options.SessionID = "ses_peer"
+			}
+			if _, err := f.client.UpdateCommandObserved(ctx, original, change, relations, options); err == nil || f.targetWrites != 0 || f.intentWrites != 0 || f.carrierWrites != 0 || f.receiptWrites != 0 {
+				t.Fatal("invalid observed command wrote", err, f)
+			}
+		})
+	}
+}

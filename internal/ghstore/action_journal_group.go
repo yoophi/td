@@ -45,6 +45,7 @@ type ActionGroupObservation struct {
 // any target write. Every attempted member independently records its complete
 // update input before its write; future unattempted inputs are never invented.
 type ActionGroup struct {
+	WorkflowUpdates *ActionWorkflowUpdates  `json:"workflow_updates,omitempty"`
 	RelationUpdates *ActionRelationUpdates  `json:"relation_updates,omitempty"`
 	UpdateComments  *ActionUpdateComments   `json:"update_comments,omitempty"`
 	HandoffReview   *ActionHandoffReview    `json:"handoff_review,omitempty"`
@@ -69,7 +70,7 @@ func canonicalGroupID(id string) bool {
 }
 
 func groupCommandSupported(g *ActionGroup) bool {
-	return groupBasicCommand(g.Command) || g.Command == "review" || g.Command == "update" || nativeGroupCommand(g.Command) || g.Planned && plannedTaskCommand(g.Command) || g.activityGroup() || g.updateActivityGroup() || g.pairedGroup()
+	return groupBasicCommand(g.Command) || g.Command == "review" || g.Command == "update" || nativeGroupCommand(g.Command) || g.Planned && plannedTaskCommand(g.Command) || g.activityGroup() || g.updateActivityGroup() || g.pairedGroup() || g.workflowUpdateGroup()
 }
 
 func (a ActionJournal) validateGroupAction() error {
@@ -77,7 +78,7 @@ func (a ActionJournal) validateGroupAction() error {
 	if a.CommentObservation != nil {
 		return fmt.Errorf("task group cannot carry a comment observation")
 	}
-	if g == nil || a.Action != "group" || a.GroupOperationID != "" || a.GroupMixed || a.GroupContract != "" || a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" || !groupCommandSupported(g) || len(g.Members) < 1 || len(g.Members) < 2 && !g.updateActivityGroup() && !g.pairedGroup() || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
+	if g == nil || a.Action != "group" || a.GroupOperationID != "" || a.GroupMixed || a.GroupContract != "" || a.GroupSequence != 0 || a.GroupPreviousReceiptID != "" || a.WorkflowStep != 0 || a.WorkflowEvents != nil || !groupCommandSupported(g) || len(g.Members) < 1 || len(g.Members) < 2 && !g.updateActivityGroup() && !g.pairedGroup() && !g.workflowUpdateGroup() || !canonicalGroupID(a.IssueID) || !canonicalGroupID(a.CarrierID) || a.CarrierID == a.IssueID {
 		return fmt.Errorf("group requires its immutable explicit command membership and separate carrier")
 	}
 	if a.Before != nil || a.After != nil || a.Restored != nil || a.CreateInput != nil || a.UpdateIntent != nil || a.UpdateObservation != nil || a.NativeUndo != nil || a.CommentInput != nil || a.CommentAfter != nil || a.CommentBefore != nil || a.UndoObservation != nil || a.Reconciliation != nil {
@@ -224,6 +225,9 @@ func (a ActionJournal) validateGroupAction() error {
 	if err := a.validateUpdateRelationsGroup(); err != nil {
 		return err
 	}
+	if err := a.validateWorkflowUpdateGroup(); err != nil {
+		return err
+	}
 	return a.validateOrderedGroup()
 }
 
@@ -248,6 +252,9 @@ func validateGroupRewrite(old, next ActionJournal) error {
 	}
 	if err := validateUpdateRelationsRewrite(old.Group.RelationUpdates, next.Group.RelationUpdates, old.Group.Forward != nil); err != nil {
 		return err
+	}
+	if !reflect.DeepEqual(old.Group.WorkflowUpdates, next.Group.WorkflowUpdates) {
+		return fmt.Errorf("workflow command original inputs are immutable")
 	}
 	if err := validateOrderedGroupRewrite(old.Group.Ordered, next.Group.Ordered); err != nil {
 		return err

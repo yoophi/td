@@ -26,8 +26,10 @@ journal_file=pathlib.Path(` + string(file) + `)
 journal=json.loads(journal_file.read_text()) if journal_file.exists() else {'comments':[]}
 def fixture_tick(value):return (datetime.datetime.fromisoformat(value.replace('Z','+00:00'))+datetime.timedelta(seconds=1)).isoformat().replace('+00:00','Z')
 def fixture_ordered_record(body):
- marker='<!-- td:action:v14\n';start=body.find(marker)
- return json.loads(body[start+len(marker):body.rindex('\n-->')]) if start>=0 else None
+ for version in ('v14','v29'):
+  marker='<!-- td:action:'+version+'\n';start=body.find(marker)
+  if start>=0:return json.loads(body[start+len(marker):body.rindex('\n-->')])
+ return None
 journal_carrier={'number':999,'title':'td action journal','state':'open','labels':[],'updated_at':'2026-10-09T00:00:00Z','body':'<!-- td:issue:v1\n'+json.dumps({'entity_kind':'journal','type':'task','priority':'P2','points':0})+'\n-->'}
 journal_carrier=journal.get('carrier',None if os.environ.get('TD_GH_FIXTURE_NO_CARRIER') else journal_carrier)
 def journal_result(data):

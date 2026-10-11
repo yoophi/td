@@ -188,6 +188,14 @@ func (c *Client) verifyPlannedUpdateEvents(ctx context.Context, g *ActionGroup) 
 // Recheck the immutable plan and every watched task after writing a member
 // intent and before PATCH, and again against the actual result before receipt.
 func (c *Client) verifyPlannedUpdateGroup(ctx context.Context, after *Record) error {
+	if c.journal != nil && c.journal.Group != nil && c.journal.Group.Journal.Group.workflowUpdateGroup() {
+		active := c.journal.Group
+		if len(active.Receipts) == 0 {
+			return c.verifyGraphGroupExpected(ctx, active.Journal.Group, active.Expected)
+		}
+		_, err := c.verifyOrderedForwardProgress(ctx, active.Receipts[len(active.Receipts)-1], after)
+		return err
+	}
 	if c.journal != nil && c.journal.Group != nil && c.journal.Group.Journal.Group.pairedGroup() {
 		return c.verifyPairedGroupForward(ctx, after)
 	}

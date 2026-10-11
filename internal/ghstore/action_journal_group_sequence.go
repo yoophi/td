@@ -2,6 +2,7 @@ package ghstore
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 )
 
@@ -41,6 +42,11 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 		return 0
 	})
 	chains := map[string][]*ActionJournalRecord{}
+	if group.Group.workflowUpdateGroup() {
+		if err := validateWorkflowStepOrder(group, ordered); err != nil {
+			return nil, err
+		}
+	}
 	operations := map[string]bool{}
 	for i, a := range ordered {
 		if operations[a.OperationID] || i > 0 && ordered[i-1].ID == a.ID {
@@ -73,6 +79,12 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 			return nil, err
 		}
 		chain := chains[a.IssueID]
+		if group.Group.workflowUpdateGroup() && len(chain) == 0 {
+			baseline := workflowEffectEvents(&a.ActionJournal)
+			if baseline == nil || !reflect.DeepEqual(*baseline, group.Group.WorkflowUpdates.Baselines[a.IssueID]) {
+				return nil, fmt.Errorf("workflow first effect replaced its original native event observation")
+			}
+		}
 		if group.Group.activityGroup() && len(chain) > 0 {
 			return nil, fmt.Errorf("activity group member has repeated attempts")
 		}
@@ -86,13 +98,21 @@ func orderedGroupEffects(group *ActionJournalRecord, attempts []*ActionJournalRe
 				return nil, err
 			}
 		}
+		if group.Group.workflowUpdateGroup() {
+			if err := validateWorkflowUpdateBindings(group, a, expected); err != nil {
+				return nil, err
+			}
+			if err := validateWorkflowReviewHandoffBinding(group, a, chains[a.IssueID]); err != nil {
+				return nil, err
+			}
+		}
 		if len(chain) > 0 {
 			previous := chain[len(chain)-1]
-			if previous.UpdateIntent != nil && previous.UpdateIntent.NativeEvents != nil && !group.Group.updateActivityGroup() && !group.Group.fieldCommentGroup() {
-				if a.UpdateIntent == nil || a.UpdateIntent.NativeEvents == nil {
+			if workflowEffectEvents(&previous.ActionJournal) != nil && !group.Group.updateActivityGroup() && !group.Group.fieldCommentGroup() {
+				if workflowEffectEvents(&a.ActionJournal) == nil {
 					return nil, fmt.Errorf("ordered effect omitted its predecessor's native event continuation")
 				}
-				if err := updateEventProof(previous.ActionJournal, *a.UpdateIntent.NativeEvents); err != nil {
+				if err := workflowEffectEventProof(previous.ActionJournal, *workflowEffectEvents(&a.ActionJournal)); err != nil {
 					return nil, err
 				}
 			}

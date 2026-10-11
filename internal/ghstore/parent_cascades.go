@@ -140,7 +140,7 @@ func (c *Client) transitionWithParents(ctx context.Context, id, action string, o
 		return result, noop, nil
 	}
 	for _, id := range parents {
-		if action == "review" && c.deferredReviewGroupRoot(id, rootID) {
+		if (action == "review" || c.journal != nil && c.journal.Group != nil && c.journal.Group.Journal.Group.workflowUpdateGroup()) && c.deferredReviewGroupRoot(id, rootID) {
 			break
 		}
 		parent := graph[id]

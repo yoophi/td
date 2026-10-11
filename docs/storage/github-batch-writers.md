@@ -11,7 +11,7 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | Writer | Group behavior | Local state |
 |---|---|---|
 | Multi-ID start/unstart/block/unblock | Basic transition group | Existing focus rules |
-| Multi-ID review and review hierarchy | Review group | Existing focus rules |
+| Single/multi-ID review and review hierarchy | v29/v30 workflow group includes automatic handoffs and actual hierarchy effects | Existing focus rules |
 | Close/approve/reopen and closure cascades | Ordered v14/v15 effects (#64) | Existing focus rules |
 | Forced `unstart --session` / `--stale` with multiple selected claims | Basic unstart group, bound to original selected revisions | Local liveness rechecked; focus cleared on actual release |
 | `ws tag` auto-starting multiple open tasks | Basic start group, bound to original selected revisions; one captured Git snapshot | Tags remain device-local, including after remote undo |
@@ -25,6 +25,8 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | `ws handoff --review` | v23 command fixes all handoffs and review templates; v24 ordered effects bind each review to its actual preceding handoff | Tags, history membership and work-session end state remain device-local |
 | `update` with scalar fields and `--comment` / `--note`; multi-ID comment-only update | v25 command fixes every selected task's optional field input and complete comment; v26 effects bind comments to actual preceding field results | No local context change |
 | `update` with parent/dependency changes, optional scalar fields and inline comments, without `--status` | v27 command includes selected tasks and shared reverse-edge targets; v28 effects bind graph observations to actual earlier results | No local context change |
+| `update` with `--status`, optional fields/relationships/inline comments | v29 freezes complete requested inputs and original graph membership; v30 receipts bind actual field, workflow/cascade and comment results | Focus changes only for completed selected roots |
+| Monitor edit form | One observed command for all fields, dependencies and an actually changed status; stale forms fail before writes | Draft and error handling remain local |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -193,7 +195,7 @@ does not create a journal or synthetic task write. The v27/v28 semantics retain
 bounded v9 compression and v20 multipart transport; upgrade and restart running
 readers before publishing them.
 
-## Remaining writer integration
+## Mixed workflow updates
 
 Mixed `update` commands preflight all distinct live selected tasks, field payloads,
 status requests (including blocked/foreign claim restrictions), individual
@@ -203,19 +205,47 @@ selected task; relationship validation may require additional graph reads.
 Parent-only batches use the relationship group above. Single-task inline
 comments also receive the size preflight.
 
-For updates involving status, this preparation does not persist a mixed command plan or predict cascade,
-review-policy or native-write results. Execution still reads and fences actual
-states, applies relationship changes before evaluating review policy, and
-reports partial results on later operational/policy failures. Shared reverse
-dependency targets retain actual earlier effects. Complete command recovery and
-undo for these paths remain unfinished, as listed below.
+The v29/v30 workflow command persists complete fields, relationships, requested
+status, transition options and inline comments before the first task write.
+Its membership includes both original and requested hierarchies, shared reverse
+dependency targets, potential cascade targets and their graph observations.
+Requested graph projections never become observed revisions or future results.
+Each effect binds to an actual earlier result of this command.
+
+Fields and relationships are saved before workflow policy is evaluated. An
+approval of older contents cannot close newly edited contents. A later policy
+failure leaves a prepared command and any already-saved effects; the error names
+the command receipt and partial result. Recovery records actual outcomes without
+repeating writes. It does not finish the requested transition on the user's behalf.
+
+Review commands include their exact existing handoff or a frozen automatic
+handoff input. Undo may delete only an automatic handoff actually created by this
+command, with its original native identity, contents and clock. Existing
+handoffs survive. Ordered compensation restores task fields and workflow state,
+preserves audit history and invalidates old approval/review authority. It checks
+the complete inverse before the first write and rechecks each actual effect.
+Foreign watched tasks, native comments, original receipts and close/reopen
+events stop the inverse. Completed confirmation is read-only; observed recovery
+never becomes proof of a verified write.
+
+Tracked standalone review, HTTP review and monitor review use this same command
+boundary. Monitor edits pin the form's original observation and omit an unchanged
+status, so editing an in-review task does not silently resubmit it. Unchanged
+basic status requests without field/activity effects do not create journals.
+
+The v29/v30 semantics use bounded v9 compression and v20 multipart transport.
+Upgrade and restart readers before publishing these records. Focused CLI tests
+cover compound transitions, automatic/existing handoffs, parent/dependent
+cascades, policy failures, uncertain writes and external conflicts; full release
+checks and native acceptance are separate gates, not implied by this document.
+
+## Remaining writer integration
 
 | Writer | Current effects requiring an aggregate |
 |---|---|
-| Update involving status, with or without relationships/comments | Mixed task, relationship, workflow and optional activity effects; field/comment and relationship groups are connected above |
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 
-These remaining paths need a shared mixed-effect contract, including complete
+The remaining CLI and monitor creation paths need a shared contract, including complete
 command inputs fixed before the first write, original target identity, partial
 completion, inverse conflict checks and no replay of completed effects. Their
 individual receipts are not evidence of command-wide undo support. HTTP/monitor

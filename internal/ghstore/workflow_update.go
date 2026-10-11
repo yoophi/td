@@ -14,8 +14,9 @@ func (c Changes) HasFields() bool {
 }
 
 // UpdateWorkflow applies edits before evaluating the requested transition, so
-// edits cannot ride on an approval of older content. These are separate writes;
-// errors identify already-saved edits and never retry an uncertain operation.
+// edits cannot ride on an approval of older content. Tracked calls keep these
+// separate writes in one command journal; errors identify already-saved edits
+// and never retry an uncertain operation.
 func (c *Client) UpdateWorkflow(ctx context.Context, id string, change Changes, options TransitionOptions) (*Record, error) {
 	if change.Status != nil && strings.TrimSpace(options.SessionID) == "" {
 		return nil, fmt.Errorf("status update requires a session")
@@ -52,6 +53,9 @@ func (c *Client) UpdateWorkflowObserved(ctx context.Context, observed *Record, c
 }
 
 func (c *Client) updateWorkflowObserved(ctx context.Context, observed *Record, change Changes, options TransitionOptions) (*Record, error) {
+	if change.Status != nil && c.journal != nil && c.journal.Group == nil {
+		return c.UpdateCommandObserved(ctx, observed, change, RelationChanges{}, options)
+	}
 	if change.Status == nil {
 		return c.UpdateObserved(ctx, observed, change)
 	}
@@ -73,6 +77,43 @@ func (c *Client) updateWorkflowObserved(ctx context.Context, observed *Record, c
 		return nil, fmt.Errorf("%s field changes were saved, but requested %s transition failed; inspect current status and do not repeat the entire update: %w", observed.ID, action, err)
 	}
 	return record, err
+}
+
+// UpdateCommandObserved is the single save boundary for observed edit forms.
+// An omitted status preserves the existing workflow, including review requests.
+// Every requested dependency and field is validated before the first task write.
+func (c *Client) UpdateCommandObserved(ctx context.Context, observed *Record, change Changes, relations RelationChanges, options TransitionOptions) (*Record, error) {
+	if observed == nil || observed.repository != c.repo || observed.revision == ([32]byte{}) {
+		return nil, fmt.Errorf("command update requires an observation from this repository")
+	}
+	if n, err := Number(observed.ID); err != nil || n != observed.Number {
+		return nil, fmt.Errorf("observed issue identity is inconsistent")
+	}
+	if c.journal == nil || c.journal.SessionID != options.SessionID {
+		return nil, fmt.Errorf("command update requires its tracked actor; no write attempted")
+	}
+	var records []Record
+	var err error
+	if change.Status != nil {
+		records, err = c.updateWorkflowCommand(ctx, []string{observed.ID}, change, relations, options, nil, observed)
+	} else {
+		records, err = c.updateWithRelations(ctx, []string{observed.ID}, change, relations, nil, observed)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(records) != 1 || records[0].ID != observed.ID {
+		return nil, fmt.Errorf("command result is unverified; inspect GitHub before retrying")
+	}
+	return &records[0], nil
+}
+
+func (c *Client) checkCommandObservation(records map[string]Record, observed *Record) error {
+	current, found := records[observed.ID]
+	if !found || observed.repository != c.repo || observed.Number != current.Number || observed.revision == ([32]byte{}) || current.revision != observed.revision {
+		return &ConflictError{ID: observed.ID}
+	}
+	return nil
 }
 
 func workflowUpdateRequest(from, to models.Status, options TransitionOptions) (string, error) {
