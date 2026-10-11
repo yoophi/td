@@ -104,8 +104,8 @@ func init() {
 	restoreCmd.Flags().String("reason", "", "Reason for restoring a deleted issue")
 
 	// Accept --force and --yes as no-ops for LLM compatibility
-	deleteCmd.Flags().BoolP("force", "f", false, "No-op (delete always succeeds)")
-	deleteCmd.Flags().BoolP("yes", "y", false, "No-op (delete always succeeds, alias for --force)")
+	deleteCmd.Flags().BoolP("force", "f", false, "Compatibility no-op; does not bypass validation or conflicts")
+	deleteCmd.Flags().BoolP("yes", "y", false, "Compatibility no-op (alias for --force)")
 }
 
 // Explicit empty acknowledgements should not silently become absent reasons.

@@ -837,31 +837,54 @@
       "command": "td delete",
       "owner": "#18",
       "state": "partial",
-      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "reason": "Deletion/restore/visibility, native-state preservation, reasons, no-op clocks, planned failure and inverse evidence recorded in github-deletion.md; aggregate global flags/combinations remain #31.",
       "evidence": [
-        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+        "TestGitHubDeleteRestoreCLIWithoutSQLite",
+        "TestGitHubJournalCLIPlannedRejectDeleteRestore",
+        "TestGitHubJournalCLIUndoesDeleteAndRestore"
       ],
       "flags": {
-        "force": "pending",
+        "force": "partial",
         "help": "pending",
-        "json": "pending",
-        "reason": "pending",
+        "json": "partial",
+        "reason": "partial",
         "refresh": "pending",
         "work-dir": "pending",
-        "yes": "pending"
+        "yes": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubDeleteRestoreCLIWithoutSQLite"
+        ],
+        "reason": [
+          "TestGitHubDeleteRestoreCLIWithoutSQLite"
+        ],
+        "force": [
+          "TestGitHubDeleteRestoreCLIWithoutSQLite"
+        ],
+        "yes": [
+          "TestGitHubDeleteRestoreCLIWithoutSQLite"
+        ]
       }
     },
     {
       "command": "td deleted",
       "owner": "#18",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Deletion/restore/visibility, native-state preservation, reasons, no-op clocks, planned failure and inverse evidence recorded in github-deletion.md; aggregate global flags/combinations remain #31.",
+      "evidence": [
+        "TestGitHubDeleteRestoreCLIWithoutSQLite"
+      ],
       "flags": {
         "help": "pending",
-        "json": "pending",
+        "json": "partial",
         "refresh": "pending",
         "work-dir": "pending"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubDeleteRestoreCLIWithoutSQLite"
+        ]
       }
     },
     {
@@ -1719,16 +1742,26 @@
       "command": "td restore",
       "owner": "#18",
       "state": "partial",
-      "reason": "Actual CLI fixtures verify selected issue mutation journals and real session attribution; full flag coverage, coordinated inverse operations and native acceptance remain pending.",
+      "reason": "Deletion/restore/visibility, native-state preservation, reasons, no-op clocks, planned failure and inverse evidence recorded in github-deletion.md; aggregate global flags/combinations remain #31.",
       "evidence": [
-        "TestGitHubJournalCLITracksWorkflowDeletionRelationsScheduleFilesAndWorkSessions"
+        "TestGitHubDeleteRestoreCLIWithoutSQLite",
+        "TestGitHubJournalCLIPlannedRejectDeleteRestore",
+        "TestGitHubJournalCLIUndoesDeleteAndRestore"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "reason": "pending",
+        "json": "partial",
+        "reason": "partial",
         "refresh": "pending",
         "work-dir": "pending"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubDeleteRestoreCLIWithoutSQLite"
+        ],
+        "reason": [
+          "TestGitHubDeleteRestoreCLIWithoutSQLite"
+        ]
       }
     },
     {
