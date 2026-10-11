@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/marcus/td/internal/models"
+	"github.com/marcus/td/internal/transferlimit"
 )
 
 func TestWorkspaceExportUsesOneObservationAndRetainsDeletedEntitiesAndNativeHistory(t *testing.T) {
@@ -86,6 +88,21 @@ func TestWorkspaceExportUsesOneObservationAndRetainsDeletedEntitiesAndNativeHist
 	var decoded WorkspaceExport
 	if err := json.Unmarshal(encoded, &decoded); err != nil || !reflect.DeepEqual(decoded.Native, workspace.Native) || decoded.Notes[0].ID != note.ID || decoded.Boards[0].Details.Positions[0].IssueID != "gh-1" {
 		t.Fatal("transport round-trip lost source data", err)
+	}
+}
+
+func TestWorkspaceExportCapacityStopsProjectionWithoutMoreRemoteReads(t *testing.T) {
+	body, err := encodeBody(strings.Repeat("native source", 2000), metadata{Type: models.TypeTask, Priority: models.PriorityP2, EntityKind: "note", Note: &NoteDetails{Version: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, calls := snapshotFixture([][]apiIssue{{{Number: 1, Title: "task", State: "open"}, {Number: 2, Title: "note", State: "open", Body: body}}}, [][]apiComment{{}}, nil)
+	if result, err := client.ExportWorkspaceLimited(context.Background(), 2000); !errors.Is(err, transferlimit.ErrCapacity) || result != nil || len(*calls) != 2 {
+		t.Fatalf("capacity returned partial data or added reads: result=%v calls=%v err=%v", result, *calls, err)
+	}
+	*calls = nil
+	if result, err := client.ExportWorkspaceLimited(context.Background(), -1); err == nil || result != nil || len(*calls) != 0 {
+		t.Fatal("invalid limit accessed source")
 	}
 }
 

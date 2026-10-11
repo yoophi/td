@@ -11,6 +11,7 @@ import (
 
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/models"
+	"github.com/marcus/td/internal/transferlimit"
 )
 
 // SQLiteWorkspaceExport is shared source data, not active destination history.
@@ -53,7 +54,18 @@ type SQLiteExportPosition struct {
 // or concurrent goroutines. Repository-wide GitHub observations have a separate
 // best-effort boundary; this transaction only covers one SQLite database.
 func ReadSQLiteWorkspace(ctx context.Context, baseDir string) (*SQLiteWorkspaceExport, error) {
+	return ReadSQLiteWorkspaceLimited(ctx, baseDir, 0)
+}
+
+// ReadSQLiteWorkspaceLimited checks serialized fragments during collection.
+// Existing table readers still materialize one table/entity at a time; this
+// is an input-capacity guard, not a bound on SQLite driver's peak memory.
+func ReadSQLiteWorkspaceLimited(ctx context.Context, baseDir string, maxBytes int64) (*SQLiteWorkspaceExport, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	budget, err := transferlimit.New(maxBytes)
+	if err != nil {
 		return nil, err
 	}
 	baseDir = ResolveBaseDir(baseDir)
@@ -92,16 +104,24 @@ func ReadSQLiteWorkspace(ctx context.Context, baseDir string) (*SQLiteWorkspaceE
 		return nil, fmt.Errorf("SQLite source schema %q differs from required %d; use a compatible td version or explicitly upgrade an older source before transfer; no migration attempted", rawVersion, SchemaVersion)
 	}
 	database := &DB{conn: conn, baseDir: baseDir}
-	return database.readWorkspace(ctx, version)
+	return database.readWorkspaceLimited(ctx, version, budget)
 }
 
 func (db *DB) readWorkspace(ctx context.Context, version int) (*SQLiteWorkspaceExport, error) {
+	budget, _ := transferlimit.New(0)
+	return db.readWorkspaceLimited(ctx, version, budget)
+}
+
+func (db *DB) readWorkspaceLimited(ctx context.Context, version int, budget *transferlimit.Budget) (*SQLiteWorkspaceExport, error) {
 	issues, err := db.ListIssues(ListIssuesOptions{IncludeDeleted: true})
 	if err != nil {
 		return nil, fmt.Errorf("read SQLite source tasks: %w", err)
 	}
 	result := &SQLiteWorkspaceExport{SchemaVersion: version, Tasks: []SQLiteExportTask{},
 		Notes: []models.Note{}, Boards: []SQLiteExportBoard{}, Actions: []models.ActionLog{}, ExcludedActions: map[string]int{}}
+	if err := budget.Add(result); err != nil {
+		return nil, err
+	}
 	for _, issue := range issues {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -131,6 +151,9 @@ func (db *DB) readWorkspace(ctx context.Context, version int) (*SQLiteWorkspaceE
 		if row.GitSnapshots, err = db.readWorkspaceSnapshots(ctx, issue.ID); err != nil {
 			return nil, fmt.Errorf("source %s git snapshots: %w", issue.ID, err)
 		}
+		if err := budget.Add(row); err != nil {
+			return nil, err
+		}
 		result.Tasks = append(result.Tasks, row)
 	}
 	if err := ctx.Err(); err != nil {
@@ -138,6 +161,11 @@ func (db *DB) readWorkspace(ctx context.Context, version int) (*SQLiteWorkspaceE
 	}
 	if result.Notes, err = db.readWorkspaceNotes(ctx); err != nil {
 		return nil, fmt.Errorf("read SQLite source notes: %w", err)
+	}
+	for _, note := range result.Notes {
+		if err := budget.Add(note); err != nil {
+			return nil, err
+		}
 	}
 	boards, err := db.ListBoards()
 	if err != nil {
@@ -149,7 +177,11 @@ func (db *DB) readWorkspace(ctx context.Context, version int) (*SQLiteWorkspaceE
 			return nil, fmt.Errorf("source board %s positions: %w", board.ID, err)
 		}
 		board.LastViewedAt = nil
-		result.Boards = append(result.Boards, SQLiteExportBoard{Board: board, Positions: positions})
+		row := SQLiteExportBoard{Board: board, Positions: positions}
+		if err := budget.Add(row); err != nil {
+			return nil, err
+		}
+		result.Boards = append(result.Boards, row)
 	}
 	actions, err := db.GetRecentActionsAll(0)
 	if err != nil {
@@ -159,10 +191,16 @@ func (db *DB) readWorkspace(ctx context.Context, version int) (*SQLiteWorkspaceE
 		switch action.EntityType {
 		case "issue", "dependency", "file_link", "note", "board", "board_issue_positions",
 			"logs", "comments", "handoffs", "issue_review", "issue_reviews", "git_snapshots", "issue_session_history":
+			if err := budget.Add(action); err != nil {
+				return nil, err
+			}
 			result.Actions = append(result.Actions, action)
 		default:
 			result.ExcludedActions[action.EntityType]++
 		}
+	}
+	if err := budget.Add(result.ExcludedActions); err != nil {
+		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

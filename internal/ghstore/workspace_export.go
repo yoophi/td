@@ -2,6 +2,7 @@ package ghstore
 
 import (
 	"context"
+	"github.com/marcus/td/internal/transferlimit"
 	"time"
 )
 
@@ -49,7 +50,18 @@ type WorkspaceExport struct {
 }
 
 func (c *Client) ExportWorkspace(ctx context.Context) (*WorkspaceExport, error) {
+	return c.ExportWorkspaceLimited(ctx, 0)
+}
+
+// ExportWorkspaceLimited checks serialized projections during collection. The
+// existing bulk snapshot precedes projection; its peak memory is not bounded
+// by this input-size limit. No extra GitHub calls or per-entity queries occur.
+func (c *Client) ExportWorkspaceLimited(ctx context.Context, maxBytes int64) (*WorkspaceExport, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	budget, err := transferlimit.New(maxBytes)
+	if err != nil {
 		return nil, err
 	}
 	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
@@ -66,6 +78,9 @@ func (c *Client) ExportWorkspace(ctx context.Context) (*WorkspaceExport, error) 
 	}
 	result := &WorkspaceExport{Repository: c.repo, ObservedAt: snapshot.ObservedAt(), Tasks: tasks,
 		Notes: []NoteRecord{}, Boards: []BoardRecord{}, Native: []NativeExport{}, Journal: journal}
+	if err := budget.Add(result); err != nil {
+		return nil, err
+	}
 	records := make(map[int]Record, len(snapshot.records))
 	for _, record := range snapshot.records {
 		records[record.Number] = record
@@ -91,11 +106,17 @@ func (c *Client) ExportWorkspace(ctx context.Context) (*WorkspaceExport, error) 
 				URL: comment.URL, IssueURL: comment.IssueURL, Author: comment.User.Login,
 				CreatedAt: comment.CreatedAt, UpdatedAt: comment.UpdatedAt})
 		}
+		if err := budget.Add(native); err != nil {
+			return nil, err
+		}
 		result.Native = append(result.Native, native)
 		switch kind {
 		case "note":
 			note, err := noteRecord(&record)
 			if err != nil {
+				return nil, err
+			}
+			if err := budget.Add(note); err != nil {
 				return nil, err
 			}
 			result.Notes = append(result.Notes, *note)
@@ -107,8 +128,14 @@ func (c *Client) ExportWorkspace(ctx context.Context) (*WorkspaceExport, error) 
 			// This is a device-local preference, not migrated board content.
 			// The original public native body remains source evidence unchanged.
 			board.LastViewedAt, board.Details.LastViewedAt = nil, nil
+			if err := budget.Add(board); err != nil {
+				return nil, err
+			}
 			result.Boards = append(result.Boards, *board)
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

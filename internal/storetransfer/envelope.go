@@ -14,12 +14,13 @@ import (
 
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/ghstore"
+	"github.com/marcus/td/internal/transferlimit"
 )
 
 const FormatVersion = 1
-const DefaultMaxBytes int64 = 64 << 20
+const DefaultMaxBytes int64 = transferlimit.DefaultBytes
 
-var ErrCapacity = errors.New("store-transfer input exceeds byte limit")
+var ErrCapacity = transferlimit.ErrCapacity
 
 // Envelope binds the source namespace to the immutable serialized source data.
 // SQLite namespaces must be explicitly chosen and retained across retries;
@@ -185,13 +186,7 @@ func strictJSON(data []byte, target any) error {
 }
 
 func byteLimit(value int64) (int64, error) {
-	if value == 0 {
-		return DefaultMaxBytes, nil
-	}
-	if value < 0 || value > 1<<30 {
-		return 0, errors.New("transfer byte limit must be between 1 and 1073741824")
-	}
-	return value, nil
+	return transferlimit.Bytes(value)
 }
 
 type boundedWriter struct {

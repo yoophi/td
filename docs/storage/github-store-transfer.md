@@ -87,9 +87,23 @@ GitHub task/note/board identities, with six exact query references. Constructors
 also apply the byte limit to the full envelope, including header/checksum
 overhead, before returning input.
 
-#90 still needs collection-time capacity enforcement and integration of source
-collection with the validated preview. The envelope is not yet a
-destination-ready plan. The source
+`storetransfer.Collect` now connects the project's selected source to collection,
+the capacity-checked envelope and the validated passive preview. It requires an
+explicit stable SQLite namespace and never falls back from GitHub to SQLite.
+Collectors charge serialized fragments during projection, conservatively
+including fragment separators. The full envelope limit is checked before
+returning input. This bounds transferable serialized data, not peak memory of
+the existing bulk GitHub snapshot, SQLite table readers, or one JSON fragment.
+Invalid limits fail before source access. Capacity failures return no partial
+input and perform no destination writes.
+
+The integrated GET-only native run retained 196 tasks in each store. GitHub
+made one bulk issue collection and one bulk comment collection, no remote
+writes and no SQLite access. SQLite source SHA256 was unchanged; a 1,000-byte
+limit returned the explicit capacity error and zero output bytes. These checks
+complete the source/input stage (#90), not the transfer command or executor.
+
+The envelope is not a destination-ready plan. The source
 must be preserved; previews may not initialize, upgrade or mutate it. Original
 authors, sessions and reviews are historical provenance, not destination actors
 or current approvals.
