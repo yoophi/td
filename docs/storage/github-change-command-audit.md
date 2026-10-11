@@ -1,7 +1,8 @@
 # Change command and option audit (#68)
 
-Scope: main `c609f64`, following #65/#67/#66/#83, on 2026-10-11,
-plus the scope-message corrections made during this audit.
+Scope: implementation audit through main `cc72357` on 2026-10-12.
+The chronological validation notes retain their original revisions and pending
+states; the latest consolidated gate below supersedes those historical states.
 This audit covers GitHub task, activity, board and note history/undo for #9.
 The general command support audit remains #31; GUI interaction acceptance remains
 #55. A command having a route does not prove every combination of options works.
@@ -320,3 +321,59 @@ its review update completed in 32.331 s and all original assertions passed
 (race suite 81.471 s). Only this test's budget/logging changed; production
 behavior and semantic assertions were retained. The remaining group and final
 source CI are still pending #68 gates, not broad claimed successes.
+
+
+## Consolidated gate at cc72357 (2026-10-12)
+
+Required implementation fixes #64–#67 and #83–#86 are complete. The source has
+no new implementation exclusion for sequential scalar, paired field/comment,
+scheduling/file activity, group or compound workflow inverses. The actual
+production routes and option groups above were compared with the current
+handlers; the tests enumerate behavior, not just registered command names.
+The complete general CLI audit is still #31, and real GUI interaction is #55.
+
+| Original #9 requirement | Evidence and limits |
+| --- | --- |
+| Identify original body/metadata/status, command, actor and observed effects | Versioned immutable task/activity/board/note command records, complete raw ActionHistory, owned-effect collapse only for display; CLI history and writer suites, writer audit and native #64/#65/#67/#78 evidence. |
+| Reject later foreign changes | Fresh original-target and receipt/membership checks, recorded native events/review handoffs; sequential field/clock/author/missing-effect/observed-proof failures in #84–#86 and #73. Best-effort checks do not guarantee atomic CAS or detect every same-clock edit/revert. |
+| Explain non-reversible native actions | Exact deleted-comment identity/author/time restoration and native event deletion remain unsupported. Creation inverse is logical deletion; archives are passive provenance. Alternatives are described above and in issue #9. Official comment/event endpoint documentation rechecked on 2026-10-12. |
+| Handle partial inverse/re-execution without false success | Receipt-only reconciliation after uncertain target outcomes, verified remaining inverses, no automatic POST/PATCH/DELETE replay; group/ordered/workflow/import and sequential recovery suites, native #78/#84/#85/#86 evidence. Observed proof is not promoted to causal proof. |
+| Test normal recovery, race, denial and repeated confirmation | Command/client regressions, multipart/portable boundaries, native failure injection and repeated read-only confirmations; the local timeout and child-budget failures below are retained rather than reported as passing full races. |
+| Use gh, validated repository, explicit failure, no SQLite fallback | Production store factories and origin/auth/Issues validation; actual current candidate GET-only last and undo-list acceptance against the original #86 session, with zero remote writes and no SQLite file. |
+
+The original 60-minute broad CLI race run timed out; it was not a passing suite.
+Its unfinished tests were split: the relation/workflow group passed in 1612.308 s
+(package time). The other group finished with one mixed-workflow child timeout;
+the same failure reproduced independently. That fixture's 30-second subprocess
+budget was smaller than the successful command's measured 32.331 seconds. It now
+uses the existing two-minute workflow budget, retaining all semantic assertions;
+the corrected race case passed in 81.471 s. Other group tests had no failures.
+Full Go CI for production `2256bc0` passed, including all tests/lint/cross-build.
+This supersedes earlier pending-CI notes, without relabeling the timed-out race
+run or the originally failing group as a whole passing race.
+
+#73 subsequently changed only native-event observation reuse inside one fresh
+read-only validation boundary. Its full ghstore race passed (206.713 s), original
+CLI cost scenario passed, 0/1000-comment volume race passed (159.452 s), and
+paired/update-activity foreign-change and inverse recovery race passed (382.177 s).
+The GET-only native event test passed (7.010 s), final lint reported zero issues,
+and the candidate build passed. Every next fence creates a new observation.
+Older adapter race results remain valid evidence for their unchanged routing;
+the current-source full CI remains an additional gate.
+
+Current candidate `/tmp/td-gh73-validation-observation` read the original native
+#86 session through `last --n 4` (8.554 s) and `undo --list` (7.253 s). Both returned
+four rows with applied/undone phases and due/update-comments/standalone records.
+A GET-only wrapper forbade remote writes; no SQLite file was created. This proves
+current CLI/native history decoding and session scope, not a new mutation replay.
+Prior native inverse evidence retains exact original field/identity/creation/
+author checks and cleanup confirmations for each actual implementation path.
+
+The exact current production CI is run **38159644355**, head `cc72357`; it is
+confirmed running and is **not yet a passed gate**. #68 and parent #9 remain open
+until this run terminates successfully and the final review is recorded.
+Local evidence: `artifacts/task-audit-2026-10-10/gh-68-ci-2256bc0-result.json`,
+`gh-68-current-regression-evidence.json`, `gh-68-current-native-history-summary.json`,
+`gh-73-command-cost-comparison.json`, and the original native/race logs referenced
+by the writer/portable/import/protocol documents. Historical current-gates files
+are not used to infer a live process or override later terminal evidence.
