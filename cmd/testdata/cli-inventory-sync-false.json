@@ -2566,6 +2566,10 @@
         "inherited": true
       },
       {
+        "name": "mapping",
+        "type": "string"
+      },
+      {
         "name": "refresh",
         "type": "bool",
         "inherited": true

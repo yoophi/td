@@ -62,6 +62,8 @@ fixtures prove command grouping, whole-command compensation, failure recovery
 and foreign-change rejection; they do not replace native acceptance or the full
 release gates. Builtin-board first settings (#83) now share the creation POST
 and journal, with the existing explicit creation-undo limit. Portable history
-(#66), full command/flag and adapter coverage (#31/#68), and the full
-#9 scope must be verified separately. Earlier authentication or loopback failures
+(#66) now has a [separate archival contract](github-portable-journal.md), with
+native round-trip and destination-undo isolation evidence. Full command/flag
+and adapter coverage (#31/#68), and the full #9 scope must be verified separately.
+Earlier authentication or loopback failures
 are historical observations, not current implementation exclusions.

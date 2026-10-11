@@ -1,5 +1,9 @@
 # GitHub issue import
 
+For action history, `--format journal` restores a passive, source-qualified
+archive independently of task writes. It supports `--dry-run` and explicit
+`--mapping FILE`; see [portable journal history](github-portable-journal.md).
+
 The #24 implementation now connects validated batch execution to the CLI.
 `--dry-run` is read-only; a regular import performs checked creation, archival,
 field/relationship updates and completion publication. Native command-lifecycle

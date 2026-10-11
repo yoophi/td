@@ -1079,12 +1079,13 @@ func init() {
 	rootCmd.AddCommand(importCmd)
 	rootCmd.AddCommand(upgradeCmd)
 
-	exportCmd.Flags().String("format", "json", "Export format: json or md")
+	exportCmd.Flags().String("format", "json", "Export format: json, md, or journal (GitHub history)")
 	exportCmd.Flags().StringP("output", "o", "", "Output file (default: stdout)")
 	exportCmd.Flags().Bool("all", false, "Include closed/deleted")
 	exportCmd.Flags().BoolP("render-markdown", "m", false, "Render markdown output for humans")
 
-	importCmd.Flags().String("format", "json", "Import format: json or md")
+	importCmd.Flags().String("format", "json", "Import format: json, md, or journal (archival GitHub history)")
+	importCmd.Flags().String("mapping", "", "JSON source-key to destination-ID mappings for --format journal")
 	importCmd.Flags().Bool("dry-run", false, "Preview changes")
 	importCmd.Flags().Bool("force", false, "Overwrite existing")
 	importCmd.Flags().String("source", "", "Source namespace for legacy exports imported into GitHub")

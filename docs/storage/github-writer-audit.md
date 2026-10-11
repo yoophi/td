@@ -73,7 +73,8 @@ routes. The audit did identify a separate setup boundary:
   Physically deleted native comment IDs/authors/timestamps and native event
   history cannot be recreated exactly. Supported compensation must not claim
   that identity restoration occurred.
-- Portable history remains #66; broad CLI/flag coverage is #31/#68, complete GUI
+- Portable history is covered by the [#66 archive contract](github-portable-journal.md);
+  broad CLI/flag coverage is #31/#68, complete GUI
   interaction coverage is #55, and repeated bulk verification costs are #73.
   Those tasks remain open beyond this intermediate release.
 

@@ -1,5 +1,9 @@
 # GitHub issue export
 
+`--format journal` additionally exports complete action journal history and
+restored history archives. See [portable journal history](github-portable-journal.md)
+for its separate format, ID mappings, restore command and undo boundaries.
+
 `td export --format json|md --output PATH --all --render-markdown` uses
 the configured issue store. GitHub mode verifies the remote and credentials,
 uses gh directly and never opens SQLite. Without `--all`, only open,
@@ -29,8 +33,8 @@ directory, sync, close and rename; stdout is emitted only after serialization.
 Observations are best-effort and are not an atomic repository snapshot. External
 edits during export can produce observations from different times.
 
-JSON reads one issue-list page set and one comment-page set per selected task;
-it reuses the validated issue observation rather than refetching each issue.
+JSON reads one issue-list page set and one repository comment-page set;
+it reuses the validated observations without per-issue or per-comment requests.
 Markdown reads only the issue-list page set. Repository verification and
 pagination add actual HTTP requests. Rate-limit errors preserve the original
 GitHub diagnostic; there is no automatic retry.

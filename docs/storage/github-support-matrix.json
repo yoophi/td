@@ -932,9 +932,12 @@
     {
       "command": "td export",
       "owner": "#23",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Portable journal export/archival restore, explicit mapping, read-only preview/repeat and original attribution/undo boundaries are verified in #66. Full task-format and flag-combination audits remain with the existing owner.",
+      "evidence": [
+        "TestGitHubJournalPortableCLIExportRestoreAndDestinationUndo",
+        "TestGitHubJournalPortableInvalidInputAndFlagsFailBeforeNetwork"
+      ],
       "flags": {
         "all": "pending",
         "format": "pending",
@@ -1085,15 +1088,19 @@
     {
       "command": "td import",
       "owner": "#24",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Portable journal export/archival restore, explicit mapping, read-only preview/repeat and original attribution/undo boundaries are verified in #66. Full task-format and flag-combination audits remain with the existing owner.",
+      "evidence": [
+        "TestGitHubJournalPortableCLIExportRestoreAndDestinationUndo",
+        "TestGitHubJournalPortableInvalidInputAndFlagsFailBeforeNetwork"
+      ],
       "flags": {
         "dry-run": "pending",
         "force": "pending",
         "format": "pending",
         "help": "pending",
         "json": "pending",
+        "mapping": "pending",
         "refresh": "pending",
         "source": "pending",
         "work-dir": "pending"

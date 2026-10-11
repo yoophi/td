@@ -1,5 +1,11 @@
 # GitHub action journal implementation
 
+Portable history export/restore is documented in the
+[journal archive contract](github-portable-journal.md). Restored archives retain
+source attribution and ID bindings without becoming executable destination
+receipts. The staged implementation notes below describe earlier milestones;
+the archive contract describes the current portable-history behavior.
+
 This document retains incremental protocol notes. For current command coverage
 and remaining writer integration, use [the writer matrix](github-batch-writers.md).
 The stages below include historical implementation boundaries; current

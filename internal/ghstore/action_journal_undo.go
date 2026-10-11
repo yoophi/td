@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/marcus/td/internal/models"
 )
@@ -39,6 +40,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	var comment apiComment
 	if err := json.Unmarshal(data, &comment); err != nil {
 		return nil, err
+	}
+	if strings.Contains(comment.Body, journalArchivePrefix) || strings.Contains(comment.Body, journalArchivePartPrefix) {
+		return nil, &UndoScopeError{Reason: "imported journal history is archival data, not a destination undo receipt; no write attempted"}
 	}
 	carrier, err := c.commentIssueNumber(comment.IssueURL)
 	if err != nil || comment.ID != number {

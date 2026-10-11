@@ -75,6 +75,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	if err := json.Unmarshal(data, &native); err != nil {
 		return nil, err
 	}
+	if strings.Contains(native.Body, journalArchivePrefix) || strings.Contains(native.Body, journalArchivePartPrefix) {
+		return nil, &UndoScopeError{Reason: "imported journal history is archival data and cannot be replayed or reconciled as destination actions; no write attempted"}
+	}
 	carrier, err := c.commentIssueNumber(native.IssueURL)
 	if err != nil || native.ID != number {
 		return nil, fmt.Errorf("recovery receipt membership is unverified")

@@ -18,6 +18,10 @@ type githubExportReader interface {
 	ExportIssues(context.Context, bool, bool) ([]ghstore.ExportedIssue, error)
 }
 
+type githubJournalExportReader interface {
+	ExportJournal(context.Context) (*ghstore.PortableJournalBundle, error)
+}
+
 func githubExport(cmd *cobra.Command, base string) (bool, error) {
 	cfg, err := config.Load(base)
 	if err != nil {
@@ -27,12 +31,20 @@ func githubExport(cmd *cobra.Command, base string) (bool, error) {
 	if err != nil {
 		return true, err
 	}
+	format, _ := cmd.Flags().GetString("format")
 	if kind != config.StoreGitHub {
+		if format == "journal" {
+			return true, fmt.Errorf("journal format requires store=gh-issue; no SQLite operation attempted")
+		}
 		return false, nil
 	}
-	format, _ := cmd.Flags().GetString("format")
-	if format != "json" && format != "md" {
+	if format != "json" && format != "md" && format != "journal" {
 		return true, fmt.Errorf("unsupported export format %q", format)
+	}
+	if format == "journal" {
+		if err := validateJournalExportFlags(cmd); err != nil {
+			return true, err
+		}
 	}
 	client, err := ghstore.Open(cmd.Context(), base, cfg.GitHub)
 	if err != nil {
@@ -45,6 +57,24 @@ func runGitHubExport(cmd *cobra.Command, client githubExportReader) error {
 	format, _ := cmd.Flags().GetString("format")
 	path, _ := cmd.Flags().GetString("output")
 	render, _ := cmd.Flags().GetBool("render-markdown")
+	if format == "journal" {
+		if err := validateJournalExportFlags(cmd); err != nil {
+			return err
+		}
+		reader, ok := client.(githubJournalExportReader)
+		if !ok {
+			return fmt.Errorf("portable journal export is unavailable")
+		}
+		bundle, err := reader.ExportJournal(cmd.Context())
+		if err != nil {
+			return err
+		}
+		data, err := ghstore.MarshalPortableJournal(bundle)
+		if err != nil {
+			return err
+		}
+		return writeGitHubExport(cmd, path, data)
+	}
 	rows, err := client.ExportIssues(cmd.Context(), all, format == "json")
 	if err != nil {
 		return err
@@ -103,8 +133,21 @@ func runGitHubExport(cmd *cobra.Command, client githubExportReader) error {
 	if err != nil {
 		return err
 	}
+	return writeGitHubExport(cmd, path, data)
+}
+
+func validateJournalExportFlags(cmd *cobra.Command) error {
+	all, _ := cmd.Flags().GetBool("all")
+	render, _ := cmd.Flags().GetBool("render-markdown")
+	if all || render {
+		return fmt.Errorf("journal format always preserves complete JSON history; omit --all and --render-markdown")
+	}
+	return nil
+}
+
+func writeGitHubExport(cmd *cobra.Command, path string, data []byte) error {
 	if path == "" {
-		_, err = fmt.Fprintln(cmd.OutOrStdout(), string(data))
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), string(data))
 		return err
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".td-export-*")

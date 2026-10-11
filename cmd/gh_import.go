@@ -20,13 +20,22 @@ func githubImport(cmd *cobra.Command, base, file string) (bool, error) {
 	if err != nil {
 		return true, err
 	}
+	format, _ := cmd.Flags().GetString("format")
 	if kind != config.StoreGitHub {
 		if cmd.Flags().Changed("source") {
 			return true, fmt.Errorf("--source requires store=gh-issue")
 		}
+		if format == "journal" || cmd.Flags().Changed("mapping") {
+			return true, fmt.Errorf("journal format and --mapping require store=gh-issue; no SQLite operation attempted")
+		}
 		return false, nil
 	}
-	format, _ := cmd.Flags().GetString("format")
+	if format == "journal" {
+		return true, importGitHubJournal(cmd, base, file, cfg.GitHub)
+	}
+	if cmd.Flags().Changed("mapping") {
+		return true, fmt.Errorf("--mapping requires --format journal")
+	}
 	if (format == "json" || format == "") && strings.HasSuffix(file, ".md") {
 		format = "md"
 	}
