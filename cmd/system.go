@@ -629,7 +629,11 @@ var exportCmd = &cobra.Command{
 	Use:     "export",
 	Short:   "Export database",
 	GroupID: "system",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateExportOptions(cmd); err != nil {
+			return err
+		}
 		baseDir := getBaseDir()
 		if handled, err := githubExport(cmd, baseDir); handled {
 			return err
@@ -664,10 +668,22 @@ var exportCmd = &cobra.Command{
 			// Build full export with logs and handoffs
 			exportData := make([]map[string]interface{}, 0)
 			for _, issue := range issues {
-				logs, _ := database.GetLogs(issue.ID, 0)
-				handoffs, _ := database.GetHandoffs(issue.ID)
-				deps, _ := database.GetIssueDependencyRelations(issue.ID)
-				files, _ := database.GetLinkedFiles(issue.ID)
+				logs, err := database.GetLogs(issue.ID, 0)
+				if err != nil {
+					return fmt.Errorf("export %s logs: %w", issue.ID, err)
+				}
+				handoffs, err := database.GetHandoffs(issue.ID)
+				if err != nil {
+					return fmt.Errorf("export %s handoffs: %w", issue.ID, err)
+				}
+				deps, err := database.GetIssueDependencyRelations(issue.ID)
+				if err != nil {
+					return fmt.Errorf("export %s dependencies: %w", issue.ID, err)
+				}
+				files, err := database.GetLinkedFiles(issue.ID)
+				if err != nil {
+					return fmt.Errorf("export %s files: %w", issue.ID, err)
+				}
 
 				item := map[string]interface{}{
 					"issue":        issue,
@@ -714,17 +730,7 @@ var exportCmd = &cobra.Command{
 			data = []byte(md)
 		}
 
-		if outputPath != "" {
-			if err := os.WriteFile(outputPath, data, 0644); err != nil {
-				output.Error("failed to write file: %v", err)
-				return err
-			}
-			fmt.Printf("Exported to %s\n", outputPath)
-		} else {
-			fmt.Println(string(data))
-		}
-
-		return nil
+		return writeExportOutput(cmd, outputPath, data)
 	},
 }
 

@@ -9,8 +9,6 @@ import (
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -53,6 +51,9 @@ func githubExport(cmd *cobra.Command, base string) (bool, error) {
 	return true, runGitHubExport(cmd, client)
 }
 func runGitHubExport(cmd *cobra.Command, client githubExportReader) error {
+	if err := validateExportOptions(cmd); err != nil {
+		return err
+	}
 	all, _ := cmd.Flags().GetBool("all")
 	format, _ := cmd.Flags().GetString("format")
 	path, _ := cmd.Flags().GetString("output")
@@ -73,7 +74,7 @@ func runGitHubExport(cmd *cobra.Command, client githubExportReader) error {
 		if err != nil {
 			return err
 		}
-		return writeGitHubExport(cmd, path, data)
+		return writeExportOutput(cmd, path, data)
 	}
 	rows, err := client.ExportIssues(cmd.Context(), all, format == "json")
 	if err != nil {
@@ -133,7 +134,7 @@ func runGitHubExport(cmd *cobra.Command, client githubExportReader) error {
 	if err != nil {
 		return err
 	}
-	return writeGitHubExport(cmd, path, data)
+	return writeExportOutput(cmd, path, data)
 }
 
 func validateJournalExportFlags(cmd *cobra.Command) error {
@@ -142,34 +143,5 @@ func validateJournalExportFlags(cmd *cobra.Command) error {
 	if all || render {
 		return fmt.Errorf("journal format always preserves complete JSON history; omit --all and --render-markdown")
 	}
-	return nil
-}
-
-func writeGitHubExport(cmd *cobra.Command, path string, data []byte) error {
-	if path == "" {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), string(data))
-		return err
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".td-export-*")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	defer func() { _ = os.Remove(tmp) }()
-	if _, err = f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err = f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	if err = os.Rename(tmp, path); err != nil {
-		return err
-	}
-	cmd.Printf("Exported to %s\n", path)
 	return nil
 }
