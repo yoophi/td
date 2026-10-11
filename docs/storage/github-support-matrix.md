@@ -9,6 +9,12 @@ their canonical command's responsibility.
 
 This is an incomplete audit, not a completed support or acceptance report.
 
+Export's `--all`, `--format`, `--output`, `--json` and `--render-markdown` carry
+selected actual CLI and archive preservation evidence from #23/#88. Native
+full-task export and a same-repository read-only import preview are described
+in the [export contract](github-export.md#task-archive-verification-2388).
+Remaining global options and parent/import/migration gates are still pending.
+
 | State | Meaning |
 | --- | --- |
 | pending | No complete contract classification has been established. This does not mean the command is unimplemented. |

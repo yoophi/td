@@ -1111,20 +1111,45 @@
       "command": "td export",
       "owner": "#23",
       "state": "partial",
-      "reason": "Portable journal export/archival restore, explicit mapping, read-only preview/repeat and original attribution/undo boundaries are verified in #66. Full task-format and flag-combination audits remain with the existing owner.",
+      "reason": "JSON/Markdown output and invalid-option contracts, complete bulk task export, backup preservation and fixture import/SQLite round-trip have selected evidence (#23/#88). Native full task archive and read-only same-repository preview were checked; #18/#9 parent gates, remaining global-option combinations and broader #24/#8 import/migration acceptance remain separate.",
       "evidence": [
         "TestGitHubJournalPortableCLIExportRestoreAndDestinationUndo",
-        "TestGitHubJournalPortableInvalidInputAndFlagsFailBeforeNetwork"
+        "TestGitHubJournalPortableInvalidInputAndFlagsFailBeforeNetwork",
+        "TestExportCLIOutputAndOptionContracts",
+        "TestSQLiteExportSourceFailureProtectsOutput",
+        "TestGitHubExportPreservesSharedDataAndCommonFormat",
+        "TestGitHubExportFailureDoesNotReplaceBackupOrEmitPartialJSON",
+        "TestGitHubImportCLIExecuteExportReimportAndNoSQLiteFallback"
       ],
       "flags": {
-        "all": "pending",
-        "format": "pending",
+        "all": "partial",
+        "format": "partial",
         "help": "pending",
-        "json": "pending",
-        "output": "pending",
+        "json": "partial",
+        "output": "partial",
         "refresh": "pending",
-        "render-markdown": "pending",
+        "render-markdown": "partial",
         "work-dir": "pending"
+      },
+      "flag_evidence": {
+        "all": [
+          "TestExportCLIOutputAndOptionContracts",
+          "TestGitHubExportPreservesSharedDataAndCommonFormat"
+        ],
+        "format": [
+          "TestExportCLIOutputAndOptionContracts"
+        ],
+        "json": [
+          "TestExportCLIOutputAndOptionContracts"
+        ],
+        "output": [
+          "TestExportCLIOutputAndOptionContracts",
+          "TestGitHubExportFailureDoesNotReplaceBackupOrEmitPartialJSON",
+          "TestSQLiteExportSourceFailureProtectsOutput"
+        ],
+        "render-markdown": [
+          "TestExportCLIOutputAndOptionContracts"
+        ]
       }
     },
     {

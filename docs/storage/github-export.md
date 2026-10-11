@@ -48,3 +48,35 @@ it reuses the validated observations without per-issue or per-comment requests.
 Markdown reads only the issue-list page set. Repository verification and
 pagination add actual HTTP requests. Rate-limit errors preserve the original
 GitHub diagnostic; there is no automatic retry.
+
+## Task archive verification (#23/#88)
+
+On 2026-10-12, candidate source `b004896` was checked against the public
+`yoophi/td-sample` repository through a GET-only gh wrapper. `--all` exported
+196 tasks, including 109 natively closed and 119 logically deleted tasks.
+The independently observed native issue set exactly matched the exported IDs;
+titles, complete issue bodies, URLs, native authors/states and creation/update
+clocks matched. All 125 task comments retained their identities, authors, URLs
+and clocks; typed activity payloads and ordinary native comment bodies matched.
+Four derived preserved-history entries remained passive historical data.
+
+The export made one bulk issue collection and one bulk comment collection, with
+no individual task/comment reads. The observations contained three issue pages
+and eight comment pages; collection counts are not HTTP request counts.
+The actual GitHub import CLI accepted the full file in read-only same-repository
+preview and planned 196 skips. No remote write or SQLite database was used.
+
+The same file was imported with the actual SQLite CLI into a disposable local
+project, then exported again. All 196 portable issue records matched after ID
+normalization, including 119 deletion dates and 20 scheduled tasks. Portable
+logs (49), handoffs (52), dependencies (20) and files (4) retained their modeled
+content, references and clocks. Historical sessions stayed namespaced. This
+does not put the GitHub extension, native comments/reviews or executable journal
+state into SQLite; those are outside its portable task fields.
+
+Race-enabled fixtures additionally cover output failures, bulk pagination and
+API errors, archived provenance, and import/reimport/SQLite round trips. #88
+fixed JSON output and incomplete SQLite backup handling. These observations
+do not close the #18/#9 parent gates or the broader #24/#8 import and migration
+requirements. Complete action journal history still requires `--format journal`,
+and notes/boards are outside task-format export.

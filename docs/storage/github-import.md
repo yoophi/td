@@ -280,7 +280,12 @@ Portable GitHub rows restored into SQLite use its existing `td-` normalization:
 are normalized together, so the restored relationships resolve to real rows.
 CLI round-trip tests cover priority, description, acceptance, points, sprint,
 minor/schedule fields, files and mapped relationships alongside history.
-Native validation remains pending. Monitor detail views project preserved logs
+Native command-lifecycle acceptance is recorded under #78. The #23 export
+audit also validated a complete native task archive through same-repository
+read-only import preview and actual temporary SQLite import/export; see the
+[export contract](github-export.md#task-archive-verification-2388). Broader #24
+portable-data acceptance and its dependency gates remain pending.
+Monitor detail views project preserved logs
 and handoffs through the shared reader and label them as history. The activity
 feed and active-session/recent-handoff summaries use native events only; imported
 history does not become current activity. Tests exercise detail projection and
