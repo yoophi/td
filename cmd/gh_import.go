@@ -67,6 +67,9 @@ func githubImport(cmd *cobra.Command, base, file string) (bool, error) {
 	}
 	force, _ := cmd.Flags().GetBool("force")
 	if !dryRun {
+		if err := trackGitHubCommandActions(cmd, client, cfg.GitHub.Repo); err != nil {
+			return true, err
+		}
 		result, err := client.Import(cmd.Context(), items, force)
 		if err != nil {
 			return true, err

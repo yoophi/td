@@ -40,6 +40,7 @@ func (a ActionJournal) validateReconciliation() error {
 }
 
 type ActionReconcileResult struct {
+	ImportPlan          *ImportPlan               `json:"import_plan,omitempty"`
 	Partial             bool                      `json:"partial,omitempty"`
 	GroupMembers        []ActionGroupResultMember `json:"group_members,omitempty"`
 	GroupReceiptSaved   bool                      `json:"group_receipt_saved,omitempty"`
@@ -104,6 +105,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	}
 	if action.CreationCommand != nil {
 		return c.reconcileCreationCommand(ctx, action, sessionID, actor.Login, apply)
+	}
+	if action.ImportCommand != nil {
+		return c.reconcileImportCommand(ctx, action, sessionID, actor.Login, apply)
 	}
 	if action.Group != nil {
 		return c.reconcileActionGroup(ctx, action, sessionID, actor.Login, apply, false)

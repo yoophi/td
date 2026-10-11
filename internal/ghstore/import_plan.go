@@ -23,6 +23,7 @@ type ImportPlanRow struct {
 	HistoryVerified          bool                  `json:"history_verified,omitempty"`
 	Owner                    *ImportExecutionOwner `json:"owner,omitempty"`
 	intent                   *importIntent
+	receipt                  *importReceipt
 	basis                    string
 	destinationArchiveDigest string
 	destinationArchiveBasis  string
@@ -197,6 +198,7 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 			row.Action, row.ResumeState = "overwrite", "before_backup"
 			row.Owner = row.capture.Owner
 		} else if completed {
+			row.receipt = &receipt
 			if row.TargetID == "" || receipt.TargetID != row.TargetID {
 				return nil, fmt.Errorf("completion receipt for %s disagrees with its target mapping; no import writes attempted", row.SourceKey)
 			}

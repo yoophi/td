@@ -108,6 +108,16 @@ func planImportArchivePublication(a ActionJournal) (*journalPublication, error) 
 		}
 		member.Before = nil
 	}
+	if frozen.ImportForward != nil {
+		data, err := json.Marshal(frozen.ImportForward.Targets)
+		if err != nil {
+			return nil, err
+		}
+		if err := add("forward", data); err != nil {
+			return nil, err
+		}
+		frozen.ImportForward.Targets = nil
+	}
 	if _, err := p.rootPlan(p.manifest); err != nil {
 		return nil, fmt.Errorf("import archive root capacity: %w", err)
 	}
@@ -203,6 +213,12 @@ func decodeImportArchiveJournal(root apiComment, carrier string, collection *jou
 			names = append(names, "before:"+member.TargetID)
 		}
 	}
+	if a.ImportForward != nil {
+		if a.ImportForward.Targets != nil {
+			return nil, fmt.Errorf("import archive root embeds forward observations")
+		}
+		names = append(names, "forward")
+	}
 	if len(names) != len(manifest.Documents) {
 		return nil, fmt.Errorf("import archive documents differ from original membership")
 	}
@@ -235,6 +251,16 @@ func decodeImportArchiveJournal(root apiComment, carrier string, collection *jou
 		}
 		if doc.Name == "input" {
 			a.ImportCommand.Input = data.String()
+			continue
+		}
+		if doc.Name == "forward" {
+			if err := strictJournalJSON(data.Bytes(), &a.ImportForward.Targets); err != nil {
+				return nil, err
+			}
+			canonical, err := json.Marshal(a.ImportForward.Targets)
+			if err != nil || !bytes.Equal(canonical, data.Bytes()) {
+				return nil, fmt.Errorf("import forward observation is not canonical")
+			}
 			continue
 		}
 		var state ImportNativeState

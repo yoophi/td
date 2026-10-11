@@ -13,6 +13,8 @@ import (
 )
 
 type githubActionHistoryRow struct {
+	ImportCommand      *ghstore.ActionImportCommand      `json:"import_command,omitempty"`
+	ImportForward      *ghstore.ActionImportForward      `json:"import_forward,omitempty"`
 	CreationCommand    *ghstore.ActionCreationCommand    `json:"creation_command,omitempty"`
 	CommentObservation *ghstore.ActionCommentObservation `json:"comment_observation,omitempty"`
 	Group              *ghstore.ActionGroup              `json:"group,omitempty"`
@@ -119,6 +121,10 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 		}
 		if jsonMode(cmd) {
 			return true, json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+		}
+		if result.Journal.ImportCommand != nil {
+			cmd.Printf("Import command %s: phase=%s, partial=%t, receipt saved=%t, already reconciled=%t; no target writes replayed\n", result.Journal.ID, result.Journal.Phase, result.Partial, result.Applied, result.AlreadyReconciled)
+			return true, nil
 		}
 		if result.Journal.Group != nil {
 			cmd.Printf("Group %s: members=%d, phase=%s, group receipt saved=%t; member targets were not replayed by reconciliation\n", result.Journal.ID, len(result.GroupMembers), result.Journal.Phase, result.GroupReceiptSaved)
@@ -283,6 +289,9 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 		if action.Group != nil {
 			dataFormat = "github-action-group-v1"
 		}
+		if action.ImportCommand != nil {
+			dataFormat = "github-import-command-v1"
+		}
 		if kind, id := action.EntityIdentity(); kind != "issue" {
 			entityType, entityID, targetIssueID = kind, id, action.IssueID
 		}
@@ -299,7 +308,7 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 			ActionType: models.ActionType(action.Action), EntityType: entityType, EntityID: entityID,
 			PreviousData: before, NewData: after, Timestamp: action.CreatedAt, Undone: action.Phase == "undone"},
 			OperationID: action.OperationID, UndoOperationID: action.UndoOperationID, Phase: action.Phase, CarrierID: action.CarrierID, Author: action.Author, URL: action.URL,
-			DataFormat: dataFormat, HistoryScope: "td-action-journal", CreateInput: action.CreateInput, CreationCommand: action.CreationCommand, CommentObservation: action.CommentObservation,
+			DataFormat: dataFormat, HistoryScope: "td-action-journal", CreateInput: action.CreateInput, CreationCommand: action.CreationCommand, ImportCommand: action.ImportCommand, ImportForward: action.ImportForward, CommentObservation: action.CommentObservation,
 			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, Reconciliation: action.Reconciliation, NativeUndo: action.NativeUndo, Group: action.Group, UpdateIntent: action.UpdateIntent, UpdateObservation: action.UpdateObservation, UndoObservation: action.UndoObservation, CommentDataFormat: commentFormat})
 	}
 	return rows, nil

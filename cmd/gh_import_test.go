@@ -130,6 +130,10 @@ func TestSQLiteImportRejectsGitHubSourceFlagBeforeOpeningDatabase(t *testing.T) 
 
 func TestGitHubImportCLIExecuteExportReimportAndNoSQLiteFallback(t *testing.T) {
 	dir := githubScheduleTestDir(t)
+	useHandoffReviewFixture(t)
+	configureImportJournalFixture(t)
+	t.Setenv("TD_SESSION_ID", "import-roundtrip")
+	t.Setenv("TD_GH_CONTEXT_ROOT", t.TempDir())
 	execute := func(input string, args ...string) (ghstore.ImportResult, error) {
 		t.Helper()
 		c := &cobra.Command{Use: importCmd.Use, RunE: importCmd.RunE, SilenceErrors: true, SilenceUsage: true}

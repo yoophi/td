@@ -57,6 +57,9 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if action.CreationCommand != nil {
 		return c.undoCreationCommand(ctx, action, sessionID)
 	}
+	if action.ImportCommand != nil {
+		return nil, &UndoScopeError{Reason: "import whole-command inverse is not yet implemented; no target write attempted"}
+	}
 	if action.Group != nil {
 		return c.undoActionGroup(ctx, action, sessionID)
 	}

@@ -26,6 +26,9 @@ func (c *Client) Import(ctx context.Context, items []ImportItem, force bool) (*I
 	if err := RequireImportSourceNamespaces(items); err != nil {
 		return nil, err
 	}
+	if c.journal != nil {
+		return c.importCommand(ctx, items, force)
+	}
 	return c.executeImport(ctx, items, force)
 }
 

@@ -114,9 +114,12 @@ func selectPendingImportExecution(snapshot *Snapshot, plan *ImportPlan, items []
 	if err != nil {
 		return nil, err
 	}
-	sources, targets := map[string]bool{}, map[string]bool{}
+	sources, targets, allocations := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, row := range plan.Rows {
 		sources[row.SourceKey], targets[row.TargetID] = true, row.TargetID != ""
+		if row.Observed != nil && row.Observed.meta.OperationID != "" {
+			allocations[row.Observed.meta.OperationID] = true
+		}
 	}
 	var selected *ActionJournalRecord
 	for n := range history {
@@ -127,6 +130,9 @@ func selectPendingImportExecution(snapshot *Snapshot, plan *ImportPlan, items []
 		overlap := false
 		for _, member := range root.ImportCommand.Members {
 			overlap = overlap || sources[member.SourceKey] || member.TargetID != "" && targets[member.TargetID]
+			// A prepared creation has no target number yet. Its stable allocation
+			// identity still binds the real issue if another source exports it.
+			overlap = overlap || member.Action == "create" && allocations[member.OperationID]
 		}
 		if !overlap {
 			continue
@@ -194,6 +200,11 @@ func validateImportExecutionPlan(ctx context.Context, plan *ImportPlan, items []
 	if selected == nil || !reflect.DeepEqual(selected, scope.root) {
 		return fmt.Errorf("original import command is missing or changed in the fresh observation")
 	}
+	return validateImportExecutionRows(scope, plan)
+}
+
+// Shared by live replans and the completed command's native evidence reader.
+func validateImportExecutionRows(scope *importExecutionScope, plan *ImportPlan) error {
 	if err := validateImportExecutionCheckpoints(scope, plan); err != nil {
 		return err
 	}

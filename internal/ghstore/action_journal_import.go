@@ -101,12 +101,12 @@ func (s *ImportNativeState) validate(repository, id string) error {
 
 func (a ActionJournal) validateImportCommand() error {
 	i := a.ImportCommand
-	if i == nil || !repositoryPattern.MatchString(i.Repository) || a.Action != "import" || a.Phase != "prepared" || !canonicalGroupID(a.CarrierID) {
-		return fmt.Errorf("import intent requires a repository, separate carrier and prepared command")
+	if i == nil || !repositoryPattern.MatchString(i.Repository) || a.Action != "import" || a.Phase != "prepared" && a.Phase != "applied" || !canonicalGroupID(a.CarrierID) {
+		return fmt.Errorf("import requires a repository, separate carrier and supported command phase")
 	}
 	// Import owns its own snapshots. It must not smuggle another command's
 	// before/after state, child membership or unverified completion into v33.
-	expected := ActionJournal{OperationID: a.OperationID, SessionID: a.SessionID, CarrierID: a.CarrierID, Action: "import", Phase: "prepared", ImportCommand: i}
+	expected := ActionJournal{OperationID: a.OperationID, SessionID: a.SessionID, CarrierID: a.CarrierID, Action: "import", Phase: a.Phase, ImportCommand: i, ImportForward: a.ImportForward}
 	if !reflect.DeepEqual(a, expected) {
 		return fmt.Errorf("import intent contains unrelated action fields")
 	}
@@ -172,7 +172,7 @@ func (a ActionJournal) validateImportCommand() error {
 			return fmt.Errorf("import destination decision for %s differs from its original input/observation", row.SourceKey)
 		}
 	}
-	return nil
+	return a.validateImportForward()
 }
 
 // Build from the original complete snapshot. No remote write occurs here, and

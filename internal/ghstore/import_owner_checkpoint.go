@@ -97,3 +97,111 @@ func validateImportExecutionCheckpoints(scope *importExecutionScope, plan *Impor
 	}
 	return nil
 }
+
+// A tracked new command may supersede a completed source version. This is not
+// permission for the untracked executor to adopt owned pending work: the old
+// command must be complete and its checkpoint evidence must still be exact.
+func validateNewImportCommandPlan(plan *ImportPlan, items []ImportItem, force bool) error {
+	if _, err := selectPendingImportExecution(plan.snapshot, plan, items, force, "", ""); err != nil {
+		return err
+	}
+	history, err := plan.snapshot.ActionHistory("")
+	if err != nil {
+		return err
+	}
+	roots := map[string]ActionJournalRecord{}
+	completedSources := map[string]ActionJournalRecord{}
+	for _, root := range history {
+		roots[root.ID] = root
+		if root.Phase != "applied" || root.ImportForward == nil {
+			continue
+		}
+		// ActionHistory is newest first. A skipped member only observes an
+		// earlier source version; it does not acquire that version's ownership.
+		for _, member := range root.ImportCommand.Members {
+			if _, exists := completedSources[member.SourceKey]; !exists && member.Action != "skip" {
+				completedSources[member.SourceKey] = root
+			}
+		}
+	}
+	sources := map[string]ImportItem{}
+	for _, item := range items {
+		sources[item.SourceKey()] = item
+	}
+	entries := map[string]snapshotEntry{}
+	for _, entry := range plan.snapshot.entries {
+		entries[fmt.Sprintf("gh-%d", entry.Issue.Number)] = entry
+	}
+	for _, row := range plan.Rows {
+		if row.Action == "skip" {
+			continue
+		}
+		// Source history remains authoritative even if live ownership metadata
+		// was removed. The allocation owner may belong to a different source,
+		// such as a legacy task later exported and restored in its native repo.
+		previous, found := completedSources[row.SourceKey]
+		if !found {
+			item := sources[row.SourceKey]
+			nativeRestore := item.GitHub != nil && strings.EqualFold(item.GitHub.Repository, plan.Repository) && item.Issue.ID == row.TargetID
+			if row.Owner == nil {
+				continue
+			}
+			previous, found = roots[row.Owner.CommandID]
+			if !found || previous.Phase != "applied" || previous.ImportForward == nil || previous.OperationID != row.Owner.OperationID || previous.SessionID != row.Owner.SessionID {
+				return fmt.Errorf("%s has no valid completed import baseline; inspect command %s before starting another execution", row.TargetID, row.Owner.CommandID)
+			}
+			if nativeRestore && row.intent == nil && row.capture == nil && row.receipt == nil {
+				ownsAllocation := false
+				for n, member := range previous.ImportCommand.Members {
+					ownsAllocation = ownsAllocation || member.Action == "create" && fmt.Sprintf("gh-%d", previous.ImportForward.Targets[n].Issue.Number) == row.TargetID
+				}
+				if !ownsAllocation {
+					return fmt.Errorf("previous import does not own this native allocation")
+				}
+				continue
+			}
+		}
+		var original *ImportNativeState
+		for n, member := range previous.ImportCommand.Members {
+			if member.SourceKey == row.SourceKey && fmt.Sprintf("gh-%d", previous.ImportForward.Targets[n].Issue.Number) == row.TargetID {
+				original = &previous.ImportForward.Targets[n]
+			}
+		}
+		if original == nil {
+			return fmt.Errorf("previous import does not own this source/destination")
+		}
+		basis, err := importTargetBasis(original.Issue)
+		if err != nil || basis != row.basis {
+			return &ConflictError{ID: row.TargetID}
+		}
+		baseline := map[int64]apiComment{}
+		for _, comment := range original.Comments {
+			binding, err := decodeImportCheckpointBinding(comment.Body)
+			if err != nil {
+				return err
+			}
+			if binding != nil && binding.source == row.SourceKey {
+				baseline[comment.ID] = comment
+			}
+		}
+		for _, comment := range entries[row.TargetID].Comments {
+			binding, err := decodeImportCheckpointBinding(comment.Body)
+			if err != nil {
+				return err
+			}
+			original, exists := baseline[comment.ID]
+			if exists {
+				if !reflect.DeepEqual(original, comment) {
+					return fmt.Errorf("previous import checkpoint changed before the new command")
+				}
+				delete(baseline, comment.ID)
+			} else if binding != nil && binding.source == row.SourceKey {
+				return fmt.Errorf("new checkpoint is outside the previous completed import")
+			}
+		}
+		if len(baseline) != 0 {
+			return fmt.Errorf("previous import checkpoint disappeared before the new command")
+		}
+	}
+	return nil
+}

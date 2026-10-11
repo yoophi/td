@@ -1,10 +1,11 @@
 # Import command journal contract (#65)
 
-Status: implementation in progress. The v33 prepared-intent model and v34
-reference archive transport have local implementation/tests and are unpublished.
-Import is not yet connected to command history, whole-command undo or
-reconciliation. The execution sections below specify required runtime behavior,
-not completed support. #65 and the intermediate release remain gated on it.
+Status: implementation in progress. The CLI now locally connects original v33
+command intents, v34 reference archives, owned execution, completed command
+history, explicit resume and receipt-only reconciliation. These formats remain
+unpublished to live repositories. Whole-command undo and compensated reimport
+are not implemented. Remaining execution/capacity requirements below still gate
+#65 and the intermediate release; forward CLI support is not final acceptance.
 
 ## One executor, one original command
 
@@ -65,12 +66,45 @@ allocation when native timestamps share the same second.
 
 Local executor tests cover response loss, rejected owner transfer, foreign or
 edited v2 checkpoints, new v1 checkpoints after allocation, and preservation of
-legitimate legacy intent/capture/completion baselines. This scope is not yet
-connected to CLI root preparation/completion or inverse execution. Each current
+legitimate legacy intent/capture/completion baselines. The CLI prepares the root
+before target writes and uses this scope with the existing executor. Each current
 root fence still reads the root and its fresh paginated carrier collection and
 revalidates the archive. Removing that duplicate point read and avoiding repeated
 semantic parsing after verified native equality remain efficiency follow-ups;
 fresh conflict checks must remain intact.
+
+Completed results are stored separately in `import_forward`, with actual native
+target/comment/event observations and an observer attribution. The original
+command envelope and its document digests never change. A successful initial
+invocation records a verified result; a resumed or reconciled invocation records
+an observed result and retains the original command's actor/session. Completion
+checks source projections, complete provenance, owned checkpoints and the native
+close/reopen event boundary. Large forward observations use a separate reference
+document rather than consuming the ordinary decoded root budget.
+
+`last` and `undo --list` show one import command. An identical completed import
+does not publish another root or change targets. A changed-source `--force`
+import starts a new command around the current baseline, keeping original issue
+identities; the previous command must be complete with unchanged checkpoint
+evidence. This is distinct from the compensated reimport contract below.
+
+A task allocated from a legacy source can later be exported and explicitly
+restored from its native repository with `--force`. With no checkpoints for that
+new native source, the current task becomes the new command's Before state; its
+original allocation identity and owner remain unchanged. The allocation owner
+must belong to a completed command. Pending creations are also discovered by
+their stable allocation identity, even though their root has no target number
+yet, so exporting a partially allocated task cannot transfer ownership. Once a
+completion exists for the native source, subsequent target edits remain
+conflicts even with `--force`.
+
+Reconciliation never allocates tasks or replays field/checkpoint writes. A
+partial execution returns its remaining plan without changing the root. Once
+all source completions exist, explicit apply can publish the observed command
+result under the actual observer's session without transferring original
+ownership. Repeating reconciliation of a completed command is read-only and
+checks its frozen native result. Whole-command inverse remains an explicit
+unsupported operation until its dedicated executor is implemented.
 
 ## Undo and subsequent import
 
@@ -109,19 +143,23 @@ orphan chunks while no root exists. Duplicate/foreign chunks and existing comman
 roots are explicit errors. No source history becomes live review authority.
 
 Preserve existing large-import capability: the 4 MiB decoded journal limit is
-not a new total import-history limit. Preparation checks root/reference capacity
-before uploads; preflight of final forward/inverse proof metadata remains part
-of the unfinished execution integration. Missing, edited, duplicate or foreign
+not a new total import-history limit. Preparation checks original root/reference
+capacity before uploads, and completion checks its realized result capacity.
+Preflight of worst-case forward/inverse reference metadata before target writes
+remains a release gate. Missing, edited, duplicate or foreign
 referenced parts fail explicitly. Partial archive uploads stay inert until a
 verified root owns them; they cannot authorize target changes. Resolving
 references adds no per-source or per-part GitHub GET requests to bulk reads.
 Incremental reads defer reference validation until the delta is merged with
 unchanged baseline chunks.
 
-Local tests cover input history beyond 4 MiB, multipart reference roots, changed
+Local tests cover input and result history beyond 4 MiB, multipart reference roots, changed
 native/semantic evidence, partial upload recovery, original-document reuse and
-bulk/incremental reading. This does not claim live GitHub or complete import
-execution acceptance. Source/destination provenance already written by the
+bulk/incremental reading. CLI tests cover success/no-op, lost root/allocation/
+target/completion responses, denied final receipts, cross-session refusal and
+receipt-only recovery, and changed-source generations. The whole-command CLI
+acceptance test now reaches the pending inverse gate. This does not claim live
+GitHub or complete import execution acceptance. Source/destination provenance already written by the
 legacy executor is unchanged; reuse across that format and command documents is
 a future integration/efficiency concern, not a claim of zero storage duplication.
 
