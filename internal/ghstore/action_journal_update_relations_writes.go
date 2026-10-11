@@ -44,6 +44,7 @@ func (c *Client) updateWithRelations(ctx context.Context, ids []string, change C
 // input. Separating preparation from execution lets creation bind an allocated
 // ID without refreshing away the external observations captured before POST.
 type relationCommandPlan struct {
+	receipt    *ActionJournalRecord
 	root       ActionJournal
 	expected   map[string]ActionIssueState
 	records    map[string]Record
@@ -158,6 +159,12 @@ func (c *Client) prepareRelationCommand(ctx context.Context, records map[string]
 func (c *Client) writeRelationCommand(ctx context.Context, command *relationCommandPlan) ([]Record, error) {
 	root, expected, records := command.root, command.expected, command.records
 	g, plans, activities := root.Group, command.plans, command.activities
+	if root.CreationOwner != "" {
+		active := creationContext(ctx)
+		if active == nil || active.journal == nil || active.journal.OperationID != root.CreationOwner {
+			return nil, fmt.Errorf("creation relationship command requires its active parent before any write")
+		}
+	}
 	if err := c.verifyRelationGroupOriginal(ctx, g, expected); err != nil {
 		return nil, err
 	}
@@ -181,6 +188,16 @@ func (c *Client) writeRelationCommand(ctx context.Context, command *relationComm
 	written, err := c.writePreparedJournal(ctx, root)
 	if err != nil {
 		return nil, err
+	}
+	command.receipt = written
+	if root.CreationOwner != "" {
+		active := creationContext(ctx)
+		if active == nil {
+			return nil, fmt.Errorf("creation relationship command has no active parent")
+		}
+		if err := validateCreationChild(active.journal, written); err != nil {
+			return nil, err
+		}
 	}
 	c.journal.Group = &activeActionGroup{Journal: written, Expected: expected, Attempted: map[string]bool{}}
 	completed := []Record{}
@@ -208,9 +225,11 @@ func (c *Client) writeRelationCommand(ctx context.Context, command *relationComm
 			completed = append(completed, r)
 		}
 	}
-	if _, err := c.CompleteActionGroup(ctx); err != nil {
+	finished, err := c.CompleteActionGroup(ctx)
+	if err != nil {
 		return completed, err
 	}
+	command.receipt = finished.Journal
 	// Output follows selection order even when safe graph order differs.
 	slices.SortFunc(completed, func(a, b Record) int {
 		return slices.Index(g.RelationUpdates.Selected, a.ID) - slices.Index(g.RelationUpdates.Selected, b.ID)

@@ -594,11 +594,15 @@
       "command": "td create",
       "owner": "#17",
       "state": "partial",
-      "reason": "Selected CLI create/update behavior with real-session action journals, lazy bootstrap and verified receipt failures is implemented; complete option combinations, other writers and native acceptance remain pending.",
+      "reason": "CLI related creation freezes complete input and original graph before POST, binds reverse edges to the actual allocated ID, reports one command, supports receipt-only recovery and guarded logical-delete compensation. CLI fixtures cover both directions, partial outcomes and foreign changes. Full flags/aliases and native acceptance remain pending.",
       "evidence": [
         "TestGitHubJournalCLITracksCreateUpdatesAndSequentialUndo",
         "TestGitHubJournalCLIReportsIntentTargetAndReceiptFailures",
-        "TestGitHubJournalCLIBootstrapValidationAndHumanOutput"
+        "TestGitHubJournalCLIBootstrapValidationAndHumanOutput",
+        "TestGitHubJournalCLICreateRelationsWholeCommand",
+        "TestGitHubJournalCLICreationCommandForwardOwnership",
+        "TestGitHubJournalCLICreationInverseRecovery",
+        "TestGitHubJournalCLICreationInverseRejectsForeignChanges"
       ],
       "flags": {
         "acceptance": "pending",
@@ -1142,9 +1146,11 @@
       "command": "td last",
       "owner": "#9",
       "state": "partial",
-      "reason": "Bulk current-session action-journal history and create/update CLI tracking are implemented; complete writer coverage and native acceptance remain pending.",
+      "reason": "Bulk current-session journal history collapses compound field/activity, relationship, workflow and related-creation effects into complete commands, with explicit phase and partial-creation scope. Complete command/flag and adapter acceptance remains pending.",
       "evidence": [
-        "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads"
+        "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads",
+        "TestGitHubJournalCLICreateRelationsWholeCommand",
+        "TestGitHubJournalCLICreationCommandForwardOwnership"
       ],
       "flags": {
         "help": "pending",
@@ -2022,11 +2028,15 @@
       "command": "td task create",
       "owner": "#17",
       "state": "partial",
-      "reason": "Selected CLI create/update behavior with real-session action journals, lazy bootstrap and verified receipt failures is implemented; complete option combinations, other writers and native acceptance remain pending.",
+      "reason": "CLI related creation freezes complete input and original graph before POST, binds reverse edges to the actual allocated ID, reports one command, supports receipt-only recovery and guarded logical-delete compensation. CLI fixtures cover both directions, partial outcomes and foreign changes. Full flags/aliases and native acceptance remain pending.",
       "evidence": [
         "TestGitHubJournalCLITracksCreateUpdatesAndSequentialUndo",
         "TestGitHubJournalCLIReportsIntentTargetAndReceiptFailures",
-        "TestGitHubJournalCLIBootstrapValidationAndHumanOutput"
+        "TestGitHubJournalCLIBootstrapValidationAndHumanOutput",
+        "TestGitHubJournalCLICreateRelationsWholeCommand",
+        "TestGitHubJournalCLICreationCommandForwardOwnership",
+        "TestGitHubJournalCLICreationInverseRecovery",
+        "TestGitHubJournalCLICreationInverseRejectsForeignChanges"
       ],
       "flags": {
         "acceptance": "pending",
@@ -2135,10 +2145,16 @@
       "command": "td undo",
       "owner": "#9",
       "state": "partial",
-      "reason": "Bulk current-session journal list and verified latest scalar undo with receipt-chain verification are implemented; workflow/graph/multi-target integration, remaining writer journaling and native acceptance remain pending.",
+      "reason": "Verified scalar, relationship, workflow and compound-command inverses are connected. Related creation restores actual reverse edges then logically deletes the new task; uncertain outcomes reconcile receipts without replay. Native creation acceptance, the complete flag/adapter audit, portable history and explicit legacy/physical-deletion limits remain separate #9 work.",
       "evidence": [
         "TestGitHubLastCLIHistoryScopePhasesLimitsAndBulkReads",
-        "TestGitHubUndoCLIExecutesVerifiedLatestActionAndReportsFailures"
+        "TestGitHubUndoCLIExecutesVerifiedLatestActionAndReportsFailures",
+        "TestGitHubJournalCLICreateRelationsWholeCommand",
+        "TestGitHubJournalCLICreationCommandForwardOwnership",
+        "TestGitHubJournalCLICreationInverseRecovery",
+        "TestGitHubJournalCLICreationInverseRejectsForeignChanges",
+        "TestGitHubJournalCLIUpdateRelationsSharedTargetWholeCommand",
+        "TestGitHubJournalCLIWorkflowFailureRecoveryDoesNotReplay"
       ],
       "flags": {
         "apply": "pending",

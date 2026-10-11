@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
@@ -17,37 +16,30 @@ type formCreateFixture struct {
 	created           models.Issue
 	root              *ghstore.Record
 	createErr, depErr error
-	getErr            error
+	dependencies      []string
 	deleted           bool
 }
 
-func (f *formCreateFixture) Get(_ context.Context, id string) (*ghstore.Record, error) {
-	f.calls = append(f.calls, "get:"+id)
-	r := &ghstore.Record{Issue: models.Issue{ID: id}}
-	if f.deleted {
-		now := time.Now()
-		r.DeletedAt = &now
-	}
-	return r, f.getErr
-}
 func (f *formCreateFixture) Create(_ context.Context, issue *models.Issue) (*ghstore.Record, error) {
 	f.calls = append(f.calls, "create")
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
 	f.created = *issue
 	f.root = &ghstore.Record{Issue: *issue}
 	f.root.ID = "gh-10"
 	return f.root, f.createErr
 }
-func (f *formCreateFixture) ChangeDependencyObserved(_ context.Context, root *ghstore.Record, id string, add bool, actor string) (*ghstore.Record, error) {
-	if root != f.root || !add || actor != "actual-monitor" {
-		return nil, errors.New("wrong revision or actor")
+func (f *formCreateFixture) CreateWithRelations(_ context.Context, issue *models.Issue, relations ghstore.RelationChanges) (*ghstore.Record, error) {
+	f.calls = append(f.calls, "create-with-relations")
+	if f.deleted {
+		return nil, errors.New("dependency unavailable")
 	}
-	f.calls = append(f.calls, "add:"+id)
-	if f.depErr != nil {
-		return nil, f.depErr
-	}
-	next := *root
-	f.root = &next
-	return f.root, nil
+	f.dependencies = append([]string{}, (*relations.DependsOn)...)
+	f.created = *issue
+	f.root = &ghstore.Record{Issue: *issue}
+	f.root.ID = "gh-10"
+	return f.root, f.depErr
 }
 func formCreator(t *testing.T) (*formCreateFixture, *GitHubDataSource) {
 	t.Helper()
@@ -59,7 +51,7 @@ func TestGitHubFormCreatePrechecksAndCarriesCreatedRevision(t *testing.T) {
 	f, s := formCreator(t)
 	issue := models.Issue{Title: "new", Type: models.TypeTask, Priority: models.PriorityP1, Minor: true, ParentID: "gh-8", CreatorSession: "untrusted", CreatedBranch: "untrusted"}
 	id, err := s.CreateIssue(issue, []string{"2", "gh-3"})
-	if err != nil || id != "gh-10" || strings.Join(f.calls, ",") != "get:gh-2,get:gh-3,create,add:gh-2,add:gh-3" {
+	if err != nil || id != "gh-10" || strings.Join(f.calls, ",") != "create-with-relations" || strings.Join(f.dependencies, ",") != "gh-2,gh-3" {
 		t.Fatalf("%s %v %v", id, f.calls, err)
 	}
 	if f.created.CreatorSession != "actual-monitor" || f.created.CreatedBranch != "actual-branch" || f.created.Status != models.StatusOpen || !f.created.Minor || f.created.ParentID != "gh-8" {
@@ -71,7 +63,7 @@ func TestGitHubFormCreateFailureRetainsRecoveryAndNeverRetries(t *testing.T) {
 	f.depErr = &ghstore.ConflictError{ID: "gh-10", AfterWrite: true}
 	id, err := s.CreateIssue(models.Issue{Title: "new"}, []string{"gh-2", "gh-3"})
 	var conflict *ghstore.ConflictError
-	if id != "gh-10" || !errors.As(err, &conflict) || !strings.Contains(err.Error(), "was created") || len(f.calls) != 4 {
+	if id != "gh-10" || !errors.As(err, &conflict) || !strings.Contains(err.Error(), "was created") || len(f.calls) != 1 {
 		t.Fatalf("%s %v %v", id, f.calls, err)
 	}
 	f, s = formCreator(t)

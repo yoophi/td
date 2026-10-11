@@ -51,6 +51,12 @@ func (c *Client) UndoAction(ctx context.Context, id, sessionID string) (*ActionU
 	if action == nil {
 		return nil, fmt.Errorf("comment %s is not an action journal", id)
 	}
+	if err := checkCreationChildAccess(ctx, action); err != nil {
+		return nil, err
+	}
+	if action.CreationCommand != nil {
+		return c.undoCreationCommand(ctx, action, sessionID)
+	}
 	if action.Group != nil {
 		return c.undoActionGroup(ctx, action, sessionID)
 	}

@@ -201,6 +201,12 @@ func (c *Client) prepareCreationJournal(ctx context.Context, operationID string,
 	}
 	a := ActionJournal{OperationID: operationID, SessionID: c.journal.SessionID, CarrierID: c.journal.Carrier.ID,
 		Action: "create", Phase: "prepared", CreateInput: &input}
+	if active := creationContext(ctx); active != nil {
+		if operationID != active.plan.create.operationID || !reflect.DeepEqual(input, active.plan.create.input) {
+			return nil, fmt.Errorf("creation differs from its complete command input")
+		}
+		a.CreationCommand = creationCommandFromPlan(active.plan)
+	}
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
@@ -225,7 +231,13 @@ func (c *Client) prepareCreationJournal(ctx context.Context, operationID string,
 			return nil, fmt.Errorf("creation operation %s already identifies %s; inspect it before retrying; no new issue POST attempted", operationID, record.ID)
 		}
 	}
-	return c.writePreparedJournal(ctx, a)
+	written, err := c.writePreparedJournal(ctx, a)
+	if err == nil {
+		if active := creationContext(ctx); active != nil {
+			active.journal = written
+		}
+	}
+	return written, err
 }
 
 func (c *Client) writePreparedJournal(ctx context.Context, a ActionJournal) (*ActionJournalRecord, error) {
@@ -311,6 +323,21 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 			return err
 		}
 		applied.IssueID = after.ID
+		if applied.CreationCommand != nil {
+			active := creationContext(ctx)
+			if active == nil || active.journal == nil || active.journal.ID != prepared.ID {
+				return fmt.Errorf("creation allocation lost its command intent")
+			}
+			if err := c.verifyCreationOriginal(ctx, prepared, after); err != nil {
+				return err
+			}
+			applied, err = copyCreationJournal(applied)
+			if err != nil {
+				return err
+			}
+			applied.Phase = "prepared"
+			applied.CreationCommand.Allocation = &CreationObservation{Proof: "verified", SessionID: applied.SessionID, Actor: prepared.Author, ObservedAt: time.Now().UTC()}
+		}
 	}
 	publication, err := planActionJournalPublication(applied)
 	if err != nil {
@@ -353,6 +380,9 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 	}
 	if latest.revision != after.revision {
 		return &ConflictError{ID: after.ID, AfterWrite: true}
+	}
+	if prepared.CreationCommand != nil {
+		creationContext(ctx).journal = verified
 	}
 	if c.journal != nil && c.journal.Group != nil && prepared.GroupOperationID == c.journal.Group.Journal.OperationID {
 		active := c.journal.Group

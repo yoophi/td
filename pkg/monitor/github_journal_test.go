@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/marcus/td/internal/ghcontext"
 	"github.com/marcus/td/internal/ghstore"
 	"os"
@@ -14,6 +15,47 @@ import (
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/testutil"
 )
+
+func TestGitHubMonitorRelatedCreationUsesOneCommandAndWholeUndo(t *testing.T) {
+	f, source := journalMonitor(t)
+	id, err := source.CreateIssue(models.Issue{Title: "Monitor related creation", Type: models.TypeTask, Priority: models.PriorityP2, Minor: true}, []string{"gh-1"})
+	if err != nil || id != "gh-2" {
+		t.Fatal(id, err)
+	}
+	actions := f.Journals(t)
+	if len(actions) != 1 || actions[0].Action != "create" || actions[0].Phase != "applied" {
+		t.Fatal(actions)
+	}
+	requests, err := os.ReadFile(f.RequestsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(requests)), "\n") {
+		var request struct{ Method, Path string }
+		if err := json.Unmarshal([]byte(line), &request); err != nil {
+			t.Fatal(err)
+		}
+		if request.Path == "repos/owner/repo/issues/1" || request.Method == "PATCH" && request.Path == "repos/owner/repo/issues/2" {
+			t.Fatal("monitor split related creation into per-target reads or later dependency writes", request)
+		}
+	}
+	client, err := ghstore.Open(context.Background(), f.Directory, &models.GitHubStoreConfig{Remote: "origin", Repo: "owner/repo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := client.ReadSnapshot(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := snapshot.ActionHistory("actual-monitor")
+	if err != nil || len(history) != 1 || history[0].CreationCommand == nil {
+		t.Fatal(history, err)
+	}
+	result, err := client.UndoAction(context.Background(), history[0].ID, "actual-monitor")
+	if err != nil || result.Issue.DeletedAt == nil || result.Journal.Phase != "undone" {
+		t.Fatal(result, err)
+	}
+}
 
 func journalMonitor(t *testing.T) (testutil.GitHubJournalFixture, *GitHubDataSource) {
 	t.Helper()

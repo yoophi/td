@@ -27,6 +27,7 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | `update` with parent/dependency changes, optional scalar fields and inline comments, without `--status` | v27 command includes selected tasks and shared reverse-edge targets; v28 effects bind graph observations to actual earlier results | No local context change |
 | `update` with `--status`, optional fields/relationships/inline comments | v29 freezes complete requested inputs and original graph membership; v30 receipts bind actual field, workflow/cascade and comment results | Focus changes only for completed selected roots |
 | Monitor edit form | One observed command for all fields, dependencies and an actually changed status; stale forms fail before writes | Draft and error handling remain local |
+| CLI create with `--depends-on` / `--blocks`; monitor creation with dependencies | v31 creation command freezes complete input and original graph before POST; actual allocation owns an optional v32 reverse-edge command | Monitor retains its draft, allocated ID and no-repeat guard on partial failure |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -239,17 +240,48 @@ cover compound transitions, automatic/existing handoffs, parent/dependent
 cascades, policy failures, uncertain writes and external conflicts; full release
 checks and native acceptance are separate gates, not implied by this document.
 
-## Remaining writer integration
+## Creation with relationships
 
-| Writer | Current effects requiring an aggregate |
-|---|---|
-| Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
+CLI creation with relationship flags and monitor creation with dependencies now
+use the same command. Preparation captures the original graph in one paginated
+issue collection, without one issue GET per dependency. Initial dependencies are
+part of the creation POST. Only the actual allocated GitHub issue number can be
+bound into reverse-edge inputs; original external observations remain unchanged.
+The optional relationship child cannot be recovered or undone independently.
+`last` and `undo --list` collapse the creation and its child into one entry.
 
-The remaining CLI and monitor creation paths need a shared contract, including complete
-command inputs fixed before the first write, original target identity, partial
-completion, inverse conflict checks and no replay of completed effects. Their
-individual receipts are not evidence of command-wide undo support. HTTP/monitor
-adapter coverage and the complete command/flag inventory must be checked against
+Forward recovery may record a partial creation with unattempted reverse edges.
+It never POSTs another task or adds missing edges. Known allocated IDs accompany
+errors. Verified allocation evidence remains distinct from an observed outcome.
+
+Whole-command undo first checks the source, original graph, native activity,
+close/reopen events and every remaining relationship inverse. It restores actual
+reverse-edge effects through the existing group protocol, records their real
+completed receipts, then logically deletes the allocated task. GitHub identity,
+native state and history survive. The original creation snapshots are immutable;
+the inverse does not fabricate a before-state for an issue that did not exist.
+
+Receipt recovery after a lost deletion response writes receipts only and retains
+observed provenance. A pending child inverse can be reconciled before an explicit
+`undo` continues unattempted effects. Once the deletion checkpoint was published,
+an uncertain deletion is never automatically retried. If the task still has its
+original live state, recovery reports an unverified outcome rather than claiming
+completion or resending PATCH. Inspect that case manually. Completed confirmation
+checks the source and saved external results without writes, including after the
+source is hidden. Later task, comment, receipt or graph changes remain conflicts.
+
+The v31/v32 formats use the existing bounded compression and multipart transport.
+Upgrade and restart readers before publishing them. Fixture coverage includes
+whole-command compensation, partial forward outcomes, uncertain child/deletion/
+parent receipts, conflicts, and the monitor production client. Native acceptance
+and the full release gates remain separate checks.
+
+## Remaining acceptance and adapter audit
+
+HTTP creation currently accepts a parent but no dependency/block list, so its
+existing single creation POST remains standalone. Legacy standalone creation
+receipts retain their explicit logical-delete alternative. HTTP/monitor adapter
+coverage and the complete command/flag inventory must still be checked against
 #31 before closing #65/#68.
 
 Individual uncertain activity creations support receipt-only reconciliation

@@ -87,6 +87,8 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
+	CreationCommand        *ActionCreationCommand    `json:"creation_command,omitempty"`
+	CreationOwner          string                    `json:"creation_owner,omitempty"`
 	WorkflowStep           int                       `json:"workflow_step,omitempty"`
 	WorkflowEvents         *[]nativeStateEvent       `json:"workflow_events,omitempty"`
 	CommentObservation     *ActionCommentObservation `json:"comment_observation,omitempty"`
@@ -150,6 +152,9 @@ func (a ActionJournal) validate() error {
 	}
 	if !identity(a.OperationID) || !identity(a.SessionID) {
 		return fmt.Errorf("action history requires operation and session identity")
+	}
+	if err := a.validateCreationScope(); err != nil {
+		return err
 	}
 	if a.Group != nil || a.Action == "group" {
 		return a.validateGroupAction()
@@ -260,7 +265,10 @@ func (a ActionJournal) validate() error {
 	if err := a.validateNativeUndo(); err != nil {
 		return err
 	}
-	return a.validateReconciliation()
+	if err := a.validateReconciliation(); err != nil {
+		return err
+	}
+	return a.validateCreationCommand()
 }
 
 func renderActionJournal(a ActionJournal) (string, error) {
@@ -350,6 +358,12 @@ func renderActionJournal(a ActionJournal) (string, error) {
 	} else if a.entityKind() != "" {
 		start = actionEntityJournalStart
 	}
+	if a.CreationCommand != nil {
+		start = actionCreationCommandStart
+	}
+	if a.CreationOwner != "" {
+		start = actionCreationRelationsStart
+	}
 	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, target, a.Phase, start, data, markerEnd), nil
 }
 
@@ -374,7 +388,11 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionWorkflowUpdateJournalStart) {
+	if strings.HasPrefix(block, actionCreationCommandStart) {
+		start = actionCreationCommandStart
+	} else if strings.HasPrefix(block, actionCreationRelationsStart) {
+		start = actionCreationRelationsStart
+	} else if strings.HasPrefix(block, actionWorkflowUpdateJournalStart) {
 		start = actionWorkflowUpdateJournalStart
 	} else if strings.HasPrefix(block, actionWorkflowUpdateMemberStart) {
 		start = actionWorkflowUpdateMemberStart
@@ -445,6 +463,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
+	if (a.CreationCommand != nil) != (start == actionCreationCommandStart) || (a.CreationOwner != "") != (start == actionCreationRelationsStart) || !creationNativeAuthor(a, comment.User.Login) {
+		return nil, fmt.Errorf("creation command version or native attribution differs from payload")
+	}
 	activityGroup := start == actionActivityGroupJournalStart
 	activityRoot := a.Group != nil && a.Group.activityGroup()
 	activityMember := a.GroupOperationID != "" && a.Action == "comment_create"
@@ -457,7 +478,7 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		return nil, fmt.Errorf("update/comments version differs from payload")
 	}
 	relationsRoot, relationsMember := a.Group.updateRelationsGroup(), a.GroupContract == updateRelationsContract
-	if relationsRoot != (start == actionUpdateRelationsJournalStart) || relationsMember != (start == actionUpdateRelationsMemberStart) {
+	if relationsRoot != (start == actionUpdateRelationsJournalStart || start == actionCreationRelationsStart) || relationsMember != (start == actionUpdateRelationsMemberStart) {
 		return nil, fmt.Errorf("update/relations version differs from payload")
 	}
 	workflowRoot, workflowMember := a.Group.workflowUpdateGroup(), a.GroupContract == workflowUpdateContract

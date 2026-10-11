@@ -104,6 +104,11 @@ func selectJournalUploadParts(plan *journalPublication, collection *journalPartC
 // write response. Callers may consume it immediately within this publication
 // boundary; subsequent writes must still reobserve their original receipts.
 func (c *Client) publishJournal(ctx context.Context, path string, plan *journalPublication, old *ActionJournalRecord, fence func() error) (*ActionJournalRecord, error) {
+	if active := creationContext(ctx); active != nil && active.journal != nil {
+		if err := c.verifyCreationReceipt(ctx, active.journal); err != nil {
+			return nil, err
+		}
+	}
 	if plan == nil {
 		return nil, fmt.Errorf("journal publication plan is required")
 	}

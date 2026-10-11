@@ -40,6 +40,7 @@ func (a ActionJournal) validateReconciliation() error {
 }
 
 type ActionReconcileResult struct {
+	Partial             bool                      `json:"partial,omitempty"`
 	GroupMembers        []ActionGroupResultMember `json:"group_members,omitempty"`
 	GroupReceiptSaved   bool                      `json:"group_receipt_saved,omitempty"`
 	ForwardOutcome      *ActionUndoOutcome        `json:"forward_outcome,omitempty"`
@@ -84,6 +85,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	if action == nil || action.CarrierID == "" {
 		return nil, fmt.Errorf("recovery requires a separate action journal carrier")
 	}
+	if err := checkCreationChildAccess(ctx, action); err != nil {
+		return nil, err
+	}
 	if _, err := c.journalCarrier(ctx, action.CarrierID); err != nil {
 		return nil, err
 	}
@@ -97,6 +101,9 @@ func (c *Client) ReconcileAction(ctx context.Context, id, sessionID string, appl
 	}
 	if actor.Login == "" || !strings.EqualFold(actor.Login, action.Author) {
 		return nil, fmt.Errorf("recovery receipt is not attributed to the authenticated GitHub author; no write attempted")
+	}
+	if action.CreationCommand != nil {
+		return c.reconcileCreationCommand(ctx, action, sessionID, actor.Login, apply)
 	}
 	if action.Group != nil {
 		return c.reconcileActionGroup(ctx, action, sessionID, actor.Login, apply, false)

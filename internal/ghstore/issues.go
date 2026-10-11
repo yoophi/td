@@ -431,6 +431,11 @@ func (c *Client) writeIssueCreation(ctx context.Context, plan *issueCreatePlan) 
 			return nil, err
 		}
 	}
+	if active := creationContext(ctx); active != nil {
+		if err := c.verifyCreationOriginal(ctx, active.journal, nil); err != nil {
+			return nil, err
+		}
+	}
 	data, err := c.request(ctx, "POST", "/issues", payload, false)
 	if err != nil {
 		return nil, fmt.Errorf("%w; operation %s is embedded in the issue body if created; inspect recent issues before retrying (search indexing can lag)", err, operationID)
@@ -449,6 +454,9 @@ func (c *Client) writeIssueCreation(ctx context.Context, plan *issueCreatePlan) 
 	}
 	if journal != nil && !strings.EqualFold(returned.User.Login, journal.Author) {
 		return nil, fmt.Errorf("%s was created, but its GitHub author differs from intent %s; inspect GitHub before retrying", record.ID, operationID)
+	}
+	if active := creationContext(ctx); active != nil {
+		active.allocated = record
 	}
 	if err := checkLabels(record, labels, "created"); err != nil {
 		return nil, err
@@ -758,6 +766,14 @@ func (c *Client) writeIssueUpdate(ctx context.Context, plan *issueUpdatePlan) (*
 		}
 	}
 	if err := c.verifyPlannedUpdateGroup(ctx, nil); err != nil {
+		return nil, err
+	}
+	if active := creationContext(ctx); active != nil {
+		if err := c.verifyCreationReceipt(ctx, active.journal); err != nil {
+			return nil, err
+		}
+	}
+	if err := checkCreationInverseFence(ctx); err != nil {
 		return nil, err
 	}
 	data, err := c.request(ctx, "PATCH", fmt.Sprintf("/issues/%d", record.Number), payload, false)

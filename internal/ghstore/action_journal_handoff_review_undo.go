@@ -65,36 +65,7 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 	if root.Phase == "undone" {
 		return &ActionUndoResult{Issue: observed.Current[root.IssueID], Journal: root, AlreadyUndone: true, GroupMembers: observed.Members, UndoOutcome: groupResultOutcome(root, true)}, nil
 	}
-	// Check every remaining inverse before the first mutation. Exact comment
-	// clocks are checked again after any companion effect has been restored.
-	for _, r := range observed.Receipts {
-		if r.Phase != "applied" {
-			continue
-		}
-		if r.Action == "comment_create" {
-			if !strings.EqualFold(r.CommentAfter.Author, user.Login) {
-				return nil, fmt.Errorf("paired command comment author changed")
-			}
-			if err := c.readNativeComment(ctx, r.CommentAfter); err != nil {
-				return nil, err
-			}
-		} else {
-			if root.Group.fieldCommentGroup() {
-				if err := scalarUndoScope(r); err != nil {
-					return nil, err
-				}
-				if !sameActionContents(*r.After, observed.States[r.IssueID]) {
-					return nil, &ConflictError{ID: r.IssueID}
-				}
-			} else if _, err := r.PlanIssueUndo(observed.Current[r.IssueID], session, user.Login); err != nil {
-				return nil, err
-			}
-			if err := c.checkUndoOriginalReview(ctx, r, false); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if err := c.preflightRelationGroupInverse(ctx, root, observed); err != nil {
+	if err := c.preflightPairedInverse(ctx, root, observed, session, user.Login); err != nil {
 		return nil, err
 	}
 	if root.Phase == "applied" {
@@ -166,4 +137,40 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 		return nil, err
 	}
 	return &ActionUndoResult{Issue: result.Issue, Journal: result.Journal, GroupMembers: result.GroupMembers, UndoOutcome: groupResultOutcome(result.Journal, true)}, nil
+}
+
+func (c *Client) preflightPairedInverse(ctx context.Context, root *ActionJournalRecord, observed *pairedGroupObservation, session, author string) error {
+	// Check every remaining inverse before the first mutation. Exact comment
+	// clocks are checked again after any companion effect has been restored.
+	for _, r := range observed.Receipts {
+		if r.Phase != "applied" {
+			continue
+		}
+		if r.Action == "comment_create" {
+			if !strings.EqualFold(r.CommentAfter.Author, author) {
+				return fmt.Errorf("paired command comment author changed")
+			}
+			if err := c.readNativeComment(ctx, r.CommentAfter); err != nil {
+				return err
+			}
+		} else {
+			if root.Group.fieldCommentGroup() {
+				if err := scalarUndoScope(r); err != nil {
+					return err
+				}
+				if !sameActionContents(*r.After, observed.States[r.IssueID]) {
+					return &ConflictError{ID: r.IssueID}
+				}
+			} else if _, err := r.PlanIssueUndo(observed.Current[r.IssueID], session, author); err != nil {
+				return err
+			}
+			if err := c.checkUndoOriginalReview(ctx, r, false); err != nil {
+				return err
+			}
+		}
+	}
+	if err := c.preflightRelationGroupInverse(ctx, root, observed); err != nil {
+		return err
+	}
+	return nil
 }

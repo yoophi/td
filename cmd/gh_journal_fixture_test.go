@@ -72,6 +72,13 @@ if path.startswith('repos/owner/repo/issues/comments/'):
  if data is not None:
   if method=='PATCH':
    payload=json.load(sys.stdin)
+   creation_failure=os.environ.get('TD_GH_CREATION_FAIL');creation_body=payload.get('body','')
+   creation_record=None
+   creation_marker='<!-- td:action:v31\n'
+   if creation_marker in creation_body:creation_record=json.loads(creation_body.split(creation_marker,1)[1].rsplit('\n-->',1)[0])
+   if creation_record is not None and creation_failure=='inverse-command-receipt-denied' and creation_record['phase']=='undone':sys.stderr.write('HTTP 403 creation inverse receipt denied');sys.exit(1)
+   creation_denied=(creation_failure=='member-receipt-denied' and '"group_contract":"update-relations"' in creation_body and '"phase":"applied"' in creation_body) or (creation_failure=='relation-receipt-denied' and '"creation_owner":' in creation_body and '"phase":"applied"' in creation_body) or (creation_failure=='command-receipt-denied' and '"creation_command":' in creation_body and '"phase":"applied"' in creation_body)
+   if creation_denied:sys.stderr.write('HTTP 403 creation receipt denied');sys.exit(1)
    ordered=fixture_ordered_record(payload.get('body',''));steps=ordered.get('group',{}).get('ordered',{}).get('steps',[]) if ordered else [];step=steps[-1] if steps else None
    completes_ordered_step=step is not None and step.get('result') is not None
    if os.environ.get('TD_GH_JOURNAL_FAIL')=='receipt-denied' or (os.environ.get('TD_GH_JOURNAL_FAIL')=='undo-completion-denied' and ('"phase":"undone"' in payload.get('body','') or completes_ordered_step)):sys.stderr.write('HTTP 403 journal receipt denied');sys.exit(1)

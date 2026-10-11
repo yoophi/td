@@ -232,7 +232,7 @@ func (a ActionJournal) validateGroupAction() error {
 }
 
 func validateGroupRewrite(old, next ActionJournal) error {
-	if old.GroupOperationID != next.GroupOperationID || old.GroupMixed != next.GroupMixed || old.GroupContract != next.GroupContract {
+	if old.CreationOwner != next.CreationOwner || old.GroupOperationID != next.GroupOperationID || old.GroupMixed != next.GroupMixed || old.GroupContract != next.GroupContract {
 		return fmt.Errorf("member group identity is immutable")
 	}
 	if old.Group == nil || next.Group == nil {

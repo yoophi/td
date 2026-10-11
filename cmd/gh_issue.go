@@ -153,27 +153,14 @@ func runGitHubIssue(cmd *cobra.Command, args []string, operation string, cfg *mo
 	if operation == "create" {
 		created.CreatorSession = local.Session.ID
 		created.CreatedBranch = scope.Branch
+		var record *ghstore.Record
 		if relations.changed() {
-			// A synthetic graph node validates the requested final graph before
-			// creation; it is never written or used as review attribution.
-			_, err = prepareGitHubRelations(cmd.Context(), client, &ghstore.Record{Issue: models.Issue{ID: "new-issue"}}, relations)
-			if err != nil {
-				return err
-			}
+			record, err = client.CreateWithRelations(cmd.Context(), created, ghstore.RelationChanges{DependsOn: relations.depends, Blocks: relations.blocks})
+		} else {
+			record, err = writer.Create(cmd.Context(), created)
 		}
-		record, err := writer.Create(cmd.Context(), created)
 		if err != nil {
 			return err
-		}
-		if relations.changed() {
-			createdID := record.ID
-			plan, planErr := prepareGitHubRelations(cmd.Context(), client, record, relations)
-			if planErr == nil {
-				record, planErr = applyGitHubRelations(cmd.Context(), client, plan, record, local.Session.ID)
-			}
-			if planErr != nil {
-				return fmt.Errorf("issue %s was created, but relationship attachment failed; earlier changes remain, inspect it before retrying creation: %w", createdID, planErr)
-			}
 		}
 		return emitGitHubMutation(cmd, "created", record)
 	}

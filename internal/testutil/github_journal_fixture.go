@@ -82,7 +82,7 @@ func (f GitHubJournalFixture) Journals(t *testing.T) []GitHubJournalReceipt {
 		}
 		header := block[:line]
 		known := false
-		for _, version := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "10", "11", "12", "13", "14", "15", "27", "28", "29", "30"} {
+		for _, version := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "10", "11", "12", "13", "14", "15", "27", "28", "29", "30", "31", "32"} {
 			if header == "<!-- td:action:v"+version {
 				known = true
 				break

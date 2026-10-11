@@ -117,8 +117,14 @@ func (c *Client) bindCreatedRecord(original *creationCommandPlan, created *Recor
 		if err != nil {
 			return err
 		}
-		if owned.revision != record.revision {
-			return fmt.Errorf("creation observation's native contents changed for %s", record.ID)
+		// Record.revision hashes the entire native API item, including author,
+		// URL and creation/closure clocks. ActionIssueState intentionally holds
+		// only undo-relevant fields, so its reconstructed checksum is different.
+		// Retain the actual original revision instead of synthesizing a new one.
+		owned.revision, owned.CreatedAt = record.revision, record.CreatedAt
+		if record.ClosedAt != nil {
+			closed := *record.ClosedAt
+			owned.ClosedAt = &closed
 		}
 		owned.repository, owned.URL = c.repo, record.URL
 		records[record.ID] = *owned

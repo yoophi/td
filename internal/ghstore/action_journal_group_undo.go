@@ -22,6 +22,9 @@ type groupUndoGate struct {
 }
 
 func checkGroupUpdateUndoGate(ctx context.Context, member *ActionJournalRecord, current *Record) error {
+	if err := checkCreationInverseFence(ctx); err != nil {
+		return err
+	}
 	gate, _ := ctx.Value(groupUndoContextKey{}).(*groupUndoGate)
 	if gate != nil && gate.UpdateFence != nil {
 		return gate.UpdateFence(member, current)
@@ -372,5 +375,5 @@ func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord,
 		}
 		return 0
 	})
-	return out, nil
+	return collapseCreationCommands(out)
 }

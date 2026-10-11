@@ -16,6 +16,10 @@ import (
 func creationBindingFixture(t *testing.T) (*journalWriteFixture, *creationCommandPlan, *Record) {
 	t.Helper()
 	f := newJournalWriteFixture(t, "")
+	base := f.issues[1]
+	base.CreatedAt, base.URL = base.UpdatedAt.Add(-time.Hour), "https://github.com/owner/repo/issues/1"
+	base.User.Login = "github-author"
+	f.issues[1] = base
 	for _, n := range []int{3, 4} {
 		r := f.issues[1]
 		r.Number, r.Title = n, fmt.Sprintf("Existing %d", n)
@@ -32,6 +36,7 @@ func creationBindingFixture(t *testing.T) (*journalWriteFixture, *creationComman
 	// This is a native fixture response, not a guessed future observation used
 	// in production. The binding must match these exact server-owned fields.
 	r := apiIssue{Number: 2, Title: plan.create.input.Title, Body: plan.create.input.Body, State: "open", UpdatedAt: f.issues[1].UpdatedAt.Add(time.Minute)}
+	r.CreatedAt, r.URL, r.User.Login = r.UpdatedAt, "https://github.com/owner/repo/issues/2", "github-author"
 	for _, name := range plan.create.input.Labels {
 		r.Labels = append(r.Labels, struct {
 			Name string `json:"name"`
