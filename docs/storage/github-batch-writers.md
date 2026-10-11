@@ -276,9 +276,9 @@ whole-command compensation, partial forward outcomes, uncertain child/deletion/
 parent receipts, conflicts, and the monitor production client. Native acceptance
 and the full release gates remain separate checks.
 
-## Remaining acceptance and adapter audit
+## Acceptance and adapter audit
 
-The import executor remains an incomplete batch writer in #65. The local CLI now
+The import executor now has a command boundary in #65. The local CLI
 binds its existing capture, provenance, intent and completion protocol to one
 current-session action command, with original-root resume, completed results and
 receipt-only reconciliation. Whole-command compensation and same-ID reimport
@@ -295,25 +295,32 @@ graph-detachment failure/recovery pass local CLI acceptance in #76, including
 native identity/history and original-input preservation without duplicate
 allocations or repeated PATCHes. Resumed whole-command undo and inverse receipt
 failure recovery also pass local CLI acceptance (#77), preserving original and
-forward evidence, native history, and external edits. The #65 writer audit
-(#79) and native acceptance (#78) remain release gates, tracked as
-separate tasks under release preparation epic #74. Capacity errors may stop with explicit original errors and
+forward evidence, native history, and external edits. Native acceptance (#78)
+passed with response-loss recovery, read-only repeats, whole undo, same-ID
+reimport and final fixture cleanup. The [writer audit (#79)](github-writer-audit.md)
+traces the actual CLI/HTTP/monitor dispatch and records passing production-adapter
+and inventory checks. Final #65 review and release verification remain separate
+tasks under release preparation epic #74. Capacity errors may stop with explicit original errors and
 partial-effect disclosure; worst-case future result sizing is not a release
 gate. See [the import command contract](github-import-command-journal.md).
 
 HTTP creation currently accepts a parent but no dependency/block list, so its
 existing single creation POST remains standalone. Legacy standalone creation
-receipts retain their explicit logical-delete alternative. HTTP/monitor adapter
-coverage and the complete command/flag inventory must still be checked against
-#31 before closing #65/#68.
+receipts retain their explicit logical-delete alternative. The #79 audit verifies
+the current #65 adapter boundaries. Complete command/flag contracts remain
+#31/#68 work and are not implied by this intermediate release.
 
 Individual uncertain activity creations support receipt-only reconciliation
 with explicit v18 observer provenance. Work-session activity groups carry the
-same observer provenance in v19 members. Mixed writers above still need their
-aggregate membership, execution and inverse checks.
+same observer provenance in v19 members. The writer audit links the mixed
+writers above to their aggregate membership, execution and inverse evidence.
 
-Board/note operations currently mutate one entity per command; rendering and
-filter loops do not constitute batch writes. Session cleanup and work-session
+Existing board/note updates mutate one carrier; rendering and filter loops do
+not constitute batch writes. Initial builtin-board materialization followed by
+a shared mode/position write still creates separate tracked actions. This
+implementable setup/undo boundary is recorded as #83 under the broader #9/#68
+gate, rather than declared an impossible API exception. Monitor view/visit
+preferences remain device-local. Session cleanup and work-session
 start/end/tag removal change device-local JSON; remote journal undo must not
 claim to restore those local records. Portable history remains #66. Multipart
 storage (#67) now publishes large journals across verified part comments and a

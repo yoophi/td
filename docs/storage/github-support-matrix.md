@@ -37,6 +37,9 @@ observations. Compound command effects collapse into one history entry. The
 [current writer matrix](github-batch-writers.md) records the concrete CLI,
 monitor and HTTP integration boundaries, including workflow cascades, claim
 sweeps, work-session fan-out and creation with relationships.
+The [#79 writer audit](github-writer-audit.md) maps those adapters to production
+entry points and regression evidence. Native import acceptance is recorded in
+the [import journal contract](github-import-command-journal.md#native-acceptance-78).
 
 Supported inverse executors retain original snapshots, attribution, review
 checks, graph observations and native-event evidence. Related creation records
@@ -57,6 +60,7 @@ does not restore device-local focus or work-session records.
 The machine-readable matrix remains a partial command/flag audit. New creation
 fixtures prove command grouping, whole-command compensation, failure recovery
 and foreign-change rejection; they do not replace native acceptance or the full
-release gates. Portable history (#66), adapter coverage (#31/#68), and the full
+release gates. Builtin-board setup grouping (#83), portable history (#66), full
+command/flag and adapter coverage (#31/#68), and the full
 #9 scope must be verified separately. Earlier authentication or loopback failures
 are historical observations, not current implementation exclusions.
