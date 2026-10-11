@@ -15,16 +15,17 @@ const markerStart = markerPrefix + "v1\n"
 const markerEnd = "\n-->"
 
 type metadata struct {
-	EntityKind      string          `json:"entity_kind,omitempty"`
-	Board           *BoardDetails   `json:"board,omitempty"`
-	Note            *NoteDetails    `json:"note,omitempty"`
-	Details         *IssueDetails   `json:"details,omitempty"`
-	OperationID     string          `json:"operation_id,omitempty"`
-	Type            models.Type     `json:"type"`
-	Priority        models.Priority `json:"priority"`
-	Points          int             `json:"points"`
-	Acceptance      string          `json:"acceptance,omitempty"`
-	LastStateReason string          `json:"last_state_reason,omitempty"`
+	EntityKind      string                `json:"entity_kind,omitempty"`
+	Board           *BoardDetails         `json:"board,omitempty"`
+	Note            *NoteDetails          `json:"note,omitempty"`
+	Details         *IssueDetails         `json:"details,omitempty"`
+	OperationID     string                `json:"operation_id,omitempty"`
+	ImportOwner     *ImportExecutionOwner `json:"import_owner,omitempty"`
+	Type            models.Type           `json:"type"`
+	Priority        models.Priority       `json:"priority"`
+	Points          int                   `json:"points"`
+	Acceptance      string                `json:"acceptance,omitempty"`
+	LastStateReason string                `json:"last_state_reason,omitempty"`
 }
 
 func encodeBody(description string, meta metadata) (string, error) {
@@ -70,6 +71,14 @@ func decodeBody(body string) (string, metadata, bool, error) {
 }
 
 func validateMetadata(meta metadata) error {
+	if meta.ImportOwner != nil {
+		if meta.EntityKind != "" && meta.EntityKind != "issue" || !strings.HasPrefix(meta.OperationID, "td-import-v1-") || !importDigestPattern.MatchString(strings.TrimPrefix(meta.OperationID, "td-import-v1-")) {
+			return fmt.Errorf("import allocation owner requires a source-bound task identity")
+		}
+		if err := meta.ImportOwner.validate(); err != nil {
+			return err
+		}
+	}
 	if !models.IsValidType(meta.Type) || !models.IsValidPriority(meta.Priority) || (meta.Points != 0 && !models.IsValidPoints(meta.Points)) {
 		return fmt.Errorf("invalid td issue metadata fields")
 	}

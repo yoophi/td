@@ -8,19 +8,20 @@ import (
 )
 
 type ImportPlanRow struct {
-	SourceID                 string   `json:"source_id"`
-	SourceKey                string   `json:"source_key"`
-	Digest                   string   `json:"digest"`
-	TargetID                 string   `json:"target_id,omitempty"`
-	Action                   string   `json:"action"`
-	SourceChanged            bool     `json:"source_changed,omitempty"`
-	ParentSourceKey          string   `json:"parent_source_key,omitempty"`
-	DependencySourceKeys     []string `json:"dependency_source_keys"`
-	BlockedSourceKeys        []string `json:"blocked_source_keys"`
-	Observed                 *Record  `json:"-"`
-	OperationID              string   `json:"operation_id"`
-	ResumeState              string   `json:"resume_state,omitempty"`
-	HistoryVerified          bool     `json:"history_verified,omitempty"`
+	SourceID                 string                `json:"source_id"`
+	SourceKey                string                `json:"source_key"`
+	Digest                   string                `json:"digest"`
+	TargetID                 string                `json:"target_id,omitempty"`
+	Action                   string                `json:"action"`
+	SourceChanged            bool                  `json:"source_changed,omitempty"`
+	ParentSourceKey          string                `json:"parent_source_key,omitempty"`
+	DependencySourceKeys     []string              `json:"dependency_source_keys"`
+	BlockedSourceKeys        []string              `json:"blocked_source_keys"`
+	Observed                 *Record               `json:"-"`
+	OperationID              string                `json:"operation_id"`
+	ResumeState              string                `json:"resume_state,omitempty"`
+	HistoryVerified          bool                  `json:"history_verified,omitempty"`
+	Owner                    *ImportExecutionOwner `json:"owner,omitempty"`
 	intent                   *importIntent
 	basis                    string
 	destinationArchiveDigest string
@@ -191,8 +192,10 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 			}
 			row.Action, row.ResumeState = "resume", state
 			row.intent = &intent
+			row.Owner = intent.Owner
 		} else if row.capture != nil {
 			row.Action, row.ResumeState = "overwrite", "before_backup"
+			row.Owner = row.capture.Owner
 		} else if completed {
 			if row.TargetID == "" || receipt.TargetID != row.TargetID {
 				return nil, fmt.Errorf("completion receipt for %s disagrees with its target mapping; no import writes attempted", row.SourceKey)
@@ -205,6 +208,7 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 				return nil, err
 			}
 			row.HistoryVerified = verified
+			row.Owner = receipt.Owner
 			row.destinationArchiveDigest, row.destinationArchiveBasis = receipt.DestinationArchiveDigest, receipt.DestinationBasis
 			row.SourceChanged = receipt.SourceDigest != row.Digest
 			if row.SourceChanged && !force {
@@ -220,6 +224,9 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 				}
 				row.Action, row.ResumeState = "resume_history", "history_pending"
 			}
+		}
+		if row.Owner == nil && row.Observed != nil {
+			row.Owner = row.Observed.meta.ImportOwner
 		}
 		row.basis = bases[row.TargetID]
 		plan.Rows = append(plan.Rows, row)

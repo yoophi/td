@@ -10,30 +10,30 @@ import (
 )
 
 const importCapturePrefix = "<!-- td:import-capture:"
-const importCaptureStart = importCapturePrefix + "v1\n"
 
 // Capture identity is published before backup chunks. Native comment writes
 // change issue clocks; retain those clocks and the original comment boundary so
 // a later process can reconstruct identical bytes while fields remain unchanged.
 type importCapture struct {
-	Version       int        `json:"version"`
-	Repository    string     `json:"repository"`
-	SourceKey     string     `json:"source_key"`
-	SourceDigest  string     `json:"source_digest"`
-	TargetID      string     `json:"target_id"`
-	BeforeBasis   string     `json:"before_basis"`
-	ArchiveDigest string     `json:"archive_digest"`
-	Parts         int        `json:"parts"`
-	LastCommentID int64      `json:"last_comment_id"`
-	CommentCount  int        `json:"comment_count"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	ClosedAt      *time.Time `json:"closed_at"`
+	Version       int                   `json:"version"`
+	Owner         *ImportExecutionOwner `json:"owner,omitempty"`
+	Repository    string                `json:"repository"`
+	SourceKey     string                `json:"source_key"`
+	SourceDigest  string                `json:"source_digest"`
+	TargetID      string                `json:"target_id"`
+	BeforeBasis   string                `json:"before_basis"`
+	ArchiveDigest string                `json:"archive_digest"`
+	Parts         int                   `json:"parts"`
+	LastCommentID int64                 `json:"last_comment_id"`
+	CommentCount  int                   `json:"comment_count"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	ClosedAt      *time.Time            `json:"closed_at"`
 	commentID     int64
 }
 
 func (capture importCapture) validate() error {
-	receipt := importReceipt{Version: capture.Version, SourceKey: capture.SourceKey, SourceDigest: capture.SourceDigest, TargetID: capture.TargetID, TargetBasis: capture.BeforeBasis}
+	receipt := importReceipt{Version: capture.Version, Owner: capture.Owner, SourceKey: capture.SourceKey, SourceDigest: capture.SourceDigest, TargetID: capture.TargetID, TargetBasis: capture.BeforeBasis}
 	if err := receipt.validate(); err != nil {
 		return err
 	}
@@ -51,20 +51,19 @@ func renderImportCapture(capture importCapture) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "td import destination capture.\n\n" + importCaptureStart + string(data) + markerEnd, nil
+	return "td import destination capture.\n\n" + importCheckpointStart(importCapturePrefix, capture.Version) + string(data) + markerEnd, nil
 }
 
 func decodeImportCapture(body string) (*importCapture, error) {
 	if !strings.Contains(body, importCapturePrefix) {
 		return nil, nil
 	}
-	index := strings.Index(body, importCapturePrefix)
-	block := strings.TrimSpace(body[index:])
-	if strings.Count(body, importCapturePrefix) != 1 || !strings.HasPrefix(block, importCaptureStart) || !strings.HasSuffix(block, markerEnd) {
-		return nil, fmt.Errorf("malformed destination capture")
+	data, err := importCheckpointJSON(body, importCapturePrefix)
+	if err != nil {
+		return nil, err
 	}
 	var capture importCapture
-	if err := decodeImportJSON([]byte(strings.TrimSuffix(strings.TrimPrefix(block, importCaptureStart), markerEnd)), &capture); err != nil {
+	if err := decodeImportJSON(data, &capture); err != nil {
 		return nil, err
 	}
 	canonical, err := renderImportCapture(capture)
@@ -114,7 +113,9 @@ func canonicalImportDestination(repo string, issue apiIssue, comments []apiComme
 	}
 	slices.SortFunc(issue.Labels, func(a, b struct {
 		Name string `json:"name"`
-	}) int { return strings.Compare(a.Name, b.Name) })
+	}) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	comments = slices.Clone(comments)
 	if comments == nil {
 		comments = []apiComment{}

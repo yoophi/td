@@ -242,6 +242,9 @@ func (c *Client) writeImportProvenance(ctx context.Context, expected []importPro
 		return 0, &ConflictError{ID: first.TargetID}
 	}
 	saved := 0
+	if err := c.fenceImportExecution(ctx); err != nil {
+		return 0, err
+	}
 	for _, body := range missing {
 		data, err := c.request(ctx, "POST", fmt.Sprintf("/issues/%d/comments", record.Number), map[string]string{"body": body}, false)
 		if err != nil {
@@ -259,6 +262,9 @@ func (c *Client) writeImportProvenance(ctx context.Context, expected []importPro
 	}
 	if actual != basis {
 		return saved, &ConflictError{ID: first.TargetID, AfterWrite: saved > 0}
+	}
+	if err := c.fenceImportExecution(ctx); err != nil {
+		return saved, err
 	}
 	return saved, nil
 }

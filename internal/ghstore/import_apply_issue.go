@@ -154,6 +154,24 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 		if finalBasis != row.intent.AfterBasis || (row.detaching && after != row.intent.DetachedBasis) {
 			return nil, "", false, fmt.Errorf("import projection changed since preparation; inspect mappings before resuming")
 		}
+		if importExecution(ctx) != nil && row.intent.Owner == nil {
+			// A tracked continuation owns only changes after its frozen legacy
+			// baseline. Preserve the old checkpoint, append an explicitly owned
+			// continuation with identical projection, and fence its current basis.
+			owned := *row.intent
+			owned.Version, owned.Owner, err = importCheckpointOwnership(ctx, nil)
+			if err != nil {
+				return nil, "", false, err
+			}
+			body, err := renderImportIntent(owned)
+			if err != nil {
+				return nil, "", false, err
+			}
+			if err := c.publishImportCheckpoint(ctx, row.TargetID, basis, body, "owned continuation"); err != nil {
+				return nil, "", false, err
+			}
+			row.intent = &owned
+		}
 		if state == "after_apply" || (row.detaching && state == "after_detach") {
 			return current, basis, false, nil
 		}
@@ -169,7 +187,7 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 			// minimal created issue may enter this stage without an intent.
 			skeleton := native
 			skeleton.Title, skeleton.State = source.Issue.Title, "open"
-			skeleton.Body, err = encodeBody(source.Issue.Description, metadata{OperationID: row.OperationID, Type: source.Issue.Type, Priority: source.Issue.Priority, Points: source.Issue.Points, Acceptance: source.Issue.Acceptance})
+			skeleton.Body, err = encodeBody(source.Issue.Description, metadata{OperationID: row.OperationID, ImportOwner: current.meta.ImportOwner, Type: source.Issue.Type, Priority: source.Issue.Priority, Points: source.Issue.Points, Acceptance: source.Issue.Acceptance})
 			if err != nil {
 				return nil, "", false, err
 			}
@@ -229,6 +247,9 @@ func (c *Client) applyImportIssue(ctx context.Context, source ImportItem, row Im
 		return nil
 	}
 	if err := verify(false); err != nil {
+		return nil, "", false, err
+	}
+	if err := c.fenceImportExecution(ctx); err != nil {
 		return nil, "", false, err
 	}
 	updated, err := c.UpdateObserved(ctx, current, change)

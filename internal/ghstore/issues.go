@@ -347,6 +347,25 @@ func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue,
 	if err != nil {
 		return nil, err
 	}
+	if scope := importExecution(ctx); scope != nil {
+		allowed := false
+		for _, member := range scope.root.ImportCommand.Members {
+			allowed = allowed || member.OperationID == operationID && member.Action == "create"
+		}
+		if !allowed {
+			return nil, fmt.Errorf("import allocation is outside its original command membership")
+		}
+		description, meta, _, err := decodeBody(plan.input.Body)
+		if err != nil {
+			return nil, err
+		}
+		owner := scope.owner
+		meta.ImportOwner = &owner
+		plan.input.Body, err = encodeBody(description, meta)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return c.writeIssueCreation(ctx, plan)
 }
 
@@ -435,6 +454,9 @@ func (c *Client) writeIssueCreation(ctx context.Context, plan *issueCreatePlan) 
 		if err := c.verifyCreationOriginal(ctx, active.journal, nil); err != nil {
 			return nil, err
 		}
+	}
+	if err := c.fenceImportExecution(ctx); err != nil {
+		return nil, err
 	}
 	data, err := c.request(ctx, "POST", "/issues", payload, false)
 	if err != nil {

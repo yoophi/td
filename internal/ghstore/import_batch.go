@@ -86,6 +86,9 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 		return fail("plan", "", err)
 	}
 	result.Plan = plan
+	if err := validateImportExecutionPlan(ctx, plan, items, force); err != nil {
+		return fail("ownership", "", err)
+	}
 	if len(items) == 0 {
 		plan.DryRun = false
 		return result, nil
@@ -110,6 +113,9 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 		plan, err = c.planImport(ctx, items, force)
 		if err != nil {
 			return fail("replan", "", err)
+		}
+		if err := validateImportExecutionPlan(ctx, plan, items, force); err != nil {
+			return fail("ownership after allocation", "", err)
 		}
 	}
 	result.Plan = plan
@@ -174,6 +180,9 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 				var capture importCapture
 				capture, parts, err = newImportCapture(c.repo, *row, *entry)
 				if err == nil {
+					capture.Version, capture.Owner, err = importCheckpointOwnership(ctx, nil)
+				}
+				if err == nil {
 					var body string
 					body, err = renderImportCapture(capture)
 					if err == nil {
@@ -226,6 +235,9 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 			return fail("replan after detach", "", err)
 		}
 		result.Plan = plan
+		if err := validateImportExecutionPlan(ctx, plan, items, force); err != nil {
+			return fail("ownership after detach", "", err)
+		}
 		order, err = importGraphOrder(plan, relations)
 		if err != nil {
 			return fail("graph order after detach", "", err)

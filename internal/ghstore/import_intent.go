@@ -8,24 +8,24 @@ import (
 )
 
 const importIntentPrefix = "<!-- td:import-intent:"
-const importIntentStart = importIntentPrefix + "v1\n"
 
 // An intent precedes issue PATCHes. Known before/detached/final bases can be
 // resumed; any other state means a subsequent edit and must not be replaced.
 type importIntent struct {
-	Version                  int    `json:"version"`
-	SourceKey                string `json:"source_key"`
-	SourceDigest             string `json:"source_digest"`
-	TargetID                 string `json:"target_id"`
-	BeforeBasis              string `json:"before_basis"`
-	AfterBasis               string `json:"after_basis"`
-	DetachedBasis            string `json:"detached_basis,omitempty"`
-	DestinationArchiveDigest string `json:"destination_archive_digest,omitempty"`
+	Version                  int                   `json:"version"`
+	Owner                    *ImportExecutionOwner `json:"owner,omitempty"`
+	SourceKey                string                `json:"source_key"`
+	SourceDigest             string                `json:"source_digest"`
+	TargetID                 string                `json:"target_id"`
+	BeforeBasis              string                `json:"before_basis"`
+	AfterBasis               string                `json:"after_basis"`
+	DetachedBasis            string                `json:"detached_basis,omitempty"`
+	DestinationArchiveDigest string                `json:"destination_archive_digest,omitempty"`
 	commentID                int64
 }
 
 func (intent importIntent) validate() error {
-	receipt := importReceipt{Version: intent.Version, SourceKey: intent.SourceKey, SourceDigest: intent.SourceDigest, TargetID: intent.TargetID, TargetBasis: intent.BeforeBasis}
+	receipt := importReceipt{Version: intent.Version, Owner: intent.Owner, SourceKey: intent.SourceKey, SourceDigest: intent.SourceDigest, TargetID: intent.TargetID, TargetBasis: intent.BeforeBasis}
 	if err := receipt.validate(); err != nil {
 		return fmt.Errorf("invalid import intent: %w", err)
 	}
@@ -46,7 +46,7 @@ func renderImportIntent(intent importIntent) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "td import prepared.\n\n" + importIntentStart + string(data) + markerEnd, nil
+	return "td import prepared.\n\n" + importCheckpointStart(importIntentPrefix, intent.Version) + string(data) + markerEnd, nil
 }
 
 func decodeImportIntent(body string) (*importIntent, error) {
@@ -54,13 +54,12 @@ func decodeImportIntent(body string) (*importIntent, error) {
 	if index < 0 {
 		return nil, nil
 	}
-	block := strings.TrimSpace(body[index:])
-	if strings.Count(body, importIntentPrefix) != 1 || !strings.HasPrefix(block, importIntentStart) || !strings.HasSuffix(block, markerEnd) {
-		return nil, fmt.Errorf("malformed or unsupported import intent; inspect the edited comment")
+	data, err := importCheckpointJSON(body, importIntentPrefix)
+	if err != nil {
+		return nil, err
 	}
 	var intent importIntent
-	data := strings.TrimSuffix(strings.TrimPrefix(block, importIntentStart), markerEnd)
-	if err := decodeImportJSON([]byte(data), &intent); err != nil {
+	if err := decodeImportJSON(data, &intent); err != nil {
 		return nil, fmt.Errorf("invalid import intent: %w", err)
 	}
 	expected, err := renderImportIntent(intent)
@@ -151,6 +150,11 @@ func (c *Client) importNativeTarget(ctx context.Context, id string) (apiIssue, *
 // prepareImport publishes one checked intent, never retrying an uncertain
 // comment POST. The caller must replan before resuming or attempting a PATCH.
 func (c *Client) prepareImport(ctx context.Context, intent importIntent) error {
+	var err error
+	intent.Version, intent.Owner, err = importCheckpointOwnership(ctx, intent.Owner)
+	if err != nil {
+		return err
+	}
 	body, err := renderImportIntent(intent)
 	if err != nil {
 		return err
@@ -180,6 +184,11 @@ func (c *Client) completeImport(ctx context.Context, receipt importReceipt) erro
 // Batch completion shares one fresh bulk inventory after all field writes.
 // Each publication still checks its own destination before/after its POST.
 func (c *Client) completeImportWithInventory(ctx context.Context, receipt importReceipt, inventory importProvenanceInventory) error {
+	var err error
+	receipt.Version, receipt.Owner, err = importCheckpointOwnership(ctx, receipt.Owner)
+	if err != nil {
+		return err
+	}
 	if receipt.SourceParts == 0 {
 		return fmt.Errorf("completion requires verified source provenance parts; no receipt POST attempted")
 	}
@@ -201,6 +210,9 @@ func (c *Client) publishImportCheckpoint(ctx context.Context, targetID, expected
 	if basis != expectedBasis {
 		return &ConflictError{ID: targetID}
 	}
+	if err := c.fenceImportExecution(ctx); err != nil {
+		return err
+	}
 	data, err := c.request(ctx, "POST", fmt.Sprintf("/issues/%d/comments", record.Number), map[string]string{"body": body}, false)
 	if err != nil {
 		return fmt.Errorf("%w; import %s may exist on %s; inspect or replan before retrying; issue PATCH not attempted by checkpoint publication", err, kind, targetID)
@@ -208,6 +220,12 @@ func (c *Client) publishImportCheckpoint(ctx context.Context, targetID, expected
 	var comment apiComment
 	if err := json.Unmarshal(data, &comment); err != nil || comment.ID <= 0 || comment.Body != body {
 		return fmt.Errorf("import %s response unreadable or different on %s; inspect or replan before retrying; issue PATCH not attempted by checkpoint publication", kind, targetID)
+	}
+	if scope := importExecution(ctx); scope != nil {
+		owner, err := c.commentIssueNumber(comment.IssueURL)
+		if err != nil || owner != record.Number || !validJournalPartNative(comment) || !strings.EqualFold(comment.User.Login, scope.root.Author) || comment.CreatedAt.Before(scope.root.CreatedAt) {
+			return fmt.Errorf("owned import checkpoint has unverified native author, target or clocks")
+		}
 	}
 	_, basis, err = c.importTarget(ctx, targetID)
 	if err != nil {

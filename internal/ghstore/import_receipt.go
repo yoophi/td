@@ -16,14 +16,15 @@ const importReceiptStart = importReceiptPrefix + "v1\n"
 // A receipt is a completion record, never an active workflow approval. It is
 // stored as a native comment; normal activity parsing does not grant it rights.
 type importReceipt struct {
-	Version                  int    `json:"version"`
-	SourceKey                string `json:"source_key"`
-	SourceDigest             string `json:"source_digest"`
-	TargetID                 string `json:"target_id"`
-	TargetBasis              string `json:"target_basis"`
-	SourceParts              int    `json:"source_parts,omitempty"`
-	DestinationArchiveDigest string `json:"destination_archive_digest,omitempty"`
-	DestinationBasis         string `json:"destination_basis,omitempty"`
+	Version                  int                   `json:"version"`
+	Owner                    *ImportExecutionOwner `json:"owner,omitempty"`
+	SourceKey                string                `json:"source_key"`
+	SourceDigest             string                `json:"source_digest"`
+	TargetID                 string                `json:"target_id"`
+	TargetBasis              string                `json:"target_basis"`
+	SourceParts              int                   `json:"source_parts,omitempty"`
+	DestinationArchiveDigest string                `json:"destination_archive_digest,omitempty"`
+	DestinationBasis         string                `json:"destination_basis,omitempty"`
 	commentID                int64
 }
 
@@ -36,8 +37,11 @@ func (receipt importReceipt) validate() error {
 		validSource = (parts[0] == "legacy" && importNamespacePattern.MatchString(parts[1])) || (parts[0] == "github" && repositoryPattern.MatchString(parts[1]))
 	}
 	n, err := Number(receipt.TargetID)
-	if receipt.Version != 1 || !validSource || err != nil || receipt.SourceParts < 0 || receipt.TargetID != fmt.Sprintf("gh-%d", n) || !importDigestPattern.MatchString(receipt.SourceDigest) || !importDigestPattern.MatchString(receipt.TargetBasis) {
+	if !validSource || err != nil || receipt.SourceParts < 0 || receipt.TargetID != fmt.Sprintf("gh-%d", n) || !importDigestPattern.MatchString(receipt.SourceDigest) || !importDigestPattern.MatchString(receipt.TargetBasis) {
 		return fmt.Errorf("invalid or unsupported import completion receipt")
+	}
+	if err := validateImportCheckpointOwner(receipt.Version, receipt.Owner); err != nil {
+		return err
 	}
 	if (receipt.DestinationArchiveDigest == "") != (receipt.DestinationBasis == "") || (receipt.DestinationArchiveDigest != "" && (!importDigestPattern.MatchString(receipt.DestinationArchiveDigest) || !importDigestPattern.MatchString(receipt.DestinationBasis))) {
 		return fmt.Errorf("invalid import prior destination proof")
@@ -79,7 +83,7 @@ func renderImportReceipt(receipt importReceipt) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "td import completed.\n\n" + importReceiptStart + string(data) + markerEnd, nil
+	return "td import completed.\n\n" + importCheckpointStart(importReceiptPrefix, receipt.Version) + string(data) + markerEnd, nil
 }
 
 func decodeImportReceipt(body string) (*importReceipt, error) {
@@ -87,13 +91,12 @@ func decodeImportReceipt(body string) (*importReceipt, error) {
 	if index < 0 {
 		return nil, nil
 	}
-	block := strings.TrimSpace(body[index:])
-	if strings.Count(body, importReceiptPrefix) != 1 || !strings.HasPrefix(block, importReceiptStart) || !strings.HasSuffix(block, markerEnd) {
-		return nil, fmt.Errorf("malformed or unsupported import receipt; inspect the edited comment")
+	data, err := importCheckpointJSON(body, importReceiptPrefix)
+	if err != nil {
+		return nil, err
 	}
 	var receipt importReceipt
-	data := strings.TrimSuffix(strings.TrimPrefix(block, importReceiptStart), markerEnd)
-	if err := decodeImportJSON([]byte(data), &receipt); err != nil {
+	if err := decodeImportJSON(data, &receipt); err != nil {
 		return nil, fmt.Errorf("invalid import receipt: %w", err)
 	}
 	expected, err := renderImportReceipt(receipt)

@@ -51,6 +51,27 @@ performed after that baseline. It must not claim the earlier allocation as its
 own creation or erase earlier imported data when undone. Existing per-source
 checkpoints remain provenance, and no historical review becomes active authority.
 
+Local execution-scope integration now stamps v2 intent/capture/completion
+checkpoints with the original native command ID, operation and session. Newly
+allocated task bodies carry the same execution owner alongside their stable
+source identity. Every replan checks checkpoint evidence from its existing bulk
+observation before any writes: new checkpoints require the matching command,
+source digest and target, the original native author, unedited comment clocks,
+and creation at or after the root. A matching JSON owner alone is insufficient.
+Legacy or older-generation checkpoints must exactly match native comments in the
+frozen baseline; missing or edited baseline checkpoints stop the continuation.
+Original target inventory also prevents claiming a preexisting issue as a new
+allocation when native timestamps share the same second.
+
+Local executor tests cover response loss, rejected owner transfer, foreign or
+edited v2 checkpoints, new v1 checkpoints after allocation, and preservation of
+legitimate legacy intent/capture/completion baselines. This scope is not yet
+connected to CLI root preparation/completion or inverse execution. Each current
+root fence still reads the root and its fresh paginated carrier collection and
+revalidates the archive. Removing that duplicate point read and avoiding repeated
+semantic parsing after verified native equality remain efficiency follow-ups;
+fresh conflict checks must remain intact.
+
 ## Undo and subsequent import
 
 Undo preserves issue numbers, authors, native timestamps and comments. It marks
