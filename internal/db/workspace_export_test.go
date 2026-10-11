@@ -74,6 +74,16 @@ func TestSQLiteWorkspaceSourceRetainsSharedDataWithoutChangingOriginal(t *testin
 	if _, err := database.conn.Exec("UPDATE board_issue_positions SET deleted_at=? WHERE board_id=?", now.Format(time.RFC3339Nano), board.ID); err != nil {
 		t.Fatal(err)
 	}
+	deletedBoard, err := database.CreateBoard("Original deleted board", `id = "`+child.ID+`"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetIssuePosition(deletedBoard.ID, child.ID, 9); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.DeleteBoardLogged(deletedBoard.ID, "original-board-author"); err != nil {
+		t.Fatal(err)
+	}
 	if err := database.DeleteIssue(child.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +119,18 @@ func TestSQLiteWorkspaceSourceRetainsSharedDataWithoutChangingOriginal(t *testin
 	}
 	if len(workspace.Tasks) != 2 || len(workspace.Notes) != 1 || workspace.Notes[0].DeletedAt == nil || workspace.ExcludedActions["work_sessions"] != 1 {
 		t.Fatal("source scope lost shared data or included local actions", workspace)
+	}
+	boardHistory, positionHistory := false, false
+	for _, action := range workspace.Actions {
+		if action.EntityID == deletedBoard.ID && action.ActionType == models.ActionBoardDelete && action.SessionID == "original-board-author" && strings.Contains(action.PreviousData, "Original deleted board") {
+			boardHistory = true
+		}
+		if action.EntityType == "board_issue_positions" && action.SessionID == "original-board-author" && strings.Contains(action.PreviousData, deletedBoard.ID) && strings.Contains(action.PreviousData, child.ID) {
+			positionHistory = true
+		}
+	}
+	if !boardHistory || !positionHistory {
+		t.Fatal("hard-deleted board's available passive provenance lost")
 	}
 	found := false
 	for _, row := range workspace.Tasks {

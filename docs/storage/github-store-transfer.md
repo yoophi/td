@@ -103,6 +103,12 @@ writes and no SQLite access. SQLite source SHA256 was unchanged; a 1,000-byte
 limit returned the explicit capacity error and zero output bytes. These checks
 complete the source/input stage (#90), not the transfer command or executor.
 
+SQLite's foreign-key cascade removes a hard-deleted board's position rows.
+Available logged board/position before-images are preserved in passive action
+history; collection does not fabricate a live deleted board or restore data
+that no longer exists. Unlogged hard-deleted content is an explicit source
+limitation for the destination preservation/loss report.
+
 The envelope is not a destination-ready plan. The source
 must be preserved; previews may not initialize, upgrade or mutate it. Original
 authors, sessions and reviews are historical provenance, not destination actors
@@ -114,3 +120,10 @@ checked bidirectional execution; durable confirmed checkpoints; uncertain-write
 observation and explicit resume without duplicate creation; whole-dataset/native
 and SQLite validation. Reuse the existing import/export and passive journal
 archive paths. Data collection alone does not satisfy these requirements.
+
+Remaining stages: #92 target validation/mapping and query/loss preview,
+#93 explicit bidirectional CLI/execution, #94 confirmed checkpoint/uncertain
+write observation/resume, and #95 native/SQLite end-to-end tests, command matrix
+and integration review. Source-stage completion in this feature worktree does
+not mean those stages are implemented, main is integrated, or a new release
+was published.
