@@ -293,8 +293,10 @@ envelopes before the first remote observation; allocation, replanning, graph
 projection and provenance retain those same inputs. Mixed overwrite/create and
 graph-detachment failure/recovery pass local CLI acceptance in #76, including
 native identity/history and original-input preservation without duplicate
-allocations or repeated PATCHes. Resumed whole-command undo (#77), the #65
-writer audit (#79) and native acceptance (#78) remain release gates, tracked as
+allocations or repeated PATCHes. Resumed whole-command undo and inverse receipt
+failure recovery also pass local CLI acceptance (#77), preserving original and
+forward evidence, native history, and external edits. The #65 writer audit
+(#79) and native acceptance (#78) remain release gates, tracked as
 separate tasks under release preparation epic #74. Capacity errors may stop with explicit original errors and
 partial-effect disclosure; worst-case future result sizing is not a release
 gate. See [the import command contract](github-import-command-journal.md).

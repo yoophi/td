@@ -209,8 +209,20 @@ read-only reconciliation does not replay work, and explicit resume preserves
 the original input/before-state, native issue identities/authors and comments,
 and unrelated tasks. Each existing task receives exactly one detach and one
 final PATCH; the newly allocated task receives one final PATCH and is not
-allocated again. A completed repeat makes no writes. Whole undo of the resumed
-mixed command remains #77, and live GitHub acceptance remains #78.
+allocated again. A completed repeat makes no writes. Whole undo of that resumed
+mixed command now passes local CLI acceptance (#77), restores both original
+graphs and fields, logically deletes the original new allocation, and preserves
+native identities/comments and the immutable original/forward command evidence.
+Its overall attribution remains observed. First-allocation response loss also
+resumes and undoes both the original and subsequently allocated task together.
+
+Inverse result-receipt response loss permits explicit continuation from its
+retained result without another PATCH to that task. Denial of the final inverse
+completion receipt is repaired by receipt-only observation, with no target
+writes and observed attribution. External edits during a partial inverse stop
+both undo and result adoption before changing targets or journal evidence.
+Completed recovery confirmation is read-only. These are CLI fixture results;
+live GitHub acceptance remains #78.
 Source/destination provenance already written by the
 legacy executor is unchanged; reuse across that format and command documents is
 a future integration/efficiency concern, not a claim of zero storage duplication.

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -160,6 +161,34 @@ func TestGitHubJournalCLIImportForwardAndResume(t *testing.T) {
 			var native struct{ Issues map[string]json.RawMessage }
 			if json.Unmarshal(state, &native) != nil || len(native.Issues) != 7 {
 				t.Fatal("resume duplicated task allocations", len(native.Issues))
+			}
+			if failure == "allocation-lost" {
+				beforeUndo := readImportNativeFixture(t)
+				execute("undo")
+				done := importLastCommand(t, execute)
+				if done.ID != before[0].ID || done.Phase != "undone" || !reflect.DeepEqual(done.ImportCommand, before[0].ImportCommand) || !reflect.DeepEqual(done.ImportForward, after[0].ImportForward) {
+					t.Fatal("undo split the original and resumed allocations or replaced evidence")
+				}
+				restored := readImportNativeFixture(t)
+				if len(restored.Issues) != 7 || !reflect.DeepEqual(beforeUndo.Comments, restored.Comments) {
+					t.Fatal("resumed allocation undo lost native identities or history")
+				}
+				for _, id := range []string{"gh-6", "gh-7"} {
+					if out, stderr, err := run("show", id, "--json"); err == nil || !strings.Contains(out+stderr, "deleted") {
+						t.Fatal("undo omitted an original or resumed allocation", id, out, stderr, err)
+					}
+					number := strings.TrimPrefix(id, "gh-")
+					for _, field := range []string{"number", "created_at", "user", "url", "state"} {
+						if !reflect.DeepEqual(beforeUndo.Issues[number][field], restored.Issues[number][field]) {
+							t.Fatal("undo replaced an original or resumed native identity", id, field)
+						}
+					}
+				}
+				for id, issue := range beforeUndo.Issues {
+					if id != "6" && id != "7" && !reflect.DeepEqual(issue, restored.Issues[id]) {
+						t.Fatal("resumed allocation undo changed unrelated data", id)
+					}
+				}
 			}
 		})
 	}

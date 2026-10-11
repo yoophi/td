@@ -29,9 +29,47 @@ func readImportNativeFixture(t *testing.T) importNativeFixtureState {
 	return state
 }
 
+func recordImportFixturePatches(t *testing.T) func() []map[string]any {
+	t.Helper()
+	path, err := exec.LookPath("gh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	needle := "  if os.environ.get('TD_GH_JOURNAL_FAIL')=='target-lost':"
+	if !bytes.Contains(script, []byte(needle)) {
+		t.Fatal("missing native PATCH observation seam")
+	}
+	patchFile := filepath.Join(t.TempDir(), "patches.jsonl")
+	t.Setenv("TD_GH_IMPORT_PATCH_LOG", patchFile)
+	script = bytes.Replace(script, []byte(needle), []byte("  with pathlib.Path(os.environ['TD_GH_IMPORT_PATCH_LOG']).open('a') as f:f.write(json.dumps({'id':n,'patch':patch})+'\\n')\n"+needle), 1)
+	if err := os.WriteFile(path, script, 0755); err != nil {
+		t.Fatal(err)
+	}
+	return func() []map[string]any {
+		t.Helper()
+		data, err := os.ReadFile(patchFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result []map[string]any
+		for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
+			var row map[string]any
+			if err := json.Unmarshal(line, &row); err != nil {
+				t.Fatal(err)
+			}
+			result = append(result, row)
+		}
+		return result
+	}
+}
+
 // Reverse both independent graphs while also allocating a new legacy source.
 // Neither existing task can acquire its final relationships before detachment.
-func TestGitHubJournalCLIImportMixedGraphResume(t *testing.T) {
+func TestGitHubJournalCLIImportMixedGraphResumeAndUndo(t *testing.T) {
 	run, execute := importJournalCLI(t)
 	for _, title := range []string{"First imported task", "Second imported task", "Unrelated task"} {
 		execute("create", title, "--minor")
@@ -72,40 +110,7 @@ func TestGitHubJournalCLIImportMixedGraphResume(t *testing.T) {
 	execute("log", "gh-8", "Unrelated native activity")
 	original := readImportNativeFixture(t)
 
-	path, err := exec.LookPath("gh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	script, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	needle := "  if os.environ.get('TD_GH_JOURNAL_FAIL')=='target-lost':"
-	if !bytes.Contains(script, []byte(needle)) {
-		t.Fatal("missing native PATCH observation seam")
-	}
-	patchFile := filepath.Join(t.TempDir(), "patches.jsonl")
-	t.Setenv("TD_GH_IMPORT_PATCH_LOG", patchFile)
-	script = bytes.Replace(script, []byte(needle), []byte("  with pathlib.Path(os.environ['TD_GH_IMPORT_PATCH_LOG']).open('a') as f:f.write(json.dumps({'id':n,'patch':patch})+'\\n')\n"+needle), 1)
-	if err := os.WriteFile(path, script, 0755); err != nil {
-		t.Fatal(err)
-	}
-	patches := func() []map[string]any {
-		t.Helper()
-		data, err := os.ReadFile(patchFile)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var result []map[string]any
-		for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
-			var row map[string]any
-			if err := json.Unmarshal(line, &row); err != nil {
-				t.Fatal(err)
-			}
-			result = append(result, row)
-		}
-		return result
-	}
+	patches := recordImportFixturePatches(t)
 	t.Setenv("TD_GH_JOURNAL_FAIL", "target-lost")
 	if out, stderr, err := run("import", file, "--force", "--json"); err == nil || !strings.Contains(out+stderr, "connection lost after target") || !strings.Contains(out+stderr, "no automatic retry") {
 		t.Fatal("mixed import did not stop on the original detach failure", out, stderr, err)
@@ -199,5 +204,60 @@ func TestGitHubJournalCLIImportMixedGraphResume(t *testing.T) {
 	execute("import", file, "--force")
 	if !bytes.Equal(state, importFixtureStateBytes(t)) || !bytes.Equal(journals, relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")) || len(patches()) != 5 {
 		t.Fatal("completed mixed import repeated a native or journal write")
+	}
+	var undone struct {
+		ReceiptID   string                     `json:"receipt_id"`
+		UndoOutcome *ghstore.ActionUndoOutcome `json:"undo_outcome"`
+	}
+	if out := execute("undo"); json.Unmarshal([]byte(out), &undone) != nil || undone.ReceiptID != root.ID || undone.UndoOutcome == nil || undone.UndoOutcome.TargetWriteVerified || undone.UndoOutcome.CausalUndoChainEligible {
+		t.Fatal("whole undo lost the resumed command's observed attribution", out)
+	}
+	restored := readImportNativeFixture(t)
+	if len(restored.Issues) != len(after.Issues) || !reflect.DeepEqual(after.Comments, restored.Comments) {
+		t.Fatal("whole undo replaced native identities or removed import/native history")
+	}
+	for _, id := range []string{"gh-6", "gh-7"} {
+		var got ghstore.Record
+		if out := execute("show", id); json.Unmarshal([]byte(out), &got) != nil || got.Details == nil {
+			t.Fatal("existing destination was not restored", out)
+		}
+		if id == "gh-6" && (got.ParentID != "" || !slices.Equal(got.Details.Dependencies, []string{"gh-7"})) || id == "gh-7" && (got.ParentID != "gh-6" || len(got.Details.Dependencies) != 0) {
+			t.Fatal("whole undo lost the original graph", id, got.ParentID, got.Details.Dependencies)
+		}
+		number := strings.TrimPrefix(id, "gh-")
+		for _, field := range []string{"title", "labels", "state", "number", "created_at", "user", "url"} {
+			if !reflect.DeepEqual(original.Issues[number][field], restored.Issues[number][field]) {
+				t.Fatal("undo did not restore original fields/native identity", id, field)
+			}
+		}
+	}
+	if out, stderr, err := run("show", "gh-9", "--json"); err == nil || !strings.Contains(out+stderr, "deleted") {
+		t.Fatal("undo omitted the allocation made before the interrupted detach", out, stderr, err)
+	}
+	for _, field := range []string{"number", "created_at", "user", "url", "state"} {
+		if !reflect.DeepEqual(after.Issues["9"][field], restored.Issues["9"][field]) {
+			t.Fatal("compensation replaced the original allocation identity/history", field)
+		}
+	}
+	for id, issue := range original.Issues {
+		if id != "6" && id != "7" && !reflect.DeepEqual(issue, restored.Issues[id]) {
+			t.Fatal("whole undo changed an unrelated task", id)
+		}
+	}
+	done := importLastCommand(t, execute)
+	if done.Phase != "undone" || !reflect.DeepEqual(done.ImportCommand, root.ImportCommand) || !reflect.DeepEqual(done.ImportForward, completed.ImportForward) {
+		t.Fatal("undo changed original or completed forward evidence")
+	}
+	counts = map[string]int{}
+	for _, patch := range patches() {
+		counts[patch["id"].(string)]++
+	}
+	if !reflect.DeepEqual(counts, map[string]int{"6": 4, "7": 4, "9": 2}) {
+		t.Fatal("undo did not compensate the complete original and resumed effects exactly once", counts)
+	}
+	state, journals = importFixtureStateBytes(t), relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")
+	execute("undo", "--reconcile", root.ID, "--apply")
+	if !bytes.Equal(state, importFixtureStateBytes(t)) || !bytes.Equal(journals, relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")) || len(patches()) != 10 {
+		t.Fatal("completed whole undo confirmation repeated writes")
 	}
 }
