@@ -40,12 +40,12 @@ func handoffReviewUndoPlan(action *ActionJournalRecord, current *Record, session
 	return nil, &ConflictError{ID: action.IssueID}
 }
 
-func (c *Client) undoHandoffReview(ctx context.Context, root *ActionJournalRecord, session string) (*ActionUndoResult, error) {
+func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord, session string) (*ActionUndoResult, error) {
 	if root.SessionID != session {
-		return nil, fmt.Errorf("handoff review undo requires its original session")
+		return nil, fmt.Errorf("paired command undo requires its original session")
 	}
 	if root.Phase == "prepared" {
-		return nil, fmt.Errorf("handoff review outcome is unverified; use undo --reconcile %s --apply before undo", root.ID)
+		return nil, fmt.Errorf("paired command outcome is unverified; use undo --reconcile %s --apply before undo", root.ID)
 	}
 	data, err := c.requestAPI(ctx, "GET", "user", "/user", nil, false)
 	if err != nil {
@@ -53,33 +53,40 @@ func (c *Client) undoHandoffReview(ctx context.Context, root *ActionJournalRecor
 	}
 	var user struct{ Login string }
 	if json.Unmarshal(data, &user) != nil || user.Login == "" || !strings.EqualFold(root.Author, user.Login) {
-		return nil, fmt.Errorf("handoff review undo requires the original authenticated GitHub author")
+		return nil, fmt.Errorf("paired command undo requires the original authenticated GitHub author")
 	}
-	observed, err := c.observeHandoffReview(ctx, root, false)
+	observed, err := c.observePairedGroup(ctx, root, false)
 	if err != nil {
 		return nil, err
 	}
 	if observed.Pending != nil {
-		return nil, fmt.Errorf("handoff review inverse is uncertain; reconcile %s without target replay before continuing", root.ID)
+		return nil, fmt.Errorf("paired command inverse is uncertain; reconcile %s without target replay before continuing", root.ID)
 	}
 	if root.Phase == "undone" {
 		return &ActionUndoResult{Issue: observed.Current[root.IssueID], Journal: root, AlreadyUndone: true, GroupMembers: observed.Members, UndoOutcome: groupResultOutcome(root, true)}, nil
 	}
 	// Check every remaining inverse before the first mutation. Exact comment
-	// clocks are checked again when their preceding review has been restored.
+	// clocks are checked again after any companion effect has been restored.
 	for _, r := range observed.Receipts {
 		if r.Phase != "applied" {
 			continue
 		}
 		if r.Action == "comment_create" {
 			if !strings.EqualFold(r.CommentAfter.Author, user.Login) {
-				return nil, fmt.Errorf("handoff author changed")
+				return nil, fmt.Errorf("paired command comment author changed")
 			}
 			if err := c.readNativeComment(ctx, r.CommentAfter); err != nil {
 				return nil, err
 			}
 		} else {
-			if _, err := r.PlanIssueUndo(observed.Current[r.IssueID], session, user.Login); err != nil {
+			if root.Group.updateCommentsGroup() {
+				if err := scalarUndoScope(r); err != nil {
+					return nil, err
+				}
+				if !sameActionContents(*r.After, observed.States[r.IssueID]) {
+					return nil, &ConflictError{ID: r.IssueID}
+				}
+			} else if _, err := r.PlanIssueUndo(observed.Current[r.IssueID], session, user.Login); err != nil {
 				return nil, err
 			}
 			if err := c.checkUndoOriginalReview(ctx, r, false); err != nil {
@@ -91,7 +98,7 @@ func (c *Client) undoHandoffReview(ctx context.Context, root *ActionJournalRecor
 		next := root.ActionJournal
 		next.Phase, next.UndoOperationID = "undo_prepared", "td-op-"+rand.Text()
 		written, err := c.writeGroupReceipt(ctx, root, next, func() error {
-			return c.fenceHandoffReview(ctx, root, observed.Receipts, observed.States, observed.present())
+			return c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present())
 		})
 		if err != nil {
 			return nil, err
@@ -103,7 +110,7 @@ func (c *Client) undoHandoffReview(ctx context.Context, root *ActionJournalRecor
 		if member.Phase == "prepared" || member.Phase == "undone" {
 			continue
 		}
-		if err := c.fenceHandoffReview(ctx, root, observed.Receipts, observed.States, observed.present()); err != nil {
+		if err := c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present()); err != nil {
 			return nil, err
 		}
 		fenceMember := func(actual *ActionJournalRecord, current *Record, deleted bool) error {
@@ -119,30 +126,39 @@ func (c *Client) undoHandoffReview(ctx context.Context, root *ActionJournalRecor
 			if actual.Action == "comment_create" {
 				present[current.ID] = !deleted
 			}
-			return c.fenceHandoffReview(ctx, root, want, states, present)
+			return c.fencePairedGroup(ctx, root, want, states, present)
 		}
 		gate := &groupUndoGate{OperationID: root.OperationID,
 			Member: func(actual *ActionJournalRecord) error {
 				if !reflect.DeepEqual(member, actual) {
-					return fmt.Errorf("handoff review member changed before inverse")
+					return fmt.Errorf("paired command member changed before inverse")
 				}
 				return nil
 			},
 			Plan: func(actual *ActionJournalRecord, current *Record, session, author string) (*IssueUndoPlan, error) {
+				if root.Group.updateCommentsGroup() {
+					chain := []*ActionJournalRecord{}
+					for _, receipt := range observed.Receipts {
+						if receipt.IssueID == actual.IssueID {
+							chain = append(chain, receipt)
+						}
+					}
+					return updateActivityUndoPlan(actual, current, session, author, chain)
+				}
 				return handoffReviewUndoPlan(actual, current, session, author, observed.Receipts)
 			},
 			CommentFence: fenceMember,
 			UpdateFence:  func(actual *ActionJournalRecord, current *Record) error { return fenceMember(actual, current, false) },
 		}
 		if _, err := c.UndoAction(context.WithValue(ctx, groupUndoContextKey{}, gate), member.ID, session); err != nil {
-			return nil, fmt.Errorf("handoff review group %s inverse stopped at %s; inspect and reconcile without replay: %w", root.ID, member.ID, err)
+			return nil, fmt.Errorf("paired command group %s inverse stopped at %s; inspect and reconcile without replay: %w", root.ID, member.ID, err)
 		}
-		observed, err = c.observeHandoffReview(ctx, root, false)
+		observed, err = c.observePairedGroup(ctx, root, false)
 		if err != nil {
 			return nil, err
 		}
 	}
-	result, err := c.reconcileHandoffReview(ctx, root, session, user.Login, true, true)
+	result, err := c.reconcilePairedGroup(ctx, root, session, user.Login, true, true)
 	if err != nil {
 		return nil, err
 	}

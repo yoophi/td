@@ -287,8 +287,8 @@ func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, 
 }
 
 func (c *Client) reconcileActionGroup(ctx context.Context, a *ActionJournalRecord, session, actor string, apply, normal bool) (*ActionReconcileResult, error) {
-	if a.Group.handoffReviewGroup() {
-		return c.reconcileHandoffReview(ctx, a, session, actor, apply, normal)
+	if a.Group.pairedGroup() {
+		return c.reconcilePairedGroup(ctx, a, session, actor, apply, normal)
 	}
 	if a.Group.updateActivityGroup() {
 		return c.reconcileUpdateActivity(ctx, a, session, actor, apply, normal)

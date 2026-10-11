@@ -29,7 +29,7 @@ type ActionHandoffReviewInput struct {
 
 func (g *ActionGroup) handoffReviewGroup() bool { return g != nil && g.HandoffReview != nil }
 func (g *ActionGroup) sequencedGroup() bool {
-	return g != nil && (g.Ordered != nil || g.updateActivityGroup() || g.handoffReviewGroup())
+	return g != nil && (g.Ordered != nil || g.updateActivityGroup() || g.pairedGroup())
 }
 func (g *ActionGroup) handoffEffects() []int {
 	out := make([]int, len(g.Members))
@@ -195,18 +195,18 @@ func validateHandoffReviewBinding(root, member *ActionJournalRecord, chain []*Ac
 	return nil
 }
 
-func validateHandoffReviewForward(root *ActionJournalRecord, receipts []*ActionJournalRecord) error {
+func validatePairedGroupForward(root *ActionJournalRecord, receipts []*ActionJournalRecord) error {
 	if root.Phase == "prepared" {
 		return nil
 	}
-	digests := root.Group.HandoffReview.ForwardDigests
+	digests := root.Group.pairedDigests()
 	if len(digests) != len(receipts) {
-		return fmt.Errorf("handoff review original effect membership changed")
+		return fmt.Errorf("paired command original effect membership changed")
 	}
 	for i, r := range receipts {
 		digest, err := updateActivityForwardDigest(r)
 		if err != nil || digests[i] != digest {
-			return fmt.Errorf("handoff review original effect identity, input or result changed")
+			return fmt.Errorf("paired command original effect identity, input or result changed")
 		}
 	}
 	return nil

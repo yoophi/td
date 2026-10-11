@@ -257,7 +257,7 @@ func (c *Client) writePreparedJournal(ctx context.Context, a ActionJournal) (*Ac
 			return nil, fmt.Errorf("group member intent is unverified (no target write attempted): %w", groupErr)
 		}
 		active.Attempted[a.IssueID] = true
-		if active.Journal.Group.Ordered != nil || active.Journal.Group.activityGroup() || active.Journal.Group.updateActivityGroup() || active.Journal.Group.handoffReviewGroup() {
+		if active.Journal.Group.Ordered != nil || active.Journal.Group.activityGroup() || active.Journal.Group.updateActivityGroup() || active.Journal.Group.pairedGroup() {
 			active.Receipts = append(active.Receipts, verified)
 		}
 	}
@@ -364,7 +364,7 @@ func (c *Client) completeActionJournalResult(ctx context.Context, prepared *Acti
 			active.Receipts[len(active.Receipts)-1] = verified
 			active.NativeEvents[after.ID] = events
 		}
-		if active.Journal.Group.activityGroup() || active.Journal.Group.updateActivityGroup() || active.Journal.Group.handoffReviewGroup() {
+		if active.Journal.Group.activityGroup() || active.Journal.Group.updateActivityGroup() || active.Journal.Group.pairedGroup() {
 			for i, receipt := range active.Receipts {
 				if receipt.ID == verified.ID {
 					active.Receipts[i] = verified

@@ -52,8 +52,8 @@ func checkGroupUndoGate(ctx context.Context) error {
 }
 
 func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, session string) (*ActionUndoResult, error) {
-	if a.Group.handoffReviewGroup() {
-		return c.undoHandoffReview(ctx, a, session)
+	if a.Group.pairedGroup() {
+		return c.undoPairedGroup(ctx, a, session)
 	}
 	if a.Group.updateActivityGroup() {
 		return c.undoUpdateActivity(ctx, a, session)
@@ -289,10 +289,10 @@ func CollapseActionGroups(actions []ActionJournalRecord) ([]ActionJournalRecord,
 		if err != nil {
 			return nil, err
 		}
-		if group.Group.handoffReviewGroup() {
+		if group.Group.pairedGroup() {
 			ordered := slices.Clone(members[op])
 			slices.SortFunc(ordered, func(a, b *ActionJournalRecord) int { return a.GroupSequence - b.GroupSequence })
-			if err := validateHandoffReviewForward(&group, ordered); err != nil {
+			if err := validatePairedGroupForward(&group, ordered); err != nil {
 				return nil, err
 			}
 		}

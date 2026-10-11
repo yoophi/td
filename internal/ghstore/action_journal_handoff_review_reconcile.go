@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-func (c *Client) reconcileHandoffReview(ctx context.Context, root *ActionJournalRecord, session, actor string, apply, normal bool) (*ActionReconcileResult, error) {
+func (c *Client) reconcilePairedGroup(ctx context.Context, root *ActionJournalRecord, session, actor string, apply, normal bool) (*ActionReconcileResult, error) {
 	if !strings.EqualFold(root.Author, actor) {
-		return nil, fmt.Errorf("handoff review recovery requires its native author")
+		return nil, fmt.Errorf("paired command recovery requires its native author")
 	}
-	observed, err := c.observeHandoffReview(ctx, root, normal)
+	observed, err := c.observePairedGroup(ctx, root, normal)
 	if err != nil {
 		return nil, err
 	}
@@ -26,14 +26,14 @@ func (c *Client) reconcileHandoffReview(ctx context.Context, root *ActionJournal
 		return result, nil
 	}
 	if observed.Pending != nil {
-		if err := c.fenceHandoffReview(ctx, root, observed.Receipts, observed.States, observed.present()); err != nil {
+		if err := c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present()); err != nil {
 			return nil, err
 		}
 		if _, err := c.ReconcileAction(ctx, observed.Pending.ID, session, true); err != nil {
-			return nil, fmt.Errorf("handoff review member recovery failed without target replay: %w", err)
+			return nil, fmt.Errorf("paired command member recovery failed without target replay: %w", err)
 		}
 		result.Applied = true
-		observed, err = c.observeHandoffReview(ctx, root, false)
+		observed, err = c.observePairedGroup(ctx, root, false)
 		if err != nil {
 			return nil, err
 		}
@@ -53,32 +53,31 @@ func (c *Client) reconcileHandoffReview(ctx context.Context, root *ActionJournal
 		next.Phase, group.Inverse = "undone", observation
 	} else {
 		next.Phase, group.Forward = "applied", observation
-		input := *group.HandoffReview
-		input.ForwardDigests = []string{}
+		digests := []string{}
 		for _, r := range observed.Receipts {
 			digest, err := updateActivityForwardDigest(r)
 			if err != nil {
 				return nil, err
 			}
-			input.ForwardDigests = append(input.ForwardDigests, digest)
+			digests = append(digests, digest)
 		}
-		group.HandoffReview = &input
+		group.setPairedDigests(digests)
 	}
 	written, err := c.writeGroupReceipt(ctx, root, next, func() error {
-		fresh, err := c.observeHandoffReview(ctx, root, false)
+		fresh, err := c.observePairedGroup(ctx, root, false)
 		if err != nil {
 			return err
 		}
-		if !sameHandoffReviewObservation(observed, fresh) {
-			return fmt.Errorf("handoff review results changed before receipt publication")
+		if !samePairedGroupObservation(observed, fresh) {
+			return fmt.Errorf("paired command results changed before receipt publication")
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	if _, err := c.observeHandoffReview(ctx, written, false); err != nil {
-		return nil, fmt.Errorf("handoff review receipt saved but final observation failed: %w", err)
+	if _, err := c.observePairedGroup(ctx, written, false); err != nil {
+		return nil, fmt.Errorf("paired command receipt saved but final observation failed: %w", err)
 	}
 	result.Journal, result.Applied, result.GroupReceiptSaved = written, true, true
 	return result, nil

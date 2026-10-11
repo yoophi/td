@@ -117,8 +117,9 @@ elif path.startswith('repos/owner/repo/issues/comments/') and method=='GET':
  if data is None:sys.stderr.write('HTTP 404 comment missing');sys.exit(1)
 elif path=='repos/owner/repo/issues/1/comments' and method=='POST':
  if os.environ.get('TD_TEST_COMMENT_FAIL')=='yes':sys.stderr.write('forbidden');sys.exit(1)
- data={'id':200+len(activities),'body':json.load(sys.stdin)['body'],'issue_url':'https://api.github.com/repos/owner/repo/issues/1','created_at':'2026-10-09T00:00:00Z','updated_at':'2026-10-09T00:00:00Z','user':{'login':'fixture-author'}}
- activities.append(data);activities_file.write_text(json.dumps(activities));issue['updated_at']=fixture_tick(issue['updated_at']);f.write_text(json.dumps(issue))
+ clock=fixture_tick(max(issue['updated_at'],journal['comments'][-1]['created_at'] if journal['comments'] else issue['updated_at']))
+ data={'id':20000+len(activities),'body':json.load(sys.stdin)['body'],'issue_url':'https://api.github.com/repos/owner/repo/issues/1','created_at':clock,'updated_at':clock,'user':{'login':'fixture-author'}}
+ activities.append(data);activities_file.write_text(json.dumps(activities));issue['updated_at']=clock;f.write_text(json.dumps(issue))
 elif path=='repos/owner/repo/issues/1':
  if method=='PATCH':
   patch=json.load(sys.stdin)

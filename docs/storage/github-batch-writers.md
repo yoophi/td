@@ -23,6 +23,7 @@ This is not an atomic GitHub transaction or a rollback of device-local context.
 | Multi-edge `dep add` / `dep rm` (`remove`) | One source PATCH and one existing update receipt for the full prevalidated delta; shared reachable targets are observed once per fence | No local context change |
 | File `link` / `unlink`, `due` / `defer` | v21 update/activity group freezes both complete inputs before writes; v22 members bind the actual field result to the following activity | File commands retain their local path/hash checks; schedule activities retain work-session attribution |
 | `ws handoff --review` | v23 command fixes all handoffs and review templates; v24 ordered effects bind each review to its actual preceding handoff | Tags, history membership and work-session end state remain device-local |
+| `update` with scalar fields and `--comment` / `--note`; multi-ID comment-only update | v25 command fixes every selected task's optional field input and complete comment; v26 effects bind comments to actual preceding field results | No local context change |
 
 Claim preview and `ws tag --no-start` do not create a mutation group. A changed
 selection is rejected before journal bootstrap or task writes. Single-target
@@ -149,6 +150,24 @@ transport. Upgrade and restart every monitor/server reading this repository
 before writing these formats; replacing the installed executable does not
 upgrade an already-running process.
 
+## Scalar updates with inline comments
+
+Scalar fields with inline comments now use one command group, including a
+single target. Comment-only updates use this group for multiple targets; a
+single comment retains its standalone activity receipt. Each target's optional
+field change precedes its own comment. Comment-only batches never issue a
+synthetic field PATCH. Complete per-target inputs and archive sizes are checked
+before the first write. `last` and `undo --list` expose the command as one entry.
+
+Recovery records observed outcomes without repeating target writes. Undo
+checks all remaining effects, then removes each exact companion comment and
+restores fields in reverse command order. The command's own comment deletion
+can bridge only its companion field revision. Foreign task/comment changes or
+replaced original receipts stop the inverse. An observed recovery stays weaker
+than a verified write, and completed confirmation is read-only. The v25/v26
+formats use bounded v9 compression and v20 multipart transport. Upgrade and
+restart readers before publishing these records.
+
 ## Remaining writer integration
 
 Mixed `update` commands preflight all distinct live selected tasks, field payloads,
@@ -168,7 +187,7 @@ undo for these paths remain unfinished, as listed below.
 
 | Writer | Current effects requiring an aggregate |
 |---|---|
-| Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |
+| Update with relationships or status, with or without comments | Mixed task, relationship, workflow and optional activity effects; scalar-only and scalar/comment batches are connected above |
 | Create with relationships | Creation followed by edits to the new task and related tasks; new GitHub ID must be bound to its actual creation result |
 
 These remaining paths need a shared mixed-effect contract, including complete

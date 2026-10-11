@@ -95,14 +95,18 @@ func (c *Client) BeginHandoffReviewGroup(ctx context.Context, plans []*PreparedH
 	return nil
 }
 
-func (c *Client) bindHandoffReviewMember(a *ActionJournal) error {
+func (c *Client) bindPairedGroupMember(a *ActionJournal) error {
 	active := c.journal.Group
 	for _, r := range active.Receipts {
 		if r.Phase != "applied" {
-			return fmt.Errorf("handoff review predecessor has an uncertain outcome")
+			return fmt.Errorf("paired command predecessor has an uncertain outcome")
 		}
 	}
-	a.GroupContract, a.GroupOperationID, a.GroupSequence, a.CarrierID = handoffReviewContract, active.Journal.OperationID, len(active.Receipts)+1, active.Journal.CarrierID
+	contract := handoffReviewContract
+	if active.Journal.Group.updateCommentsGroup() {
+		contract = updateCommentsContract
+	}
+	a.GroupContract, a.GroupOperationID, a.GroupSequence, a.CarrierID = contract, active.Journal.OperationID, len(active.Receipts)+1, active.Journal.CarrierID
 	chain := []*ActionJournalRecord{}
 	for _, r := range active.Receipts {
 		if r.IssueID == a.IssueID {
@@ -115,10 +119,29 @@ func (c *Client) bindHandoffReviewMember(a *ActionJournal) error {
 	if err := validateGroupMemberAtState(active.Journal, probe, &state); err != nil {
 		return err
 	}
-	return validateHandoffReviewBinding(active.Journal, probe, chain)
+	if active.Journal.Group.handoffReviewGroup() {
+		return validateHandoffReviewBinding(active.Journal, probe, chain)
+	}
+	return nil
 }
 
-func (c *Client) verifyHandoffReviewEvents(ctx context.Context, root *ActionJournalRecord) error {
+func (c *Client) verifyPairedGroupEvents(ctx context.Context, root *ActionJournalRecord) error {
+	if root.Group.updateCommentsGroup() {
+		for i, input := range root.Group.UpdateComments.Inputs {
+			if input.Update == nil || input.Update.NativeEvents == nil {
+				continue
+			}
+			id := root.Group.Members[i].IssueID
+			current, err := c.readStateEvents(ctx, id)
+			if err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(current, *input.Update.NativeEvents) {
+				return fmt.Errorf("update/comments native state events changed on %s", id)
+			}
+		}
+		return nil
+	}
 	for i, input := range root.Group.HandoffReview.Inputs {
 		if input.Review == nil {
 			continue
@@ -134,7 +157,7 @@ func (c *Client) verifyHandoffReviewEvents(ctx context.Context, root *ActionJour
 	return nil
 }
 
-func (c *Client) verifyHandoffReviewForward(ctx context.Context, after *Record) error {
+func (c *Client) verifyPairedGroupForward(ctx context.Context, after *Record) error {
 	active := c.journal.Group
 	expected := maps.Clone(active.Expected)
 	present := map[string]bool{}
@@ -153,5 +176,5 @@ func (c *Client) verifyHandoffReviewForward(ctx context.Context, after *Record) 
 			present[after.ID] = true
 		}
 	}
-	return c.fenceHandoffReview(ctx, active.Journal, active.Receipts, expected, present)
+	return c.fencePairedGroup(ctx, active.Journal, active.Receipts, expected, present)
 }

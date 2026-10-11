@@ -1019,9 +1019,31 @@ write. Local work-session end state, tags and history membership remain separate
 
 `last` and `undo --list` expose one command. These semantic formats retain the
 bounded v9 compression and v20 multipart transport; running readers must be
-upgraded and restarted before writing them. Mixed multi-ID updates and creation
-with relationships remain separate #65 work; see
+upgraded and restarted before writing them. Updates involving relationships or
+status and creation with relationships remain separate #65 work; see
 [compound writer coverage](github-batch-writers.md).
+
+## Scalar updates with inline comments (#65)
+
+`update <ids...> --comment ...` (or `--note`) uses v25 command and v26 effect
+receipts when it includes scalar fields or multiple selected tasks. The command
+fixes all selected original observations, optional field inputs and complete
+comment bodies before its first write. Each field result must be observed before
+it can establish the revision for that task's comment. A comment-only batch has
+no field effect; one standalone comment retains its existing activity receipt.
+
+History collapses the effects into one command. Reconciliation observes partial
+outcomes and saves receipts without replaying a field update or comment. Undo
+checks every remaining inverse before mutation, then deletes exact companion
+comments and restores fields in reverse order, preserving unrelated activity.
+Only this command's own comment inverse may bridge its companion field clock.
+Foreign task/comment edits and changes to original receipt identity stop undo;
+observation-only proof never becomes a verified write. Completed confirmation
+performs no writes. Relationships and status transitions use their existing
+writers and are not covered by this scalar/comment contract.
+
+These semantics retain bounded v9 compression and v20 multipart transport.
+Upgrade and restart running readers before creating v25/v26 records.
 
 ## Multipart transport (#67)
 

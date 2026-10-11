@@ -8,7 +8,7 @@ import (
 	"slices"
 )
 
-type handoffReviewObservation struct {
+type pairedGroupObservation struct {
 	Current                  map[string]*Record
 	States                   map[string]ActionIssueState
 	Comments                 map[string]*ActionCommentState
@@ -18,14 +18,14 @@ type handoffReviewObservation struct {
 	Partial, Remaining, Weak bool
 }
 
-func (o *handoffReviewObservation) present() map[string]bool {
+func (o *pairedGroupObservation) present() map[string]bool {
 	out := map[string]bool{}
 	for id, c := range o.Comments {
 		out[id] = c != nil
 	}
 	return out
 }
-func (c *Client) readHandoffReview(ctx context.Context, root *ActionJournalRecord) (*handoffReviewObservation, error) {
+func (c *Client) readPairedGroup(ctx context.Context, root *ActionJournalRecord) (*pairedGroupObservation, error) {
 	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func (c *Client) readHandoffReview(ctx context.Context, root *ActionJournalRecor
 	if err != nil {
 		return nil, err
 	}
-	out := &handoffReviewObservation{Current: map[string]*Record{}, States: map[string]ActionIssueState{}, Comments: map[string]*ActionCommentState{}}
+	out := &pairedGroupObservation{Current: map[string]*Record{}, States: map[string]ActionIssueState{}, Comments: map[string]*ActionCommentState{}}
 	for _, m := range root.Group.Members {
 		out.Current[m.IssueID] = nil
 	}
@@ -44,7 +44,7 @@ func (c *Client) readHandoffReview(ctx context.Context, root *ActionJournalRecor
 		if r.meta.EntityKind == "journal" {
 			carriers++
 			if r.ID != root.CarrierID {
-				return nil, fmt.Errorf("handoff review carrier changed")
+				return nil, fmt.Errorf("paired command carrier changed")
 			}
 		}
 		if _, ok := out.Current[r.ID]; ok {
@@ -60,7 +60,7 @@ func (c *Client) readHandoffReview(ctx context.Context, root *ActionJournalRecor
 		r := &history[i]
 		if r.ID == root.ID {
 			if found || !reflect.DeepEqual(r, root) {
-				return nil, fmt.Errorf("handoff review root changed")
+				return nil, fmt.Errorf("paired command root changed")
 			}
 			found = true
 		}
@@ -69,39 +69,42 @@ func (c *Client) readHandoffReview(ctx context.Context, root *ActionJournalRecor
 		}
 	}
 	if !found || carriers != 1 || len(out.States) != len(out.Current) {
-		return nil, fmt.Errorf("handoff review needs its original carrier, tasks and root")
+		return nil, fmt.Errorf("paired command needs its original carrier, tasks and root")
 	}
 	slices.SortFunc(out.Receipts, func(a, b *ActionJournalRecord) int { return a.GroupSequence - b.GroupSequence })
 	chains, err := orderedGroupEffects(root, out.Receipts)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateHandoffReviewForward(root, out.Receipts); err != nil {
+	if err := validatePairedGroupForward(root, out.Receipts); err != nil {
 		return nil, err
 	}
 	for i, m := range root.Group.Members {
 		probe := *root
 		probe.IssueID = m.IssueID
-		probe.CommentInput = root.Group.HandoffReview.Inputs[i].Comment
+		probe.CommentInput = root.Group.pairedComment(i)
 		chain := chains[m.IssueID]
-		if len(chain) > 0 {
-			probe = *chain[0]
-			probe.CommentAfter = nil
+		var receipt *ActionJournalRecord
+		for _, effect := range chain {
+			if effect.Action == "comment_create" {
+				receipt = effect
+				probe = *effect
+				probe.CommentAfter = nil
+			}
 		}
 		comment, err := c.commentCreationInSnapshot(snapshot, &probe, out.States[m.IssueID])
 		if err != nil {
 			return nil, err
 		}
 		out.Comments[m.IssueID] = comment
-		if len(chain) == 0 {
+		if receipt == nil {
 			if comment != nil {
-				return nil, fmt.Errorf("unattempted handoff acquired a native comment")
+				return nil, fmt.Errorf("unattempted paired command acquired a native comment")
 			}
 			continue
 		}
-		receipt := chain[0]
 		if receipt.Phase == "applied" && !reflect.DeepEqual(receipt.CommentAfter, comment) || receipt.Phase == "undo_prepared" && comment != nil && !reflect.DeepEqual(receipt.CommentAfter, comment) {
-			return nil, fmt.Errorf("handoff review native comment changed")
+			return nil, fmt.Errorf("paired command native comment changed")
 		}
 		if receipt.Phase == "undone" || receipt.Phase == "undo_prepared" && comment == nil {
 			if err := deletedCommentInSnapshot(snapshot, receipt); err != nil {
@@ -109,30 +112,30 @@ func (c *Client) readHandoffReview(ctx context.Context, root *ActionJournalRecor
 			}
 		}
 	}
-	if err := c.verifyHandoffReviewEvents(ctx, root); err != nil {
+	if err := c.verifyPairedGroupEvents(ctx, root); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *Client) fenceHandoffReview(ctx context.Context, root *ActionJournalRecord, receipts []*ActionJournalRecord, states map[string]ActionIssueState, present map[string]bool) error {
-	current, err := c.readHandoffReview(ctx, root)
+func (c *Client) fencePairedGroup(ctx context.Context, root *ActionJournalRecord, receipts []*ActionJournalRecord, states map[string]ActionIssueState, present map[string]bool) error {
+	current, err := c.readPairedGroup(ctx, root)
 	if err != nil {
 		return err
 	}
 	if !slices.EqualFunc(current.Receipts, receipts, func(a, b *ActionJournalRecord) bool { return reflect.DeepEqual(a, b) }) {
-		return fmt.Errorf("handoff review effect receipts changed")
+		return fmt.Errorf("paired command effect receipts changed")
 	}
 	for id, state := range states {
 		if current.States[id].Revision != state.Revision || (current.Comments[id] != nil) != present[id] {
-			return fmt.Errorf("handoff review task or comment changed: %w", &ConflictError{ID: id})
+			return fmt.Errorf("paired command task or comment changed: %w", &ConflictError{ID: id})
 		}
 	}
 	return nil
 }
 
-func (c *Client) observeHandoffReview(ctx context.Context, root *ActionJournalRecord, normal bool) (*handoffReviewObservation, error) {
-	out, err := c.readHandoffReview(ctx, root)
+func (c *Client) observePairedGroup(ctx context.Context, root *ActionJournalRecord, normal bool) (*pairedGroupObservation, error) {
+	out, err := c.readPairedGroup(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +147,7 @@ func (c *Client) observeHandoffReview(ctx context.Context, root *ActionJournalRe
 		results[m.IssueID] = ActionGroupResultMember{IssueID: m.IssueID, Status: "unattempted", State: m.Before}
 	}
 	applied := []*ActionJournalRecord{}
-	out.Partial = len(out.Receipts) < len(root.Group.handoffEffects())
+	out.Partial = len(out.Receipts) < root.Group.pairedEffectCount()
 	for _, r := range out.Receipts {
 		out.Weak = out.Weak || r.UpdateObservation != nil || r.CommentObservation != nil || r.UndoObservation != nil
 		result := results[r.IssueID]
@@ -152,7 +155,7 @@ func (c *Client) observeHandoffReview(ctx context.Context, root *ActionJournalRe
 			out.Partial = true
 			if inverse {
 				if r.Action == "comment_create" && out.Comments[r.IssueID] != nil {
-					return nil, fmt.Errorf("unapplied handoff acquired a comment during undo")
+					return nil, fmt.Errorf("unapplied paired command acquired a comment during undo")
 				}
 				if result.Status == "unattempted" {
 					result.Status, result.ReceiptID = "unapplied", r.ID
@@ -186,7 +189,7 @@ func (c *Client) observeHandoffReview(ctx context.Context, root *ActionJournalRe
 			continue
 		}
 		if !inverse && r.Phase != "applied" {
-			return nil, fmt.Errorf("handoff review effect acquired an inverse before its group")
+			return nil, fmt.Errorf("paired command effect acquired an inverse before its group")
 		}
 		applied = append(applied, r)
 		expected[r.IssueID] = *r.After
@@ -201,7 +204,7 @@ func (c *Client) observeHandoffReview(ctx context.Context, root *ActionJournalRe
 	}
 	if inverse {
 		if root.Group.Forward.Partial != out.Partial || !equalGroupMemberResults(root.Group.Forward.Members, forward) {
-			return nil, fmt.Errorf("handoff review original forward result changed")
+			return nil, fmt.Errorf("paired command original forward result changed")
 		}
 		stopped := false
 		remaining := map[string]bool{}
@@ -211,12 +214,12 @@ func (c *Client) observeHandoffReview(ctx context.Context, root *ActionJournalRe
 			switch r.Phase {
 			case "undone":
 				if stopped || r.Restored == nil || !sameActionContents(*r.Before, *r.Restored) || r.Restored.UpdatedAt.Before(expected[r.IssueID].UpdatedAt) {
-					return nil, fmt.Errorf("handoff review inverse order or contents changed")
+					return nil, fmt.Errorf("paired command inverse order or contents changed")
 				}
 				expected[r.IssueID] = *r.Restored
 			case "undo_prepared":
 				if stopped || out.Pending != nil || !sameActionContents(*r.Before, state) || state.UpdatedAt.Before(expected[r.IssueID].UpdatedAt) || r.Action == "comment_create" && out.Comments[r.IssueID] != nil {
-					return nil, fmt.Errorf("handoff review inverse is unverified; inspect without replay")
+					return nil, fmt.Errorf("paired command inverse is unverified; inspect without replay")
 				}
 				out.Pending, expected[r.IssueID], stopped = r, state, true
 			case "applied":
@@ -242,18 +245,18 @@ func (c *Client) observeHandoffReview(ctx context.Context, root *ActionJournalRe
 		out.Members = append(out.Members, result)
 	}
 	if normal && (out.Pending != nil || !inverse && out.Partial) {
-		return nil, fmt.Errorf("successful handoff review omitted or failed to verify an effect")
+		return nil, fmt.Errorf("successful paired command omitted or failed to verify an effect")
 	}
 	saved := root.Group.Forward
 	if inverse {
 		saved = root.Group.Inverse
 	}
 	if saved != nil && !equalGroupMemberResults(saved.Members, out.Members) {
-		return nil, fmt.Errorf("handoff review completed result changed")
+		return nil, fmt.Errorf("paired command completed result changed")
 	}
 	return out, nil
 }
 
-func sameHandoffReviewObservation(a, b *handoffReviewObservation) bool {
+func samePairedGroupObservation(a, b *pairedGroupObservation) bool {
 	return maps.EqualFunc(a.States, b.States, func(x, y ActionIssueState) bool { return x.Revision == y.Revision }) && reflect.DeepEqual(a.Receipts, b.Receipts) && reflect.DeepEqual(a.Comments, b.Comments) && equalGroupMemberResults(a.Members, b.Members)
 }

@@ -131,13 +131,12 @@ func checkGroupArchiveCapacity(a ActionJournal, expected map[string]ActionIssueS
 		input.ForwardDigests = []string{strings.Repeat("f", 64), strings.Repeat("f", 64)}
 		group.UpdateActivity = &input
 	}
-	if group.handoffReviewGroup() {
-		input := *group.HandoffReview
-		input.ForwardDigests = make([]string, len(group.handoffEffects()))
-		for i := range input.ForwardDigests {
-			input.ForwardDigests[i] = strings.Repeat("f", 64)
+	if group.pairedGroup() {
+		digests := make([]string, group.pairedEffectCount())
+		for i := range digests {
+			digests[i] = strings.Repeat("f", 64)
 		}
-		group.HandoffReview = &input
+		group.setPairedDigests(digests)
 	}
 	observation := &ActionGroupObservation{SessionID: a.SessionID, Actor: strings.Repeat("x", 39), ObservedAt: time.Now().UTC(), Proof: "group-contents-observed", Members: []ActionGroupResultMember{}}
 	for _, m := range group.Members {
@@ -233,6 +232,9 @@ func validateGroupMemberAtState(group *ActionJournalRecord, member *ActionJourna
 	if group.Group.updateActivityGroup() {
 		return validateUpdateActivityMember(group, member)
 	}
+	if group.Group.updateCommentsGroup() {
+		return validateUpdateCommentsMember(group, member)
+	}
 	if group.Group.handoffReviewGroup() {
 		return validateHandoffReviewMember(group, member)
 	}
@@ -295,8 +297,8 @@ func (c *Client) attachActionGroupMember(ctx context.Context, a *ActionJournal) 
 		return nil
 	}
 	active := c.journal.Group
-	if active.Journal.Group.handoffReviewGroup() {
-		return c.bindHandoffReviewMember(a)
+	if active.Journal.Group.pairedGroup() {
+		return c.bindPairedGroupMember(a)
 	}
 	if active.Journal.Group.updateActivityGroup() {
 		return c.bindUpdateActivityMember(a)
