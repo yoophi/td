@@ -60,8 +60,19 @@ transaction's observation. A real temporary SQLite dataset retained 196 tasks,
 scheduled tasks; its database SHA256 was unchanged after collection. The common
 SQLite initializer's separate literal-path bug is tracked by #91.
 
-#90 still needs the versioned, capacity-bounded
-input envelope with strict identity/reference/checksum validation. The source
+The `storetransfer` input envelope now binds format version 1, store and stable
+source namespace to the serialized payload with SHA256. SQLite namespaces are
+explicit identifiers rather than filesystem paths; GitHub uses `owner/repo`.
+The checksum is change detection, not authentication. Reading has a default
+64 MiB byte limit and rejects oversized, truncated, trailing, unknown-field,
+wrong-version and checksum-mismatched input before returning a source. Writing
+pre-encodes within the limit, so a capacity error writes no partial bytes; IO
+failures retain their original errors and still require an atomic file
+controller. Native 196-task inputs round-tripped with unchanged checksum:
+SQLite 388,067 bytes and GitHub 16,813,153 bytes.
+
+#90 still needs strict entity identity/reference validation and collection-time
+capacity enforcement. The envelope is not yet a destination-ready plan. The source
 must be preserved; previews may not initialize, upgrade or mutate it. Original
 authors, sessions and reviews are historical provenance, not destination actors
 or current approvals.
