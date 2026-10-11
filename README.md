@@ -285,9 +285,10 @@ best-effort and does not provide a distributed lock. `unstart --session/--stale`
 `review`, `approve`, `reject`, `close`, and `reopen` use shared session and review
 policy checks. Approval supports `--record-only`, `--self-review`, `--reviewed-by`,
 and `--decision`, with explicit reasons where required. Native close/reopen events
-and changed review content invalidate approval. Full lifecycle parity (including
-descendant cascades and remaining native-state parity) remains
-tracked in #3.
+and changed review content invalidate approval. Descendant, parent and dependent
+cascades use the shared command protocols described in the
+[writer audit](docs/storage/github-writer-audit.md). The complete command/flag
+contract audit remains separately tracked in #31/#68.
 
 `serve` can now bootstrap with `store=gh-issue` without opening an SQLite
 issue database. It validates the configured GitHub remote and authentication
@@ -313,7 +314,8 @@ operations are no-ops after revision validation. Multi-ID CLI operations stop
 on the first failure and report earlier saved IDs. HTTP DELETE returns the
 existing `{"deleted": true}` payload, validates `If-Match` and observed revisions,
 and rejects unsupported fields/query parameters. `logical_delete` is exposed
-in `/v1/project`. Undo and import/export integration remain tracked in #18/#9.
+in `/v1/project`. Tracked deletion/restoration participates in guarded undo;
+broader import/export and command-contract completion remains #18/#9/#66 work.
 `POST /v1/issues/{id}/comments` returns `201 Created` with the existing comment
 DTO, stores a td comment activity, and uses the actual web session. The matching
 `DELETE /v1/issues/{id}/comments/{comment_id}` returns `200 OK` with
@@ -505,8 +507,9 @@ to shared transition history. They leave native state unchanged and do not
 automatically unblock or cascade workflow states. Graph checks remain
 best-effort; post-write graph conflicts explicitly report the saved edge and
 are never retried automatically. `/v1/project` exposes `dependencies` and the
-two routes. Dependency CLI and undo/import/export integration remain separate
-work under #4/#9/#18.
+two routes. CLI dependency batches validate the complete delta and use one source
+PATCH with guarded whole-delta undo. Portable history and the full command/flag
+audit remain separately tracked in #9/#66/#68.
 Conflict checks are best-effort; uncertain writes are never retried automatically. Issue reads
 support filters, pagination, TDQ and shared activity. GitHub issue listings and
 comments are separate reads, not an atomic snapshot. Workflow HTTP endpoints are connected to the shared CLI policy,
@@ -563,14 +566,17 @@ A failure to read availability after a write explicitly reports that the issue
 was already saved, so clients must inspect its current state before retrying.
 Sessions report device-local liveness; focus belongs to the stable web session,
 separate from CLI focus. Session APIs revalidate the configured repository and
-authentication on each request and reject changed web identities. Other operations explicitly return
-`501 unsupported_operation`. Remaining write endpoints and SSE are being connected in
-#13; this bootstrap alone is not a complete GitHub HTTP API. The project
-response advertises the currently supported endpoints.
+authentication on each request and reject changed web identities. Unsupported
+operations explicitly return `501 unsupported_operation`. The project response
+advertises the currently supported endpoints and capabilities; full GUI contract
+acceptance remains #55 work.
 
-Unsupported flags are errors, not ignored options. Dependencies, boards, TDQ,
-undo and offline operations remain pending for GitHub. Administrative closes do
-not count as td review approval.
+Unsupported flags are errors, not ignored options. Dependencies, boards and TDQ
+have GitHub implementations. Tracked compound task commands support guarded
+recovery and undo, including import/resume/same-ID reimport; see the
+[writer audit](docs/storage/github-writer-audit.md) for actual boundaries and
+remaining work. GitHub operations require connectivity. Administrative closes
+do not count as td review approval.
 `--json` works for all supported commands; multi-issue mutations emit one result
 per line and stop with a nonzero exit code on failure (earlier successes remain).
 

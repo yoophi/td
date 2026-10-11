@@ -2,13 +2,16 @@
 
 The #24 implementation now connects validated batch execution to the CLI.
 `--dry-run` is read-only; a regular import performs checked creation, archival,
-field/relationship updates and completion publication. Native GitHub verification
-and task review/closure remain pending; local fixture tests are not live proof.
+field/relationship updates and completion publication. Native command-lifecycle
+acceptance passed in #78; the broader #24 import/portable-data contract and task
+closure remain separately tracked.
 
-Command history and whole-import undo are a separate, unfinished #65 gate.
+Command history, original-execution resume, whole-import undo and same-ID
+reimport are implemented and verified as part of #65.
 See the [import command journal contract](github-import-command-journal.md) for
 execution ownership, explicit resume, undo/reimport generations and capacity
-requirements. The prepared-intent prototype has not been published remotely.
+requirements, native acceptance results and measured API costs. Compatible
+sample readers were upgraded before publishing the v34 native records.
 
 `td import FILE --format json|md --dry-run [--force] [--json] [--source NAME]` reads a file;
 `FILE=-` reads stdin. A `.md` extension selects Markdown with the default format.

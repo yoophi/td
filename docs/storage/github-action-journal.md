@@ -2,6 +2,10 @@
 
 This document retains incremental protocol notes. For current command coverage
 and remaining writer integration, use [the writer matrix](github-batch-writers.md).
+The stages below include historical implementation boundaries; current
+CLI/HTTP/monitor dispatch and acceptance are summarized in the
+[writer audit](github-writer-audit.md) and
+[native import acceptance](github-import-command-journal.md#native-acceptance-78).
 
 This work belongs to #9. The codec, bulk reader, inverse planner and an opt-in
 issue-update write protocol are present. `last` and `undo --list` have GitHub
