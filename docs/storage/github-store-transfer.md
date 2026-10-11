@@ -3,9 +3,9 @@
 Store configuration changes select a backend; they do not migrate data. #8
 requires a separate command with source/destination validation, preview, stable
 qualified ID mappings, checked writes and explicit partial-failure resume.
-This implementation is in progress. `td store transfer --dry-run` is registered
-in this feature branch; explicit execution is not yet available and returns an
-error before source or destination access.
+This implementation is in progress. This feature branch supports bidirectional
+`td store transfer --dry-run` and explicit execution to SQLite. GitHub destination
+execution remains unavailable and fails before source or destination access.
 
 ## CLI preview (#93, execution in progress)
 
@@ -29,8 +29,37 @@ disclosures. `--map qualified-source-key=existing-target-id` may be repeated;
 unknown keys, duplicate keys, wrong kinds and conflicting target bindings fail.
 `--max-bytes` sets the input capacity limit. Implicit issue-session discovery
 and autosync hooks are skipped because transfer owns its explicit I/O.
-`--execute` currently returns `unsupported_operation`; this is a feature-stage
-limitation, not completion of the execution task.
+`--execute --to sqlite` performs checked projection, optional no-overwrite
+initialization and an atomic workspace/capsule write. JSON reports `committed`,
+the source SHA256, namespace, ID mappings, inserted entity counts and passive
+preservation policies. Human output reports those counts and the capsule SHA.
+An output failure after commit explicitly identifies the committed outcome;
+it does not roll back data or suggest blind retry. GitHub destination execution
+still returns `unsupported_operation`; #93 is not complete.
+
+```bash
+td -w /path/to/github-project store transfer --execute --to sqlite \
+  --destination /path/to/sqlite-project --destination-namespace my-sqlite-target --json
+```
+
+Existing destination archives guard against creating the same qualified source
+identities again, including after a fresh GitHub observation changes its input
+checksum. This uses passive mapping evidence to stop for inspection, never to
+automatically adopt or overwrite an entity. An operator may explicitly bind
+existing destination IDs using `--map`; that reuses their current contents.
+Persistent checkpoint and resume are still #94. Configuration is unchanged.
+
+All Issues reuses the destination's builtin name, query and view mode; the
+original configuration remains in the capsule. Conflict-free source positions
+can be added. This is disclosed separately from copied custom board settings.
+
+The actual CLI was exercised with a GET-only `yoophi/td-sample` source and a new
+temporary SQLite destination. It committed 196 tasks, 5 notes, 3 custom boards
+(4 total including All Issues), 1 position, 49 logs, 52 handoffs, 20 dependencies
+and 4 files. The archive SHA/mappings matched the reported result; foreign-key
+checks found no orphans, and original workflow actors/active reviews were zero.
+This is native evidence for the SQLite direction, not GitHub destination writes
+or checkpoint/resume. The support matrix remains partial until #93/#94/#95 finish.
 
 `BuildTaskImportInput` now prepares the existing task importer's validated
 inputs from the immutable capsule. It supplies a bridge from qualified transfer
@@ -57,7 +86,7 @@ no original workflow actors or active reviews were installed. The complete
 source capsule was retained alongside this fixture. This is task projection and
 fixture replay, not completion of whole-store execution. #93 still requires
 checked task/note/board writes, workspace archive installation, verified target
-ownership/receipts and writer audit before `--execute` becomes available.
+ownership/receipts and writer audit before bidirectional execution is complete.
 
 The private SQLite writer now inserts prepared tasks, notes, live boards,
 positions and the complete original capsule/mappings in one `BEGIN IMMEDIATE`
@@ -121,8 +150,8 @@ initialization removes its private staging data; an already published empty
 database is retained if subsequent apply fails. Publication/directory sync
 errors preserve the original error and explicitly require inspection before
 retry; no automatic retry or deletion of a published destination occurs.
-CLI activation, journal integration and persistent execution/checkpoint receipts
-are still not implemented by these helpers.
+The SQLite CLI execution path uses these helpers. GitHub execution, journal
+integration and persistent checkpoint/resume are still required.
 
 ## Source collection (#90)
 

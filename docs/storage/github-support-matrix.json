@@ -2069,16 +2069,18 @@
       "command": "td store transfer",
       "owner": "#93",
       "state": "partial",
-      "reason": "Read-only dry-run JSON/human contracts and invalid-mode guards are tested in both directions; actual execution is not yet available.",
+      "reason": "Bidirectional read-only previews and SQLite execution are tested, including source provenance isolation, duplicate fresh replay rejection and output failure after commit. GitHub destination execution, checkpoint/resume and native/integration acceptance remain incomplete.",
       "evidence": [
         "TestStoreTransferInvalidModesAndBindingsDoNotInitialize",
-        "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH",
+        "TestStoreTransferExecuteSQLiteCommitsAndRejectsFreshReplay",
+        "TestStoreTransferExecuteSQLiteReportsOutputFailureAfterCommit"
       ],
       "flags": {
         "destination": "partial",
         "destination-namespace": "partial",
         "dry-run": "partial",
-        "execute": "pending",
+        "execute": "partial",
         "help": "pending",
         "json": "partial",
         "map": "pending",
@@ -2110,6 +2112,10 @@
         ],
         "json": [
           "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        ],
+        "execute": [
+          "TestStoreTransferExecuteSQLiteCommitsAndRejectsFreshReplay",
+          "TestStoreTransferExecuteSQLiteReportsOutputFailureAfterCommit"
         ]
       }
     },

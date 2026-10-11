@@ -105,12 +105,23 @@ func PrepareSQLiteWrite(source *Source, target *InspectedTarget, bindings map[st
 	}
 	mappings := map[string]string{}
 	adopted := map[string]bool{}
+	previousKeys := map[string]bool{}
+	for _, archive := range observed.SQLite.TransferArchives {
+		for key, id := range archive.Mappings {
+			if id != "" {
+				previousKeys[key] = true
+			}
+		}
+	}
 	for _, a := range plan.Identities.Assignments {
 		if a.Action == "archive" {
 			continue
 		}
 		id := a.TargetID
 		if a.Action == "create" {
+			if previousKeys[a.SourceKey] {
+				return nil, fmt.Errorf("source identity %q was previously transferred; inspect existing archive/mappings and explicitly bind its destination before another transfer; no automatic replay", a.SourceKey)
+			}
 			prefix := map[string]string{"task": "td-", "note": "nt-", "board": "bd-"}[a.Kind]
 			if prefix == "" {
 				return nil, fmt.Errorf("unsupported SQLite entity kind %q", a.Kind)

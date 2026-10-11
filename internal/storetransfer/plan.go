@@ -251,10 +251,14 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 		}
 	}
 	archivedBoards := 0
+	builtinBoards := 0
 	adoptedTasks, adoptedNotes, adoptedBoards := 0, 0, 0
 	for _, a := range plan.Identities.Assignments {
 		if a.Action == "archive" {
 			archivedBoards++
+		}
+		if target.Envelope.Store == "sqlite" && a.Action == "builtin" {
+			builtinBoards++
 		}
 		if target.Envelope.Store == "sqlite" && a.Action == "adopt" {
 			switch a.Kind {
@@ -270,7 +274,7 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 	result := []Disclosure{
 		{"task_content_state_schedule_deletion", "preserve", tasks - adoptedTasks, "Plan task content, status/type/priority/acceptance/labels/sprint/files/schedule/logical deletion with mapped IDs; executor is not implemented by this report."},
 		{"notes_content_flags", "preserve", notes - adoptedNotes, "Plan note content and pinned/archived/deleted flags; original authors and clocks remain source provenance."},
-		{"boards_configuration_queries", "preserve", boards - archivedBoards - adoptedBoards, "Plan live board configuration and mapped queries; blocked queries require explicit policy or confirmed mappings before board writes. Device last-view state is excluded."},
+		{"boards_configuration_queries", "preserve", boards - archivedBoards - adoptedBoards - builtinBoards, "Plan live board configuration and mapped queries; blocked queries require explicit policy or confirmed mappings before board writes. Device last-view state is excluded."},
 		{"relationships", "preserve", activeRelations, "Plan current parents and dependencies using qualified source keys; archival legacy relations are listed separately and never activated."},
 		{"board_positions", "preserve", activePositions, "Plan board membership/order with mapped IDs; archival position tombstones are listed separately and never activated."},
 		{"original_actors_reviews_history", "passive_archive", history, "Count collected typed history records (projections can overlap raw native evidence). Original authors, sessions, reviews, transitions, logs, handoffs, snapshots and comments are provenance, not destination actors, active approvals or executable undo history."},
@@ -280,6 +284,9 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 	}
 	if n := adoptedTasks + adoptedNotes + adoptedBoards; n > 0 {
 		result = append(result, Disclosure{"explicit_sqlite_adoption", "reuse_existing", n, "Explicitly mapped destination entities remain unchanged, including their relations and board positions. Original source content/history remains in the passive capsule; new entities may reference the adopted IDs."})
+	}
+	if builtinBoards > 0 {
+		result = append(result, Disclosure{"builtin_sqlite_board_configuration", "reuse_existing", builtinBoards, "All Issues keeps the destination name, query and view mode. Original source configuration stays in the passive capsule; conflict-free source positions may be added."})
 	}
 	if target.Envelope.Store == "gh-issue" {
 		blocks, deletedPositions := 0, 0
