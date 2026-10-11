@@ -343,6 +343,36 @@ func (c *Client) Create(ctx context.Context, issue *models.Issue) (*Record, erro
 // Import creation supplies a deterministic source operation. The normal
 // creation validation, uncertain-write diagnostics and mirrors remain shared.
 func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue, operationID string) (*Record, error) {
+	plan, err := c.prepareIssueCreation(ctx, issue, operationID, nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.writeIssueCreation(ctx, plan)
+}
+
+// Creation inputs are fully prepared before labels, journal or task writes.
+// Dependencies refer only to existing tasks. The new task's native identity and
+// clocks are allocated by GitHub and cannot be part of this input.
+type issueCreatePlan struct {
+	operationID string
+	input       ActionCreateInput
+	priority    models.Priority
+	parents     []Record
+}
+
+func (c *Client) prepareIssueCreation(ctx context.Context, issue *models.Issue, operationID string, dependencies []string) (*issueCreatePlan, error) {
+	plan, err := prepareIssueCreationInput(issue, operationID, dependencies)
+	if err != nil {
+		return nil, err
+	}
+	plan.parents, err = c.parentObservations(ctx, "", issue.ParentID)
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+func prepareIssueCreationInput(issue *models.Issue, operationID string, dependencies []string) (*issueCreatePlan, error) {
 	if issue == nil {
 		return nil, fmt.Errorf("issue is required")
 	}
@@ -352,12 +382,18 @@ func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue,
 	if err := validateIssue(issue); err != nil {
 		return nil, err
 	}
-	parents, err := c.parentObservations(ctx, "", issue.ParentID)
-	if err != nil {
-		return nil, err
-	}
 	meta := metadata{OperationID: operationID, Type: issue.Type, Priority: issue.Priority, Points: issue.Points, Acceptance: issue.Acceptance}
 	details := detailsFromIssue(issue)
+	if len(dependencies) > 0 {
+		seen := map[string]bool{}
+		for _, id := range dependencies {
+			if !canonicalGroupID(id) || seen[id] {
+				return nil, fmt.Errorf("creation dependencies must be distinct canonical issue IDs")
+			}
+			seen[id] = true
+		}
+		details.Dependencies = slices.Clone(dependencies)
+	}
 	baseline := IssueDetails{Status: issue.Status}
 	detailJSON, _ := json.Marshal(details)
 	baselineJSON, _ := json.Marshal(baseline)
@@ -369,19 +405,25 @@ func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue,
 		return nil, err
 	}
 	labels := mirroredPriorityLabels(mirroredLabels(issue.Labels, models.StatusOpen), issue.Priority)
+	return &issueCreatePlan{operationID: operationID, input: ActionCreateInput{Title: issue.Title, Body: body, Labels: labels}, priority: issue.Priority}, nil
+}
+
+func (c *Client) writeIssueCreation(ctx context.Context, plan *issueCreatePlan) (*Record, error) {
+	operationID, body, labels, parents := plan.operationID, plan.input.Body, plan.input.Labels, plan.parents
 	if err := c.ensureStateLabel(ctx, "td:open"); err != nil {
 		return nil, err
 	}
-	if err := c.ensurePriorityLabel(ctx, issue.Priority); err != nil {
+	if err := c.ensurePriorityLabel(ctx, plan.priority); err != nil {
 		return nil, err
 	}
-	payload := map[string]any{"title": issue.Title, "body": body, "labels": labels}
+	payload := map[string]any{"title": plan.input.Title, "body": body, "labels": labels}
 	if err := c.verifyParentObservations(ctx, "new issue", parents, false); err != nil {
 		return nil, err
 	}
 	var journal *ActionJournalRecord
+	var err error
 	if c.journal != nil {
-		journal, err = c.prepareCreationJournal(ctx, operationID, ActionCreateInput{Title: issue.Title, Body: body, Labels: append([]string{}, labels...)})
+		journal, err = c.prepareCreationJournal(ctx, operationID, plan.input)
 		if err != nil {
 			return nil, err
 		}
@@ -402,7 +444,7 @@ func (c *Client) createWithOperationID(ctx context.Context, issue *models.Issue,
 	if err := json.Unmarshal(data, &returned); err != nil {
 		return nil, err
 	}
-	if returned.Title != issue.Title || returned.Body != body || returned.State != "open" {
+	if returned.Title != plan.input.Title || returned.Body != body || returned.State != "open" {
 		return nil, fmt.Errorf("%s was created, but returned fields differ from operation %s; inspect %s before retrying", record.ID, operationID, record.URL)
 	}
 	if journal != nil && !strings.EqualFold(returned.User.Login, journal.Author) {
