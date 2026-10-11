@@ -34,7 +34,7 @@ func (receipt importReceipt) validate() error {
 	parts := strings.Split(receipt.SourceKey, ":")
 	validSource := len(parts) == 2 && parts[0] == "legacy" && importIDPattern.MatchString(parts[1])
 	if len(parts) == 3 && importIDPattern.MatchString(parts[2]) {
-		validSource = (parts[0] == "legacy" && importNamespacePattern.MatchString(parts[1])) || (parts[0] == "github" && repositoryPattern.MatchString(parts[1]))
+		validSource = (parts[0] == "legacy" && importNamespacePattern.MatchString(parts[1])) || (parts[0] == "github" && repositoryPattern.MatchString(parts[1]) && canonicalGroupID(parts[2]))
 	}
 	n, err := Number(receipt.TargetID)
 	if !validSource || err != nil || receipt.SourceParts < 0 || receipt.TargetID != fmt.Sprintf("gh-%d", n) || !importDigestPattern.MatchString(receipt.SourceDigest) || !importDigestPattern.MatchString(receipt.TargetBasis) {

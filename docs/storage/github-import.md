@@ -304,3 +304,21 @@ under a temporary root instead of writing the user's global state.
 The shared import envelope keeps SQLite's historical lenient deserialization;
 strict input and semantic validation apply to the GitHub importer. Local import
 behavior is covered by the existing SQLite import regression suite.
+
+SQLite normalizes imported `gh-N` task IDs to `td-gh-N`. Legacy JSON exports
+with those IDs now pass the shared GitHub importer and completion-receipt
+validators without renaming their parent/dependency/history/file references.
+They remain legacy source identities scoped by `--source`. Native GitHub source
+envelopes and `github:owner/repo:gh-N` receipts still require canonical `gh-N`;
+zero, leading-zero and malformed IDs, duplicate namespace identities and dangling
+references remain errors. This does not change SQLite's lenient local reader.
+
+The #96 native check exported two actual normalized SQLite tasks to
+`yoophi/td-sample` and restored their GitHub export to temporary SQLite, retaining
+parents, dependencies, file/log/handoff owners and historical session isolation.
+Original workflow actors/review stamps were cleared by the GitHub importer and
+did not become destination authority. Re-execution created zero tasks and skipped
+both completed imports. GitHub's fresh list briefly omitted newly allocated
+`gh-215`/`gh-216`; execution stopped, a read-only plan verified the original IDs
+and command owner, and explicit resume completed both with zero new allocations.
+Improving that listing-lag diagnostic is tracked separately in #97.
