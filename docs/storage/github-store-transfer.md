@@ -167,5 +167,32 @@ identities with one auth, one repo preflight and one issue/comment collection
 each. No remote writes or GitHub-to-SQLite fallback occurred. Inspection does
 not guarantee future write permissions, capacity or unchanged remote state.
 
-#92 still needs checked receipt reconciliation, relation/position plans and the
-complete preservation/loss report before its final review.
+`BuildDataPlan` now includes current parent/dependency edges, board positions,
+rewritten board-query previews and preservation/loss disclosures. Pending
+references retain qualified source keys. `ReadyRelations` and `ReadyPositions`
+return concrete destination IDs only when every active reference is mapped;
+an unresolved reference fails the whole batch rather than returning a partial
+write list. These helpers do not authenticate receipts or grant write authority.
+Query references to notes/boards are absent task references, not pending task
+creations.
+
+SQLite's raw legacy `blocks` rows do not participate in its effective blocker
+queries. A GitHub target keeps those rows as passive evidence instead of
+silently converting them into active dependencies. SQLite position tombstones
+also remain passive for a GitHub target, whose current position model has no
+tombstone field. A SQLite target can represent both rows directly.
+
+The report counts tasks, notes, boards, applicable relationships/positions,
+typed historical records, raw native comments and portable journal actions.
+Historical counts describe collected projections, which can overlap native
+evidence; they are not counts of distinct user actions. Original actors,
+reviews, transitions and journals must remain passive evidence. The report also
+discloses excluded local action kinds, unavailable hard-deleted data, changed
+ID text-search behavior and unverified future destination access. These are
+intended handling decisions, not proof that an archive or entity was written.
+
+Recorded native inputs produced 211 identities, 42 relations and 2 positions
+for GitHub-to-SQLite; SQLite-to-GitHub produced 197 identities and 42 relations.
+No API or database write was performed. #92 still needs its complete plan
+review. Creation receipt verification and checkpoint reconciliation belong to
+the checked executor/resume stages (#93/#94), not to this read-only plan.
