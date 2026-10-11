@@ -228,8 +228,52 @@ legacy executor is unchanged; reuse across that format and command documents is
 a future integration/efficiency concern, not a claim of zero storage duplication.
 
 Active monitors/servers must understand v34 before it is published to their
-repository. Installing a new CLI alone does not replace running readers. This
-implementation has not published native v33/v34 records or switched installations.
+repository. Installing a new CLI alone does not replace running readers. The
+sample repository's three owned GUI/backends were upgraded before the first
+native v34 publication in the acceptance below. Main installation and release
+activation remain separate preparation/deployment steps.
+
+## Native acceptance (#78)
+
+On 2026-10-11, candidate `39e81b5` passed the real GitHub lifecycle in
+`yoophi/td-sample`, using disposable issues #205 and #206 and an isolated local
+session. A local proxy discarded the successful first allocation response once;
+this was not a GitHub service failure. Receipt-only observation was read-only.
+Explicit resume kept the original command `ghc-6108178915`, both native IDs and
+the immutable source input, and retained `observed` forward attribution.
+
+The first explicit resume allocated #206, but its immediate fresh bulk plan did
+not contain the allocated ID. It stopped before relationship writes, preserving
+the error and partial effects. Native point reads and a later read-only plan
+recognized both owned allocations; a second explicitly inspected continuation
+completed with zero creations. This is consistent with transient collection
+visibility, not proof of its underlying cause. The test did not retry a write
+automatically or conceal that additional interruption.
+
+Identical import repetition and completed inverse confirmation made GETs only.
+Whole undo logically deleted both allocations while preserving native identities,
+authors, creation timestamps, comments and original/forward evidence. Reimport
+created a new command `ghc-6108251446` linked to the completed inverse, reused both
+IDs and retained earlier comments. Its undo restored the compensated baseline.
+Both fixtures finished logically deleted, exactly two task POSTs occurred, all
+task PATCHes targeted those fixtures, and no `.todos/issues.db` was created.
+
+With cache disabled and existing repository history retained:
+
+| Command | Seconds | gh API invocations | Observed HTTP responses |
+| --- | ---: | ---: | ---: |
+| Inspected continuation | 115.8 | 70 | 175 |
+| Identical import repeat | 8.1 | 4 | 12 |
+| Whole undo | 192.0 | 93 | 284 |
+| Same-ID reimport | 172.0 | 100 | 260 |
+| New-generation undo | 192.5 | 93 | 284 |
+| Final read-only confirmation | 14.7 | 9 | 22 |
+
+Response counts include pagination within each `gh api` invocation, but exclude
+authentication's internal requests and other running readers. These are one
+repository's measurements, not a latency or quota guarantee. Repeated bulk
+verification remains expensive; broader optimization belongs to #73. Detailed
+per-stage artifacts and both interruption results are recorded with #78.
 
 ## Required acceptance scenarios
 
