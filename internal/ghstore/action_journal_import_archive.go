@@ -23,8 +23,15 @@ type importArchiveDocument struct {
 }
 
 type importArchiveManifest struct {
-	Journal   ActionJournal           `json:"journal"`
-	Documents []importArchiveDocument `json:"documents"`
+	Journal        ActionJournal           `json:"journal"`
+	Documents      []importArchiveDocument `json:"documents"`
+	InverseResults int                     `json:"inverse_results,omitempty"`
+}
+
+type importInverseArchivePlan struct {
+	At      time.Time                  `json:"at"`
+	Watches []ActionRelatedObservation `json:"watches"`
+	Steps   []ImportInverseStep        `json:"steps"`
 }
 
 type importArchivePublication struct {
@@ -32,6 +39,8 @@ type importArchivePublication struct {
 	parts          []actionJournalPart
 	bodies         []string
 	originalDigest string
+	forwardDigest  string
+	inverse        *ActionImportInverse
 }
 
 func importOriginalDigest(command *ActionImportCommand) (string, error) {
@@ -71,6 +80,11 @@ func planImportArchivePublication(a ActionJournal) (*journalPublication, error) 
 	if err != nil {
 		return nil, err
 	}
+	forward, err := json.Marshal(frozen.ImportForward)
+	if err != nil {
+		return nil, err
+	}
+	p.forwardDigest = journalTransportHash(string(forward))
 	add := func(name string, data []byte) error {
 		if len(data) == 0 {
 			return fmt.Errorf("import archive document %s is empty", name)
@@ -117,6 +131,28 @@ func planImportArchivePublication(a ActionJournal) (*journalPublication, error) 
 			return nil, err
 		}
 		frozen.ImportForward.Targets = nil
+	}
+	if frozen.ImportInverse != nil {
+		inverse := frozen.ImportInverse
+		data, err := json.Marshal(importInverseArchivePlan{At: inverse.At, Watches: inverse.Watches, Steps: inverse.Steps})
+		if err != nil {
+			return nil, err
+		}
+		if err := add("inverse-plan", data); err != nil {
+			return nil, err
+		}
+		for n, result := range inverse.Results {
+			data, err := json.Marshal(result)
+			if err != nil {
+				return nil, err
+			}
+			if err := add(fmt.Sprintf("inverse-result:%d", n), data); err != nil {
+				return nil, err
+			}
+		}
+		p.inverse = inverse
+		p.manifest.InverseResults = len(inverse.Results)
+		p.manifest.Journal.ImportInverse = &ActionImportInverse{Started: inverse.Started, Result: inverse.Result, Canceled: inverse.Canceled}
 	}
 	if _, err := p.rootPlan(p.manifest); err != nil {
 		return nil, fmt.Errorf("import archive root capacity: %w", err)
@@ -219,6 +255,18 @@ func decodeImportArchiveJournal(root apiComment, carrier string, collection *jou
 		}
 		names = append(names, "forward")
 	}
+	if manifest.InverseResults < 0 || manifest.InverseResults > len(manifest.Documents) || a.ImportInverse == nil && manifest.InverseResults != 0 {
+		return nil, fmt.Errorf("import archive has invalid inverse result count")
+	}
+	if a.ImportInverse != nil {
+		if !a.ImportInverse.At.IsZero() || a.ImportInverse.Watches != nil || a.ImportInverse.Steps != nil || a.ImportInverse.Results != nil {
+			return nil, fmt.Errorf("import archive root embeds inverse evidence")
+		}
+		names = append(names, "inverse-plan")
+		for n := 0; n < manifest.InverseResults; n++ {
+			names = append(names, fmt.Sprintf("inverse-result:%d", n))
+		}
+	}
 	if len(names) != len(manifest.Documents) {
 		return nil, fmt.Errorf("import archive documents differ from original membership")
 	}
@@ -261,6 +309,31 @@ func decodeImportArchiveJournal(root apiComment, carrier string, collection *jou
 			if err != nil || !bytes.Equal(canonical, data.Bytes()) {
 				return nil, fmt.Errorf("import forward observation is not canonical")
 			}
+			continue
+		}
+		if doc.Name == "inverse-plan" {
+			var plan importInverseArchivePlan
+			if err := strictJournalJSON(data.Bytes(), &plan); err != nil {
+				return nil, err
+			}
+			canonical, err := json.Marshal(plan)
+			if err != nil || !bytes.Equal(canonical, data.Bytes()) {
+				return nil, fmt.Errorf("import inverse plan is not canonical")
+			}
+			a.ImportInverse.At, a.ImportInverse.Watches, a.ImportInverse.Steps = plan.At, plan.Watches, plan.Steps
+			a.ImportInverse.Results = make([]ImportInverseResult, 0, manifest.InverseResults)
+			continue
+		}
+		if strings.HasPrefix(doc.Name, "inverse-result:") {
+			var result ImportInverseResult
+			if err := strictJournalJSON(data.Bytes(), &result); err != nil {
+				return nil, err
+			}
+			canonical, err := json.Marshal(result)
+			if err != nil || !bytes.Equal(canonical, data.Bytes()) {
+				return nil, fmt.Errorf("import inverse result is not canonical")
+			}
+			a.ImportInverse.Results = append(a.ImportInverse.Results, result)
 			continue
 		}
 		var state ImportNativeState

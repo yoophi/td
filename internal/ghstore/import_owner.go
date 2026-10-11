@@ -124,7 +124,7 @@ func selectPendingImportExecution(snapshot *Snapshot, plan *ImportPlan, items []
 	var selected *ActionJournalRecord
 	for n := range history {
 		root := &history[n]
-		if root.ImportCommand == nil || root.Phase != "prepared" {
+		if root.ImportCommand == nil || root.Phase != "prepared" && root.Phase != "undo_prepared" {
 			continue
 		}
 		overlap := false
@@ -136,6 +136,9 @@ func selectPendingImportExecution(snapshot *Snapshot, plan *ImportPlan, items []
 		}
 		if !overlap {
 			continue
+		}
+		if root.Phase == "undo_prepared" {
+			return nil, fmt.Errorf("pending import inverse %s must be completed or reconciled before another import", root.ID)
 		}
 		if selected != nil {
 			return nil, fmt.Errorf("overlapping pending import commands %s and %s; inspect them before any import write", selected.ID, root.ID)

@@ -24,6 +24,7 @@ type ImportPlanRow struct {
 	Owner                    *ImportExecutionOwner `json:"owner,omitempty"`
 	intent                   *importIntent
 	receipt                  *importReceipt
+	compensation             *ImportCompensation
 	basis                    string
 	destinationArchiveDigest string
 	destinationArchiveBasis  string
@@ -78,13 +79,17 @@ func (c *Client) planImport(ctx context.Context, items []ImportItem, force bool)
 // The same source/destination contract validates a live preparation and the
 // original or resulting native observations saved in a command journal.
 func (c *Client) planImportSnapshot(items []ImportItem, force bool, snapshot *Snapshot) (*ImportPlan, error) {
-	return c.planImportObservation(items, force, snapshot, snapshotImportIdentities(snapshot))
+	compensations, err := snapshotImportCompensations(snapshot, items)
+	if err != nil {
+		return nil, err
+	}
+	return c.planImportObservation(items, force, snapshot, snapshotImportIdentities(snapshot), compensations)
 }
 
 // A command journal keeps full native observations for selected destinations
 // and a compact identity inventory for all original tasks. Both that reader
 // and a fresh remote plan use exactly the same target and checkpoint decisions.
-func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot *Snapshot, identities []ImportTargetIdentity) (*ImportPlan, error) {
+func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot *Snapshot, identities []ImportTargetIdentity, compensations ...[]ImportCompensation) (*ImportPlan, error) {
 	if err := ValidateImportItems(items); err != nil {
 		return nil, err
 	}
@@ -100,6 +105,10 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 		return nil, fmt.Errorf("import plan requires complete native issue and comment observations")
 	}
 	plan.snapshot = snapshot
+	var links []ImportCompensation
+	if len(compensations) != 0 {
+		links = compensations[0]
+	}
 	index, err := newImportTargetIndex(identities)
 	if err != nil {
 		return nil, err
@@ -203,7 +212,10 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 				return nil, fmt.Errorf("completion receipt for %s disagrees with its target mapping; no import writes attempted", row.SourceKey)
 			}
 			if bases[row.TargetID] != receipt.TargetBasis {
-				return nil, fmt.Errorf("import destination changed after completion; --force does not overwrite subsequent edits: %w", &ConflictError{ID: row.TargetID})
+				row.compensation, err = matchImportCompensation(c.repo, snapshot, receipt, bases[row.TargetID], links)
+				if err != nil {
+					return nil, fmt.Errorf("import destination changed after completion; --force does not overwrite subsequent edits: %w", err)
+				}
 			}
 			verified, err := verifyImportReceiptHistory(receipt, provenance)
 			if err != nil {
@@ -225,6 +237,13 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 					return nil, fmt.Errorf("%s has a fields-only completion receipt; recover history with original input before importing a changed source", row.TargetID)
 				}
 				row.Action, row.ResumeState = "resume_history", "history_pending"
+			}
+			if row.compensation != nil {
+				if !verified {
+					return nil, fmt.Errorf("compensated import requires complete original source history")
+				}
+				row.Action = "overwrite"
+				row.destinationArchiveDigest, row.destinationArchiveBasis = "", ""
 			}
 		}
 		if row.Owner == nil && row.Observed != nil {

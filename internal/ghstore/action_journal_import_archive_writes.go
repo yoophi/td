@@ -56,6 +56,16 @@ func (c *Client) publishImportArchiveJournal(ctx context.Context, path string, p
 		if err != nil || old.ImportCommand == nil || old.SessionID != plan.importArchive.manifest.Journal.SessionID || digest != plan.importArchive.originalDigest {
 			return nil, fmt.Errorf("import archive rewrite cannot replace the original session, input, mapping or before-state")
 		}
+		if old.ImportForward != nil {
+			forward, err := json.Marshal(old.ImportForward)
+			if err != nil || journalTransportHash(string(forward)) != plan.importArchive.forwardDigest {
+				return nil, fmt.Errorf("import archive rewrite cannot replace original forward evidence")
+			}
+		}
+		next := plan.importArchive.manifest.Journal
+		if err := validateImportInverseRewrite(old.ActionJournal, next.Phase, next.UndoOperationID, plan.importArchive.inverse); err != nil {
+			return nil, err
+		}
 	}
 	if path != expectedPath {
 		return nil, fmt.Errorf("import archive publication endpoint differs from its native identity")

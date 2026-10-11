@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-func completedImportFixture(t *testing.T) (*ownedImportFixture, ActionJournal) {
+func completedImportFixture(t *testing.T, overwrite ...bool) (*ownedImportFixture, ActionJournal) {
 	t.Helper()
-	f := newOwnedImportFixture(t, false)
+	f := newOwnedImportFixture(t, len(overwrite) > 0 && overwrite[0])
 	base := f.client.run
 	f.client.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
 		if args[4] == "GET" && strings.Contains(args[5], "/events?") {
@@ -19,10 +19,10 @@ func completedImportFixture(t *testing.T) (*ownedImportFixture, ActionJournal) {
 		}
 		return base(ctx, dir, payload, args...)
 	}
-	if _, err := f.client.executeImport(f.ctx, f.items, false); err != nil {
+	if _, err := f.client.executeImport(f.ctx, f.items, f.force); err != nil {
 		t.Fatal(err)
 	}
-	forward, err := f.client.observeImportCompletion(f.ctx, f.journal, f.items, false, CreationObservation{Proof: "verified", SessionID: f.journal.SessionID, Actor: f.journal.Author, ObservedAt: time.Now().UTC()})
+	forward, err := f.client.observeImportCompletion(f.ctx, f.journal, f.items, f.force, CreationObservation{Proof: "verified", SessionID: f.journal.SessionID, Actor: f.journal.Author, ObservedAt: time.Now().UTC()})
 	if err != nil {
 		t.Fatal(err)
 	}

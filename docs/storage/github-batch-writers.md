@@ -281,14 +281,18 @@ and the full release gates remain separate checks.
 The import executor remains an incomplete batch writer in #65. The local CLI now
 binds its existing capture, provenance, intent and completion protocol to one
 current-session action command, with original-root resume, completed results and
-receipt-only reconciliation. Whole-command compensation is not implemented.
+receipt-only reconciliation. Whole-command compensation and same-ID reimport
+now pass local CLI acceptance. Proven pre-PATCH failures retain cancellation
+records and permit explicit resume; uncertain target writes are never replayed.
+Inverse plans/results reuse immutable document parts across progress updates.
 Portable imported history (#66) does not cover
 journaling the import command's own allocations, destination overwrites, graph
 detachment and native provenance comments. Do not close #65 by excluding this
 path. Both import execution and preview now freeze and validate complete source
 envelopes before the first remote observation; allocation, replanning, graph
 projection and provenance retain those same inputs. Final-result capacity before
-target writes, whole inverse/compensated reimport and native acceptance remain
+forward target writes, mixed overwrite/create and graph-detachment failure
+runtime checks, the complete writer audit and native acceptance remain
 release gates. See [the import command contract](github-import-command-journal.md).
 
 HTTP creation currently accepts a parent but no dependency/block list, so its

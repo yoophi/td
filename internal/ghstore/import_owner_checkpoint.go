@@ -136,6 +136,27 @@ func validateNewImportCommandPlan(plan *ImportPlan, items []ImportItem, force bo
 		if row.Action == "skip" {
 			continue
 		}
+		if row.compensation != nil {
+			previous, found := roots[row.compensation.CommandID]
+			if !found || previous.ImportCommand == nil || previous.Phase != "undone" {
+				return fmt.Errorf("original import compensation disappeared before reimport")
+			}
+			verified := false
+			for n, member := range previous.ImportCommand.Members {
+				if member.SourceKey != row.SourceKey {
+					continue
+				}
+				link, err := importCompensationFromRoot(&previous, n)
+				if err != nil {
+					return err
+				}
+				verified = reflect.DeepEqual(link, row.compensation)
+			}
+			if !verified {
+				return fmt.Errorf("reimport compensation no longer matches its completed original command")
+			}
+			continue
+		}
 		// Source history remains authoritative even if live ownership metadata
 		// was removed. The allocation owner may belong to a different source,
 		// such as a legacy task later exported and restored in its native repo.

@@ -89,6 +89,7 @@ func (s ActionIssueState) validate() error {
 type ActionJournal struct {
 	ImportCommand          *ActionImportCommand      `json:"import_command,omitempty"`
 	ImportForward          *ActionImportForward      `json:"import_forward,omitempty"`
+	ImportInverse          *ActionImportInverse      `json:"import_inverse,omitempty"`
 	CreationCommand        *ActionCreationCommand    `json:"creation_command,omitempty"`
 	CreationOwner          string                    `json:"creation_owner,omitempty"`
 	WorkflowStep           int                       `json:"workflow_step,omitempty"`
@@ -155,7 +156,7 @@ func (a ActionJournal) validate() error {
 	if !identity(a.OperationID) || !identity(a.SessionID) {
 		return fmt.Errorf("action history requires operation and session identity")
 	}
-	if a.ImportCommand != nil || a.ImportForward != nil || a.Action == "import" {
+	if a.ImportCommand != nil || a.ImportForward != nil || a.ImportInverse != nil || a.Action == "import" {
 		return a.validateImportCommand()
 	}
 	if err := a.validateCreationScope(); err != nil {
@@ -483,6 +484,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 			return nil, fmt.Errorf("import command repository differs from its native carrier")
 		}
 		if err := validateImportForwardNative(a, comment); err != nil {
+			return nil, err
+		}
+		if err := validateImportInverseNative(a, comment); err != nil {
 			return nil, err
 		}
 	}

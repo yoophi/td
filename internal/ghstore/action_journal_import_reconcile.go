@@ -9,6 +9,9 @@ import (
 )
 
 func (c *Client) reconcileImportCommand(ctx context.Context, root *ActionJournalRecord, session, actor string, apply bool) (*ActionReconcileResult, error) {
+	if root.ImportInverse != nil {
+		return c.reconcileImportInverse(ctx, root, session, actor, apply)
+	}
 	items, err := root.ImportCommand.inputItems()
 	if err != nil {
 		return nil, err

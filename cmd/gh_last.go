@@ -15,6 +15,7 @@ import (
 type githubActionHistoryRow struct {
 	ImportCommand      *ghstore.ActionImportCommand      `json:"import_command,omitempty"`
 	ImportForward      *ghstore.ActionImportForward      `json:"import_forward,omitempty"`
+	ImportInverse      *ghstore.ActionImportInverse      `json:"import_inverse,omitempty"`
 	CreationCommand    *ghstore.ActionCreationCommand    `json:"creation_command,omitempty"`
 	CommentObservation *ghstore.ActionCommentObservation `json:"comment_observation,omitempty"`
 	Group              *ghstore.ActionGroup              `json:"group,omitempty"`
@@ -213,7 +214,7 @@ func executeGitHubUndo(cmd *cobra.Command, client *ghstore.Client, actions []ghs
 		cmd.Println("No tracked actions to undo in current session")
 		return nil
 	}
-	if selected.Phase != "applied" && (selected.Group == nil && selected.CreationCommand == nil || selected.Phase != "undo_prepared") {
+	if selected.Phase != "applied" && (selected.Group == nil && selected.CreationCommand == nil && selected.ImportCommand == nil || selected.Phase != "undo_prepared") {
 		return withErrorCode("conflict", fmt.Errorf("latest tracked action %s is %s with an unverified outcome; inspect GitHub before retrying; no target write attempted", selected.OperationID, selected.Phase))
 	}
 	if selected.Action == "create" && selected.CreationCommand == nil {
@@ -308,7 +309,7 @@ func githubActionHistoryRows(actions []ghstore.ActionJournalRecord) ([]githubAct
 			ActionType: models.ActionType(action.Action), EntityType: entityType, EntityID: entityID,
 			PreviousData: before, NewData: after, Timestamp: action.CreatedAt, Undone: action.Phase == "undone"},
 			OperationID: action.OperationID, UndoOperationID: action.UndoOperationID, Phase: action.Phase, CarrierID: action.CarrierID, Author: action.Author, URL: action.URL,
-			DataFormat: dataFormat, HistoryScope: "td-action-journal", CreateInput: action.CreateInput, CreationCommand: action.CreationCommand, ImportCommand: action.ImportCommand, ImportForward: action.ImportForward, CommentObservation: action.CommentObservation,
+			DataFormat: dataFormat, HistoryScope: "td-action-journal", CreateInput: action.CreateInput, CreationCommand: action.CreationCommand, ImportCommand: action.ImportCommand, ImportForward: action.ImportForward, ImportInverse: action.ImportInverse, CommentObservation: action.CommentObservation,
 			TargetIssueID: targetIssueID, CommentInput: action.CommentInput, CommentAfter: action.CommentAfter, CommentBefore: action.CommentBefore, Reconciliation: action.Reconciliation, NativeUndo: action.NativeUndo, Group: action.Group, UpdateIntent: action.UpdateIntent, UpdateObservation: action.UpdateObservation, UndoObservation: action.UndoObservation, CommentDataFormat: commentFormat})
 	}
 	return rows, nil

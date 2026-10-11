@@ -4,8 +4,9 @@ Status: implementation in progress. The CLI now locally connects original v33
 command intents, v34 reference archives, owned execution, completed command
 history, explicit resume and receipt-only reconciliation. These formats remain
 unpublished to live repositories. Whole-command undo and compensated reimport
-are not implemented. Remaining execution/capacity requirements below still gate
-#65 and the intermediate release; forward CLI support is not final acceptance.
+now pass local CLI acceptance, including reuse of the same native issue IDs.
+Remaining failure/capacity and native acceptance requirements below still gate
+#65 and the intermediate release; local success is not final acceptance.
 
 ## One executor, one original command
 
@@ -106,8 +107,8 @@ partial execution returns its remaining plan without changing the root. Once
 all source completions exist, explicit apply can publish the observed command
 result under the actual observer's session without transferring original
 ownership. Repeating reconciliation of a completed command is read-only and
-checks its frozen native result. Whole-command inverse remains an explicit
-unsupported operation until its dedicated executor is implemented.
+checks its frozen native result. Whole-command inverse uses the existing graph
+planner and journal publisher with ordered step intents and native results.
 
 ## Undo and subsequent import
 
@@ -115,6 +116,25 @@ Undo preserves issue numbers, authors, native timestamps and comments. It marks
 owned allocations logically deleted and restores overwritten fields/relationships
 with fresh conflict checks. Retained source/destination archives are disclosed.
 All original forward proofs remain immutable as inverse progress is appended.
+
+Before each inverse PATCH, a durable Started marker is published and the graph,
+selected native tasks, comments and state events are checked again. A result
+may be appended from a verified response or explicit observed reconciliation.
+An uncertain PATCH is never automatically replayed, including when the target
+currently appears unchanged. Only the original executor can record a verified
+pre-PATCH cancellation on a return path that has not called PATCH. This retains
+the canceled step/stage and executor attribution, and lets a later explicit undo
+repeat normal conflict checks and resume. Failed cancellation publication or a
+process exit without that evidence leaves the pending step uncertain. Original
+read and cancellation errors remain visible; reconciliation cannot invent a
+no-write attestation from the current target state.
+
+Inverse field restoration invalidates previous approvals. New allocations are
+logically deleted; overwritten tasks regain their original fields and graph.
+Outside active tasks referring to an allocation prevent its logical deletion.
+Graph reversal uses the existing detachment/order planner. All original native
+comments and issue identities remain intact; compensation is not a rollback of
+GitHub authors or timestamps.
 
 A completed inverse explicitly links each compensated destination to its prior
 completion receipt and verified resulting basis. Only this link permits the
@@ -137,6 +157,12 @@ Transfer identity binds every chunk to the owning command, carrier, document and
 offset. Raw chunks use the existing bounded part decoder; there is no unbounded
 compressed document expansion. Rewrites reuse original documents and reject
 changes to the original session, input, mapping or before-state before uploads.
+The inverse plan and each actual step result are separate immutable documents.
+Progress, pre-write cancellations and whole completion remain in root metadata.
+Starting a step or completing the command reuses all evidence parts; appending
+one result adds only that result's parts. This removes full inverse-history
+republication at each step, without changing the existing part transport or
+relaxing native author/clock/hash validation.
 
 The normal journal publisher and native collection readers handle roots, including
 compressed/multipart roots when reference metadata itself is large. Uploads are
@@ -148,9 +174,10 @@ roots are explicit errors. No source history becomes live review authority.
 Preserve existing large-import capability: the 4 MiB decoded journal limit is
 not a new total import-history limit. Preparation checks original root/reference
 capacity before uploads, and completion checks its realized result capacity.
-Preflight of worst-case forward/inverse reference metadata before target writes
-remains a release gate. Missing, edited, duplicate or foreign
-referenced parts fail explicitly. Partial archive uploads stay inert until a
+Inverse preparation now reserves completed inverse reference capacity before
+its first target write. Preflight of worst-case forward/inverse reference
+metadata before the first forward target write remains a release gate. Missing,
+edited, duplicate or foreign referenced parts fail explicitly. Partial archive uploads stay inert until a
 verified root owns them; they cannot authorize target changes. Resolving
 references adds no per-source or per-part GitHub GET requests to bulk reads.
 Incremental reads defer reference validation until the delta is merged with
@@ -161,8 +188,16 @@ native/semantic evidence, partial upload recovery, original-document reuse and
 bulk/incremental reading. CLI tests cover success/no-op, lost root/allocation/
 target/completion responses, denied final receipts, cross-session refusal and
 receipt-only recovery, and changed-source generations. The whole-command CLI
-acceptance test now reaches the pending inverse gate. This does not claim live
-GitHub or complete import execution acceptance. Source/destination provenance already written by the
+acceptance test covers success/no-op, undo, same-ID reimport and the new
+generation's undo. Pre-write snapshot/target failures, failed cancellation
+publication, rejected PATCH and lost PATCH response are also exercised. Recovery
+preserves observed attribution and never repeats an uncertain target write.
+Compensated reimport rejects subsequent field/comment/native-event changes,
+partial inverses and attempts to use an old inverse over a newer source receipt,
+including with `--force`, before target or command writes.
+Mixed overwrite/create and graph-detachment interruption still need runtime
+acceptance beyond model tests. This does not claim live GitHub or complete
+import execution acceptance. Source/destination provenance already written by the
 legacy executor is unchanged; reuse across that format and command documents is
 a future integration/efficiency concern, not a claim of zero storage duplication.
 

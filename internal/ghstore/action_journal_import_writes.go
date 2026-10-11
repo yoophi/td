@@ -123,6 +123,9 @@ func (c *Client) importPlanEvents(ctx context.Context, plan *ImportPlan) (map[st
 			return nil, err
 		}
 		events[row.TargetID] = observed
+		if row.compensation != nil && stateEventDigest(observed) != row.compensation.EventsSHA256 {
+			return nil, fmt.Errorf("import compensation native events changed before reimport: %w", &ConflictError{ID: row.TargetID})
+		}
 	}
 	return events, nil
 }
