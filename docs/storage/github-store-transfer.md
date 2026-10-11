@@ -155,6 +155,29 @@ integration and persistent checkpoint/resume are still required.
 
 ## GitHub passive workspace archive (#93, entity execution in progress)
 
+`BuildGitHubEntityInputs` prepares SQLite notes/boards from the immutable source.
+It requires complete, unique canonical task bindings, rewrites exact query
+references and maps active positions. Deleted position rows remain passive.
+New board names follow GitHub's case-insensitive uniqueness rule, and unsupported
+queries, view modes, collisions or title normalization fail before a partial
+input can be returned. Explicitly reused entity keys omit non-written source
+content; their original data remains in the full capsule. Bindings are not
+authenticated by this projection: the executor still must prove its receipts.
+
+Configured note creation now includes pinned/archived/deleted flags and portable
+logical deletion clocks in its initial payload. Configured custom board creation
+includes view mode and mapped positions/portable position clocks in its initial
+payload. Position targets are checked in one fresh bulk task observation, with
+no per-position GETs. Existing creation intent/result journaling and native
+readback checks apply. Original authors, review authority, native server clocks
+and device last-view settings are not installed as destination authority.
+
+The real `yoophi/td-sample` check created `nt-gh-213` with all three flags and
+`bd-gh-214` in backlog mode with a mapped position and retained source position
+clock. The test board was then logically deleted through its journaled API;
+the test note was already archived/deleted in its initial payload. These are
+configured-creation checks, not whole-workspace execution or checkpoint/resume.
+
 GitHub workspace provenance now has a separate `td:workspace-archive:v1` root
 on the existing journal carrier. It reuses immutable journal-part encoding,
 native comment IDs/clocks/body hashes and complete carrier collections. This

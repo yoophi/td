@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,6 +46,54 @@ func (c *Client) checkBoardName(ctx context.Context, name, except string) error 
 }
 func (c *Client) CreateBoard(ctx context.Context, name, expression, actor string) (*BoardRecord, error) {
 	return c.createBoard(ctx, name, expression, actor, false)
+}
+
+// BoardCreateOptions creates custom board settings and memberships in one
+// journaled payload. Source position clocks are portable metadata; native
+// authors/server clocks are assigned by GitHub, not copied from the source.
+type BoardCreateOptions struct {
+	ViewMode  string
+	Positions []BoardPosition
+}
+
+// ValidateBoardCreateOptions shares pure query/mode/membership validation with
+// transfer preparation. It performs no repository access or native allocation.
+func ValidateBoardCreateOptions(details BoardDetails) error { return details.validate() }
+
+func (c *Client) CreateBoardWithOptions(ctx context.Context, name, expression, actor string, options BoardCreateOptions) (*BoardRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(actor) == "" {
+		return nil, &WorkflowInputError{Reason: "board creation requires a name and actual actor"}
+	}
+	mode := options.ViewMode
+	if mode == "" {
+		mode = "swimlanes"
+	}
+	positions := slices.Clone(options.Positions)
+	probe := BoardDetails{Version: 1, Query: expression, ViewMode: mode, Positions: positions}
+	if err := probe.validate(); err != nil {
+		return nil, &WorkflowInputError{Reason: err.Error()}
+	}
+	if len(positions) > 0 {
+		snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), false)
+		if err != nil {
+			return nil, err
+		}
+		tasks := map[string]bool{}
+		for _, r := range snapshot.records {
+			if r.meta.EntityKind == "" || r.meta.EntityKind == "issue" {
+				tasks[r.ID] = true
+			}
+		}
+		for _, p := range positions {
+			if !tasks[p.IssueID] {
+				return nil, &WorkflowInputError{Reason: fmt.Sprintf("board position target %s is not a task in this repository", p.IssueID)}
+			}
+		}
+	}
+	return c.createBoardConfigured(ctx, name, expression, actor, false, &boardConfigMutation{reason: "Transferred initial settings", apply: func(d *BoardDetails) error { d.ViewMode = mode; d.Positions = slices.Clone(positions); return nil }})
 }
 
 func (c *Client) createBoard(ctx context.Context, name, expression, actor string, builtin bool) (*BoardRecord, error) {

@@ -153,12 +153,38 @@ func (c *Client) ListNotes(ctx context.Context, includeDeleted bool) ([]NoteReco
 }
 
 func (c *Client) CreateNote(ctx context.Context, title, content, actor string) (*NoteRecord, error) {
+	return c.CreateNoteWithOptions(ctx, title, content, actor, NoteCreateOptions{})
+}
+
+// NoteCreateOptions installs flags in the initial, journaled creation payload.
+// Original authors and native server clocks remain passive transfer provenance.
+type NoteCreateOptions struct {
+	Pinned, Archived, Deleted bool
+	// Logical deletion time is portable metadata, unlike native server clocks.
+	DeletedAt *time.Time
+}
+
+func (c *Client) CreateNoteWithOptions(ctx context.Context, title, content, actor string, options NoteCreateOptions) (*NoteRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	title = strings.TrimSpace(title)
 	if title == "" || strings.TrimSpace(actor) == "" {
 		return nil, fmt.Errorf("note creation requires a title and actual session")
 	}
+	if options.DeletedAt != nil && (!options.Deleted || options.DeletedAt.IsZero()) {
+		return nil, fmt.Errorf("note creation deletion timestamp requires a deleted flag and nonzero time")
+	}
 	operation := "td-note-op-" + rand.Text()
-	d := NoteDetails{Version: 1, History: []NoteEvent{{OperationID: operation, Action: "create", SessionID: actor, At: time.Now().UTC()}}}
+	now := time.Now().UTC()
+	d := NoteDetails{Version: 1, Pinned: options.Pinned, Archived: options.Archived, History: []NoteEvent{{OperationID: operation, Action: "create", SessionID: actor, At: now}}}
+	if options.Deleted {
+		d.DeletedAt = &now
+		if options.DeletedAt != nil {
+			stamp := *options.DeletedAt
+			d.DeletedAt = &stamp
+		}
+	}
 	body, err := encodeBody(content, metadata{EntityKind: "note", Note: &d, OperationID: operation, Type: models.TypeTask, Priority: models.PriorityP2})
 	if err != nil {
 		return nil, err
