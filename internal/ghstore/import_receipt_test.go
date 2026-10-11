@@ -96,6 +96,21 @@ func TestImportReceiptDoesNotGrantActivityOrReviewPrivileges(t *testing.T) {
 	}
 }
 
+func TestImportReceiptNormalizedLegacyIDDoesNotWeakenNativeIdentity(t *testing.T) {
+	for _, key := range []string{"legacy:td-gh-1", "legacy:project:td-gh-1", "github:owner/repo:gh-1"} {
+		r := importReceipt{Version: 1, SourceKey: key, SourceDigest: strings.Repeat("a", 64), TargetID: "gh-9", TargetBasis: strings.Repeat("b", 64)}
+		if err := r.validate(); err != nil {
+			t.Fatal("valid source receipt rejected", key, err)
+		}
+	}
+	for _, key := range []string{"github:owner/repo:td-gh-1", "github:owner/repo:td-abc", "github:owner/repo:gh-01", "legacy:project:td-gh-01", "legacy:bad source:td-gh-1"} {
+		r := importReceipt{Version: 1, SourceKey: key, SourceDigest: strings.Repeat("a", 64), TargetID: "gh-9", TargetBasis: strings.Repeat("b", 64)}
+		if err := r.validate(); err == nil {
+			t.Fatal("invalid source receipt accepted", key)
+		}
+	}
+}
+
 func TestImportTargetBasisIgnoresNativeClocksAndLabelOrderingOnly(t *testing.T) {
 	item := apiIssue{Number: 1, State: "open", Title: "Imported", Body: "Body", Labels: []struct {
 		Name string `json:"name"`

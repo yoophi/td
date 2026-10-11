@@ -129,6 +129,14 @@ func TestSQLiteImportRejectsGitHubSourceFlagBeforeOpeningDatabase(t *testing.T) 
 }
 
 func TestGitHubImportCLIExecuteExportReimportAndNoSQLiteFallback(t *testing.T) {
+	testGitHubImportCLIExecuteExportReimport(t, false)
+}
+
+func TestGitHubImportCLINormalizedSQLiteExportRoundTrip(t *testing.T) {
+	testGitHubImportCLIExecuteExportReimport(t, true)
+}
+
+func testGitHubImportCLIExecuteExportReimport(t *testing.T, normalized bool) {
 	dir := githubScheduleTestDir(t)
 	useHandoffReviewFixture(t)
 	configureImportJournalFixture(t)
@@ -156,6 +164,49 @@ func TestGitHubImportCLIExecuteExportReimportAndNoSQLiteFallback(t *testing.T) {
 		return result, err
 	}
 	input := `[{"issue":{"id":"td-parent","title":"Parent","type":"epic","description":"Original description","acceptance":"Original acceptance","priority":"P1","points":3,"sprint":"Sprint A","minor":true,"due_date":"2026-10-20","defer_until":"2026-10-15","defer_count":2},"files":[{"id":"file-old","issue_id":"td-parent","file_path":"src/example.go","role":"implementation","linked_at":"2026-10-01T12:00:00Z"}],"logs":[{"id":"log-old","session_id":"old-worker","message":"Original progress","type":"progress","timestamp":"2026-10-01T12:00:00Z"}],"handoffs":[{"id":"handoff-old","session_id":"old-worker","done":["Original handoff"],"timestamp":"2026-10-01T12:00:00Z"}]},{"issue":{"id":"td-child","title":"Child","parent_id":"td-parent"},"dependencies":["td-parent"]}]`
+	if normalized {
+		// Seed from native gh-N identities, then execute the real SQLite export.
+		seed := strings.NewReplacer("td-parent", "gh-1", "td-child", "gh-2").Replace(input)
+		rows, err := ghstore.ParseImportJSON([]byte(seed))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sqlRoot := t.TempDir()
+		database, err := db.Initialize(sqlRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rows {
+			for i := range r.Logs {
+				r.Logs[i].IssueID = r.Issue.ID
+			}
+			for i := range r.Handoffs {
+				r.Handoffs[i].IssueID = r.Issue.ID
+			}
+			if err := database.ImportItemRaw(&r.Issue, r.Logs, r.Handoffs, r.Dependencies, r.Files, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := database.Close(); err != nil {
+			t.Fatal(err)
+		}
+		baseDirOverride = &sqlRoot
+		c := &cobra.Command{Use: exportCmd.Use, RunE: exportCmd.RunE, SilenceErrors: true, SilenceUsage: true}
+		c.Flags().String("format", "json", "")
+		c.Flags().String("output", "", "")
+		c.Flags().Bool("all", true, "")
+		c.Flags().Bool("render-markdown", false, "")
+		var out bytes.Buffer
+		c.SetOut(&out)
+		if err := c.Execute(); err != nil {
+			t.Fatal("SQLite export failed", err)
+		}
+		input = out.String()
+		if !strings.Contains(input, `"id": "`+db.NormalizeIssueID("gh-1")+`"`) {
+			t.Fatal("export did not retain normalized IDs", input)
+		}
+		baseDirOverride = &dir
+	}
 	result, err := execute(input, "--source", "project-a")
 	if err != nil || result.Created != 2 || result.Completed != 2 {
 		t.Fatal(result, err)
