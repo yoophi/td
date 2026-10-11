@@ -76,7 +76,12 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 	fail := func(stage, id string, err error) (*importBatchResult, error) {
 		return result, fmt.Errorf("import %s %s failed (created=%d, applied=%d, detached=%d, archived_parts=%d, completed=%d); writes may already have occurred; refresh remote state before resuming, no automatic retry: %w", stage, id, result.Created, result.Applied, result.Detached, result.ArchivedParts, result.Completed, err)
 	}
-	plan, err := c.PlanImport(ctx, items, force)
+	frozen, err := freezeImportItems(items)
+	if err != nil {
+		return fail("plan", "", err)
+	}
+	items = frozen
+	plan, err := c.planImport(ctx, items, force)
 	if err != nil {
 		return fail("plan", "", err)
 	}
@@ -102,7 +107,7 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 	// One full re-observation recovers all allocated IDs and durable intents.
 	// Keep the decision basis for destinations that existed before allocation.
 	if result.Created > 0 {
-		plan, err = c.PlanImport(ctx, items, force)
+		plan, err = c.planImport(ctx, items, force)
 		if err != nil {
 			return fail("replan", "", err)
 		}
@@ -216,7 +221,7 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 				return fail("detach", row.TargetID, err)
 			}
 		}
-		plan, err = c.PlanImport(ctx, items, force)
+		plan, err = c.planImport(ctx, items, force)
 		if err != nil {
 			return fail("replan after detach", "", err)
 		}

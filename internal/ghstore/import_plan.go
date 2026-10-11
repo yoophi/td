@@ -49,6 +49,16 @@ type ImportPlan struct {
 // PlanImport validates every source before observing targets. New GitHub
 // numbers cannot be allocated by dry-run; relationships use stable source keys.
 func (c *Client) PlanImport(ctx context.Context, items []ImportItem, force bool) (*ImportPlan, error) {
+	frozen, err := freezeImportItems(items)
+	if err != nil {
+		return nil, err
+	}
+	return c.planImport(ctx, frozen, force)
+}
+
+// Internal replans share the command's frozen input; only observed remote
+// results and allocated destination IDs may change across plans.
+func (c *Client) planImport(ctx context.Context, items []ImportItem, force bool) (*ImportPlan, error) {
 	if err := ValidateImportItems(items); err != nil {
 		return nil, err
 	}
