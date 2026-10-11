@@ -127,3 +127,28 @@ write observation/resume, and #95 native/SQLite end-to-end tests, command matrix
 and integration review. Source-stage completion in this feature worktree does
 not mean those stages are implemented, main is integrated, or a new release
 was published.
+
+## Mapping/query foundations (#92, in progress)
+
+`PlanIdentities` currently operates on validated recorded source/target inputs.
+Bindings use source-qualified keys, require existing target IDs of the same
+entity kind, and reject duplicate targets and reserved builtin collisions.
+Titles never imply adoption. The builtin maps to its logical `bd-all-issues`
+identity; no native carrier number is invented. Other new target IDs remain
+unresolved until checked creation receipts. The plan does not grant write
+authority or prove current target access or receipt provenance.
+
+`RewriteQuery` walks TDQ AST exact ID/parent/dependency predicates and relation
+functions. It retains text searches and nonidentity values and preserves sort
+semantics. It uses TDQ-compatible quoting rather than the AST's diagnostic
+`String` formatter or Go escape sequences that the TDQ lexer does not decode.
+Missing mappings and identity pattern/order selectors block automatic use of
+the rewritten query. Pending creations must resolve before board writes; absent
+selectors require an explicit preservation/loss policy.
+
+Recorded native 196-task inputs were replayed in both directions without API or
+database writes. This verifies mapping/query processing against captured data,
+not live destination authorization, receipt validation or migration execution.
+#92 still needs runtime target inspection (including new SQLite destinations),
+checked receipt reconciliation, relation/position plans and the complete
+preservation/loss report before its final review.
