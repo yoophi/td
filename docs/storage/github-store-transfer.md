@@ -121,14 +121,15 @@ observation and explicit resume without duplicate creation; whole-dataset/native
 and SQLite validation. Reuse the existing import/export and passive journal
 archive paths. Data collection alone does not satisfy these requirements.
 
-Remaining stages: #92 target validation/mapping and query/loss preview,
-#93 explicit bidirectional CLI/execution, #94 confirmed checkpoint/uncertain
+The source/input and read-only target/mapping/query/loss-plan stages are
+implemented in this feature branch. Remaining stages: #93 explicit
+bidirectional CLI/execution, #94 confirmed checkpoint/uncertain
 write observation/resume, and #95 native/SQLite end-to-end tests, command matrix
 and integration review. Source-stage completion in this feature worktree does
 not mean those stages are implemented, main is integrated, or a new release
 was published.
 
-## Mapping/query foundations (#92, in progress)
+## Target/mapping/query and preservation plan (#92)
 
 `PlanIdentities` currently operates on validated recorded source/target inputs.
 Bindings use source-qualified keys, require existing target IDs of the same
@@ -193,6 +194,8 @@ intended handling decisions, not proof that an archive or entity was written.
 
 Recorded native inputs produced 211 identities, 42 relations and 2 positions
 for GitHub-to-SQLite; SQLite-to-GitHub produced 197 identities and 42 relations.
-No API or database write was performed. #92 still needs its complete plan
-review. Creation receipt verification and checkpoint reconciliation belong to
+No API or database write was performed. The complete planning stage was
+self-reviewed against #92's acceptance criteria; storetransfer, query, db and
+ghstore race suites passed. This does not complete the parent transfer task.
+Creation receipt verification and checkpoint reconciliation belong to
 the checked executor/resume stages (#93/#94), not to this read-only plan.
