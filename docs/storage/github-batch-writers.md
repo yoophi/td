@@ -151,6 +151,21 @@ upgrade an already-running process.
 
 ## Remaining writer integration
 
+Mixed `update` commands preflight all distinct live selected tasks, field payloads,
+status requests (including blocked/foreign claim restrictions), individual
+relationship requests and comment publication sizes before their first write.
+Selection uses one fresh paginated issue collection rather than one GET per
+selected task; relationship validation may require additional graph reads.
+Parent-only batches use the relationship-capable path instead of the scalar
+group contract. Single-task inline comments also receive the size preflight.
+
+This preparation does not persist a mixed command plan or predict cascade,
+review-policy or native-write results. Execution still reads and fences actual
+states, applies relationship changes before evaluating review policy, and
+reports partial results on later operational/policy failures. Shared reverse
+dependency targets retain actual earlier effects. Complete command recovery and
+undo for these paths remain unfinished, as listed below.
+
 | Writer | Current effects requiring an aggregate |
 |---|---|
 | Multi-ID update with relationships/status/comments | Mixed task, relationship, workflow and activity effects; scalar-only batches are connected above |

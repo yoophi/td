@@ -142,12 +142,17 @@ sys.stdout.write('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+jso
 		t.Fatal("created issue lost")
 	}
 	t.Setenv("TD_RO_FAIL", "")
-	_, err = executeGitHubTest(githubTestCommand(updateCmd), "4", "3", "--depends-on", "3", "--json")
-	if err == nil || !strings.Contains(err.Error(), "completed issues=[gh-4]") || !strings.Contains(err.Error(), "earlier changes remain") {
-		t.Fatal("multi-issue partial failure hidden", err)
+	before, err = os.ReadFile(os.Getenv("TD_RO_STATE"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Join(deps("4"), ",") != "gh-3" || len(deps("3")) != 0 {
-		t.Fatal("multi-issue actual state")
+	_, err = executeGitHubTest(githubTestCommand(updateCmd), "4", "3", "--depends-on", "3", "--json")
+	if err == nil || !strings.Contains(err.Error(), "preflight gh-3") || !strings.Contains(err.Error(), "no write attempted") {
+		t.Fatal("invalid later relationship was not preflighted", err)
+	}
+	after, readErr := os.ReadFile(os.Getenv("TD_RO_STATE"))
+	if readErr != nil || string(after) != string(before) {
+		t.Fatal("invalid later relationship changed an earlier task", readErr)
 	}
 	for _, trigger := range []string{"2", "3"} {
 		data, err := os.ReadFile(os.Getenv("TD_RO_STATE"))

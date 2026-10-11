@@ -97,45 +97,14 @@ func (c *Client) Transition(ctx context.Context, id, action string, options Tran
 	if err != nil {
 		return nil, false, err
 	}
+	target, noop, err := basicTransitionDecision(observed, action, options)
+	if err != nil {
+		return nil, false, err
+	}
+	if noop {
+		return observed, true, nil
+	}
 	from := observed.Status
-	target := models.StatusOpen
-	switch action {
-	case "start":
-		target = models.StatusInProgress
-		if from == target {
-			if observed.ImplementerSession == options.SessionID {
-				return observed, true, nil
-			}
-			return nil, false, workflowStateError("cannot start %s: already in_progress under session %q; release the claim explicitly before starting", observed.ID, observed.ImplementerSession)
-		}
-		if from == models.StatusBlocked && !options.Force {
-			return nil, false, workflowStateError("cannot start blocked issue %s without --force", observed.ID)
-		}
-	case "unstart":
-		if from == models.StatusOpen && observed.ImplementerSession == "" {
-			return observed, true, nil
-		}
-		if from != models.StatusInProgress && from != models.StatusOpen {
-			return nil, false, workflowStateError("cannot unstart %s: status is %s", observed.ID, from)
-		}
-	case "block":
-		target = models.StatusBlocked
-		if from == target {
-			return observed, true, nil
-		}
-	case "unblock":
-		if from == models.StatusOpen {
-			return observed, true, nil
-		}
-		if from != models.StatusBlocked {
-			return nil, false, workflowStateError("cannot unblock %s: status is %s", observed.ID, from)
-		}
-	default:
-		return nil, false, fmt.Errorf("unsupported GitHub transition %q", action)
-	}
-	if from != target && !workflow.DefaultMachine().IsValidTransition(from, target) {
-		return nil, false, workflowStateError("cannot %s %s: invalid transition from %s", action, observed.ID, from)
-	}
 	now := time.Now().UTC()
 	// Use effective attribution when native state no longer matches the details.
 	details.Status = target
@@ -181,4 +150,48 @@ func (c *Client) Transition(ctx context.Context, id, action string, options Tran
 		return nil, false, fmt.Errorf("%s %s (operation %s): %w", action, observed.ID, operation, err)
 	}
 	return result, false, nil
+}
+
+// basicTransitionDecision is shared by mutation and read-only command preflight.
+func basicTransitionDecision(observed *Record, action string, options TransitionOptions) (models.Status, bool, error) {
+	from := observed.Status
+	target := models.StatusOpen
+	switch action {
+	case "start":
+		target = models.StatusInProgress
+		if from == target {
+			if observed.ImplementerSession == options.SessionID {
+				return target, true, nil
+			}
+			return "", false, workflowStateError("cannot start %s: already in_progress under session %q; release the claim explicitly before starting", observed.ID, observed.ImplementerSession)
+		}
+		if from == models.StatusBlocked && !options.Force {
+			return "", false, workflowStateError("cannot start blocked issue %s without --force", observed.ID)
+		}
+	case "unstart":
+		if from == models.StatusOpen && observed.ImplementerSession == "" {
+			return target, true, nil
+		}
+		if from != models.StatusInProgress && from != models.StatusOpen {
+			return "", false, workflowStateError("cannot unstart %s: status is %s", observed.ID, from)
+		}
+	case "block":
+		target = models.StatusBlocked
+		if from == target {
+			return target, true, nil
+		}
+	case "unblock":
+		if from == models.StatusOpen {
+			return target, true, nil
+		}
+		if from != models.StatusBlocked {
+			return "", false, workflowStateError("cannot unblock %s: status is %s", observed.ID, from)
+		}
+	default:
+		return "", false, fmt.Errorf("unsupported GitHub transition %q", action)
+	}
+	if from != target && !workflow.DefaultMachine().IsValidTransition(from, target) {
+		return "", false, workflowStateError("cannot %s %s: invalid transition from %s", action, observed.ID, from)
+	}
+	return target, false, nil
 }

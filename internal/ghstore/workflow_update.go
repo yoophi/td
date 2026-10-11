@@ -55,14 +55,9 @@ func (c *Client) updateWorkflowObserved(ctx context.Context, observed *Record, c
 	if change.Status == nil {
 		return c.UpdateObserved(ctx, observed, change)
 	}
-	action, err := workflowUpdateAction(observed.Status, *change.Status)
+	action, err := workflowUpdateRequest(observed.Status, *change.Status, options)
 	if err != nil {
 		return nil, err
-	}
-	if action == "review" || action == "approve" || action == "reject" || action == "close" || action == "reopen" {
-		if err := ValidateReviewOptions(action, options); err != nil {
-			return nil, err
-		}
 	}
 	change.Status = nil
 	edited := change.HasFields()
@@ -78,6 +73,22 @@ func (c *Client) updateWorkflowObserved(ctx context.Context, observed *Record, c
 		return nil, fmt.Errorf("%s field changes were saved, but requested %s transition failed; inspect current status and do not repeat the entire update: %w", observed.ID, action, err)
 	}
 	return record, err
+}
+
+func workflowUpdateRequest(from, to models.Status, options TransitionOptions) (string, error) {
+	if strings.TrimSpace(options.SessionID) == "" {
+		return "", fmt.Errorf("status update requires a session")
+	}
+	action, err := workflowUpdateAction(from, to)
+	if err != nil {
+		return "", err
+	}
+	if action == "review" || action == "approve" || action == "reject" || action == "close" || action == "reopen" {
+		if err := ValidateReviewOptions(action, options); err != nil {
+			return "", err
+		}
+	}
+	return action, nil
 }
 
 func workflowUpdateAction(from, to models.Status) (string, error) {
