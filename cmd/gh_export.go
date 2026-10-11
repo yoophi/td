@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/ghstore"
-	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
 	"strings"
@@ -85,28 +84,10 @@ func runGitHubExport(cmd *cobra.Command, client githubExportReader) error {
 	md.WriteString("# Issues Export\n\n")
 	for i := range rows {
 		r := &rows[i]
-		item := exportedItem{Issue: r.Record.Issue, GitHub: r, Logs: []models.Log{}, Handoffs: []models.Handoff{}, Dependencies: []models.IssueDependency{}, Files: []models.IssueFile{}}
-		if r.Record.Details != nil {
-			item.Files = append(item.Files, r.Record.Details.Files...)
-			for _, dep := range r.Record.Details.Dependencies {
-				item.Dependencies = append(item.Dependencies, models.IssueDependency{IssueID: r.Record.ID, DependsOnID: dep, RelationType: "depends_on"})
-			}
-		}
-		for _, a := range r.Activity {
-			switch a.Kind {
-			case "log":
-				item.Logs = append(item.Logs, models.Log{ID: a.ID, IssueID: a.IssueID, SessionID: a.SessionID, WorkSessionID: a.WorkSessionID, Message: a.Message, Type: a.LogType, Timestamp: a.CreatedAt})
-			case "handoff":
-				item.Handoffs = append(item.Handoffs, models.Handoff{ID: a.ID, IssueID: a.IssueID, SessionID: a.SessionID, Done: a.Done, Remaining: a.Remaining, Decisions: a.Decisions, Uncertain: a.Uncertain, Timestamp: a.CreatedAt})
-			}
-		}
-		historicalLogs, historicalHandoffs, err := ghstore.ProjectImportedHistory(r.Activity, r.Record.ID)
+		item, err := ghstore.ImportItemFromExport(r)
 		if err != nil {
 			return err
 		}
-		ghstore.NamespacePortableHistorySessions(historicalLogs, historicalHandoffs)
-		item.Logs = append(item.Logs, historicalLogs...)
-		item.Handoffs = append(item.Handoffs, historicalHandoffs...)
 		items = append(items, item)
 		issue := r.Record.Issue
 		fmt.Fprintf(&md, "## %s: %s\n\n- Status: %s\n- Type: %s\n- Priority: %s\n", issue.ID, issue.Title, issue.Status, issue.Type, issue.Priority)

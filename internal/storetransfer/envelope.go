@@ -1,5 +1,5 @@
-// Package storetransfer models explicit, passive store-transfer inputs. It
-// never opens a destination or grants imported actors workflow authority.
+// Package storetransfer models immutable transfer inputs, read-only planning
+// and task projections. Imported actors cannot grant workflow authority.
 package storetransfer
 
 import (

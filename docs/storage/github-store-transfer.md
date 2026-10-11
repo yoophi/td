@@ -32,6 +32,33 @@ and autosync hooks are skipped because transfer owns its explicit I/O.
 `--execute` currently returns `unsupported_operation`; this is a feature-stage
 limitation, not completion of the execution task.
 
+`BuildTaskImportInput` now prepares the existing task importer's validated
+inputs from the immutable capsule. It supplies a bridge from qualified transfer
+keys to importer keys. SQLite namespaces and IDs use stable source-local hash
+proxies because valid SQLite rows can include `td-gh-N`, whereas the existing
+importer accepts a narrower ID alphabet. Proxies depend on identity, not changing
+payload bytes or filesystem paths. Parent/dependency and side-table owners are
+mapped together. Original identities remain in the full capsule and key bridge.
+Legacy SQLite `blocks` rows remain in that capsule and are omitted from active
+GitHub dependencies. The general import/export ID incompatibility is #96.
+
+GitHub task projection shares the export converter rather than repeating it.
+`ProjectSQLiteTasks` resolves task-only caller mappings, clears destination
+workflow actors/approval stamps and namespaces historical logs/handoffs. It
+does not project active review/session records or device work bundles. File
+identities use validated unique paths, including when native file metadata has
+no row ID. Carrier ownership and unique paths are checked without inventing an
+original file ID. This conversion is not receipt verification or write authority.
+
+The captured 196-task inputs passed preparation in both directions. Replaying
+projected GitHub tasks into a private temporary SQLite database retained 196
+tasks, 49 logs, 52 handoffs, 20 dependencies, 4 files and 119 logical deletions;
+no original workflow actors or active reviews were installed. The complete
+source capsule was retained alongside this fixture. This is task projection and
+fixture replay, not completion of whole-store execution. #93 still requires
+checked task/note/board writes, workspace archive installation, verified target
+ownership/receipts and writer audit before `--execute` becomes available.
+
 ## Source collection (#90)
 
 The GitHub collector `Client.ExportWorkspace` takes one fresh complete issue

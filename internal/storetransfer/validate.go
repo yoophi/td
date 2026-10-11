@@ -241,9 +241,18 @@ func (s *Source) validateReferences() (*Preview, error) {
 						return nil, err
 					}
 				}
+				filePaths := map[string]bool{}
 				for _, row := range details.Files {
-					if err := check("file", row.ID, row.IssueID); err != nil {
-						return nil, err
+					// GitHub metadata permits omitted file row IDs/owners. The
+					// carrier provides ownership; do not invent an original ID.
+					if row.FilePath == "" || filePaths[row.FilePath] || (row.IssueID != "" && row.IssueID != task.Record.ID) {
+						return nil, fmt.Errorf("invalid or duplicate file path/owner in task %s", task.Record.ID)
+					}
+					filePaths[row.FilePath] = true
+					if row.ID != "" {
+						if err := check("file", row.ID, task.Record.ID); err != nil {
+							return nil, err
+						}
 					}
 				}
 				for _, row := range details.Reviews {
