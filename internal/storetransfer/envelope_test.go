@@ -99,6 +99,10 @@ func TestEnvelopeCapacityAndIOFailures(t *testing.T) {
 	if _, err := NewSQLite("source", &db.SQLiteWorkspaceExport{SchemaVersion: db.SchemaVersion}, 10); !errors.Is(err, ErrCapacity) {
 		t.Fatalf("payload cap: %v", err)
 	}
+	// A payload fitting by itself must not bypass the full envelope limit.
+	if _, err := NewSQLite("source", &db.SQLiteWorkspaceExport{SchemaVersion: db.SchemaVersion}, int64(len(source.Envelope.Payload)+1)); !errors.Is(err, ErrCapacity) {
+		t.Fatalf("envelope overhead bypassed capacity: %v", err)
+	}
 	cause := errors.New("original disk error")
 	if _, err := Read(failedIO{cause}, 0); !errors.Is(err, cause) {
 		t.Fatalf("lost read cause: %v", err)

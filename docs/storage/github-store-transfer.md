@@ -71,8 +71,25 @@ failures retain their original errors and still require an atomic file
 controller. Native 196-task inputs round-tripped with unchanged checksum:
 SQLite 388,067 bytes and GitHub 16,813,153 bytes.
 
-#90 still needs strict entity identity/reference validation and collection-time
-capacity enforcement. The envelope is not yet a destination-ready plan. The source
+The source preview now qualifies task/note/board identities by store and source
+namespace. Validation rejects duplicate IDs, malformed GitHub native bindings,
+conflicting task body/state/author projections, duplicate native comments,
+missing parent/dependency/position targets, wrong history owners and malformed
+board queries. Passive journal bundles use their existing checksum/reference
+validator. A materialized builtin board retains `bd-all-issues`; it is not a
+fabricated virtual carrier. Exact ID selectors in board-query ASTs are reported
+separately, including intentionally absent targets, and text search is not
+interpreted as a reference. Mapping selectors/patterns to destination IDs is
+still a planner responsibility.
+
+Native validation retained 197 qualified SQLite task/board identities and 211
+GitHub task/note/board identities, with six exact query references. Constructors
+also apply the byte limit to the full envelope, including header/checksum
+overhead, before returning input.
+
+#90 still needs collection-time capacity enforcement and integration of source
+collection with the validated preview. The envelope is not yet a
+destination-ready plan. The source
 must be preserved; previews may not initialize, upgrade or mutate it. Original
 authors, sessions and reviews are historical provenance, not destination actors
 or current approvals.

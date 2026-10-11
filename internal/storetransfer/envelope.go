@@ -64,12 +64,17 @@ func newSource(store, namespace string, payload any, maxBytes int64) (*Source, e
 	}
 	envelope := Envelope{Version: FormatVersion, Store: store, Namespace: namespace, Payload: bytes.TrimSpace(buffer.Bytes())}
 	envelope.SHA256 = envelope.digest()
+	// Apply the same limit to the full input, including source identity and
+	// checksum overhead, before a constructor can return it to a planner.
+	if err := json.NewEncoder(&boundedWriter{writer: io.Discard, remaining: limit}).Encode(envelope); err != nil {
+		return nil, fmt.Errorf("encode transfer envelope: %w", err)
+	}
 	return envelope.decode()
 }
 
 // Read consumes at most limit+1 bytes. Validation finishes before returning any
-// source. Destination planning must additionally validate entity identities,
-// references and compatibility before attempting writes.
+// source. Source identities/references are checked here; destination planning
+// must additionally validate mappings and compatibility before any writes.
 func Read(reader io.Reader, maxBytes int64) (*Source, error) {
 	limit, err := byteLimit(maxBytes)
 	if err != nil {
@@ -143,6 +148,9 @@ func (e Envelope) decode() (*Source, error) {
 		}
 	default:
 		return nil, fmt.Errorf("unsupported transfer source store %q", e.Store)
+	}
+	if _, err := source.validateReferences(); err != nil {
+		return nil, err
 	}
 	return source, nil
 }
