@@ -163,8 +163,25 @@ func (c *Client) fenceImportExecution(ctx context.Context) error {
 	if scope == nil {
 		return nil
 	}
+	// The fresh carrier collection contains both the root and its referenced
+	// parts. Reading the root separately adds no evidence to this same fence.
+	collection, err := c.readJournalParts(ctx, scope.root.CarrierID)
+	if err != nil {
+		return err
+	}
 	n, _ := CommentNumber(scope.root.ID)
-	current, err := c.readJournalReceipt(ctx, fmt.Sprintf("/issues/comments/%d", n), scope.root)
+	native, found := collection.byID[n]
+	if !found {
+		return fmt.Errorf("original import command disappeared; no further import target write attempted")
+	}
+	body, err := renderExistingActionJournal(scope.root)
+	if err != nil {
+		return err
+	}
+	if native.Body != body {
+		return fmt.Errorf("original import command changed; no further import target write attempted")
+	}
+	current, err := decodeJournalFromCollection(native, scope.root.CarrierID, collection)
 	if err != nil {
 		return err
 	}

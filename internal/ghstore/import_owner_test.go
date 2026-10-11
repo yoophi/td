@@ -209,6 +209,55 @@ func TestImportOwnedExecutionUsesOriginalRootAcrossLostResponses(t *testing.T) {
 	}
 }
 
+func TestImportExecutionFenceUsesFreshCarrierCollection(t *testing.T) {
+	for _, change := range []string{"none", "missing root", "changed root", "missing part", "changed part", "foreign part", "duplicate part"} {
+		t.Run(change, func(t *testing.T) {
+			f := newOwnedImportFixture(t, false)
+			base := f.client.run
+			pointReads, collections := 0, 0
+			f.client.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+				if args[4] != "GET" {
+					t.Fatal("read fence attempted a write", args)
+				}
+				if args[5] == "repos/owner/repo/issues/comments/1000000" {
+					pointReads++
+				}
+				if args[5] == "repos/owner/repo/issues/4/comments?per_page=100" {
+					collections++
+				}
+				return base(ctx, dir, payload, args...)
+			}
+			if err := f.client.fenceImportExecution(f.ctx); err != nil {
+				t.Fatal(err)
+			}
+			if pointReads != 0 || collections != 1 {
+				t.Fatalf("fence duplicated root retrieval: point=%d collections=%d", pointReads, collections)
+			}
+			switch change {
+			case "missing root":
+				f.root = nil
+			case "changed root":
+				f.root.UpdatedAt = f.root.UpdatedAt.Add(time.Second)
+			case "missing part":
+				f.parts = f.parts[1:]
+			case "changed part":
+				f.parts[0].Body += "changed"
+			case "foreign part":
+				f.parts[0].User.Login = "another-user"
+			case "duplicate part":
+				f.extra = append(f.extra, f.parts[0])
+			}
+			err := f.client.fenceImportExecution(f.ctx)
+			if (err != nil) != (change != "none") {
+				t.Fatal("fresh fence ignored changed native evidence", change, err)
+			}
+			if pointReads != 0 || collections != 2 {
+				t.Fatalf("fence reused a stale collection or duplicated root GET: point=%d collections=%d", pointReads, collections)
+			}
+		})
+	}
+}
+
 func TestImportOwnedExecutionRejectsTransferChangedInputAndDuplicateRoots(t *testing.T) {
 	for _, kind := range []string{"untracked", "other session", "other actor", "input", "force", "overlap", "native edit"} {
 		t.Run(kind, func(t *testing.T) {

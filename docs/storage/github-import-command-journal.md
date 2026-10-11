@@ -68,10 +68,13 @@ Local executor tests cover response loss, rejected owner transfer, foreign or
 edited v2 checkpoints, new v1 checkpoints after allocation, and preservation of
 legitimate legacy intent/capture/completion baselines. The CLI prepares the root
 before target writes and uses this scope with the existing executor. Each current
-root fence still reads the root and its fresh paginated carrier collection and
-revalidates the archive. Removing that duplicate point read and avoiding repeated
-semantic parsing after verified native equality remain efficiency follow-ups;
-fresh conflict checks must remain intact.
+root fence reads one fresh paginated carrier collection containing both the root
+and its referenced parts, checks the exact original body/native record, and
+revalidates the archive. The duplicate root point GET is removed. If there are F
+fences and P carrier pages, this path now uses F × P REST requests instead of
+F × (1 + P); other snapshot/event reads are additional. Reusing parsed semantics
+after verified native equality remains an efficiency follow-up. Fresh conflict
+checks must remain intact.
 
 Completed results are stored separately in `import_forward`, with actual native
 target/comment/event observations and an observer attribution. The original
