@@ -290,10 +290,12 @@ journaling the import command's own allocations, destination overwrites, graph
 detachment and native provenance comments. Do not close #65 by excluding this
 path. Both import execution and preview now freeze and validate complete source
 envelopes before the first remote observation; allocation, replanning, graph
-projection and provenance retain those same inputs. Final-result capacity before
-forward target writes, mixed overwrite/create and graph-detachment failure
-runtime checks, the complete writer audit and native acceptance remain
-release gates. See [the import command contract](github-import-command-journal.md).
+projection and provenance retain those same inputs. Mixed overwrite/create and
+graph-detachment failure runtime checks, the #65 writer audit and native
+acceptance remain release gates, tracked as separate tasks under release
+preparation epic #74. Capacity errors may stop with explicit original errors and
+partial-effect disclosure; worst-case future result sizing is not a release
+gate. See [the import command contract](github-import-command-journal.md).
 
 HTTP creation currently accepts a parent but no dependency/block list, so its
 existing single creation POST remains standalone. Legacy standalone creation

@@ -58,14 +58,28 @@ def import_fixture_clock():
 }
 
 func TestGitHubJournalCLIImportForwardAndResume(t *testing.T) {
-	for _, failure := range []string{"none", "root-lost", "allocation-lost", "target-lost", "receipt-denied", "receipt-lost"} {
+	for _, failure := range []string{"none", "root-lost", "allocation-lost", "target-lost", "receipt-denied", "receipt-capacity", "receipt-lost"} {
 		t.Run(failure, func(t *testing.T) {
 			run, execute := importJournalCLI(t)
 			input := filepath.Join(t.TempDir(), "import.json")
 			if err := os.WriteFile(input, []byte(`[{"issue":{"id":"td-parent","title":"Import parent","type":"epic","minor":true}},{"issue":{"id":"td-child","title":"Import child","parent_id":"td-parent","minor":true},"dependencies":["td-parent"]}]`), 0600); err != nil {
 				t.Fatal(err)
 			}
-			if failure == "root-lost" || failure == "allocation-lost" {
+			if failure == "receipt-capacity" {
+				path, err := exec.LookPath("gh")
+				if err != nil {
+					t.Fatal(err)
+				}
+				script, err := os.ReadFile(path)
+				if err != nil || !bytes.Contains(script, []byte("HTTP 403 journal receipt denied")) {
+					t.Fatal("missing receipt capacity failure seam", err)
+				}
+				script = bytes.ReplaceAll(script, []byte("HTTP 403 journal receipt denied"), []byte("HTTP 422 body is too long (maximum is 65536 characters)"))
+				if err := os.WriteFile(path, script, 0755); err != nil {
+					t.Fatal(err)
+				}
+				t.Setenv("TD_GH_JOURNAL_FAIL", "receipt-denied")
+			} else if failure == "root-lost" || failure == "allocation-lost" {
 				t.Setenv("TD_GH_IMPORT_FAIL", failure)
 			} else if failure != "none" {
 				t.Setenv("TD_GH_JOURNAL_FAIL", failure)
@@ -73,6 +87,19 @@ func TestGitHubJournalCLIImportForwardAndResume(t *testing.T) {
 			out, stderr, err := run("import", input, "--source", "forward-fixture", "--json")
 			if (err != nil) != (failure != "none") {
 				t.Fatal("unexpected initial result", failure, out, stderr, err)
+			}
+			if failure != "none" {
+				originalError := map[string]string{
+					"root-lost": "connection lost after import root", "allocation-lost": "connection lost after import allocation",
+					"target-lost": "connection lost after target", "receipt-denied": "HTTP 403 journal receipt denied",
+					"receipt-capacity": "HTTP 422 body is too long (maximum is 65536 characters)", "receipt-lost": "connection lost after receipt",
+				}[failure]
+				if !strings.Contains(out+stderr, originalError) {
+					t.Fatal("original import failure was hidden", out, stderr)
+				}
+				if failure != "root-lost" && (!strings.Contains(out+stderr, "earlier writes remain") || !strings.Contains(out+stderr, "no automatic retry")) {
+					t.Fatal("partial effects or no-retry guidance missing", out, stderr)
+				}
 			}
 			t.Setenv("TD_GH_IMPORT_FAIL", "")
 			t.Setenv("TD_GH_JOURNAL_FAIL", "")
@@ -103,7 +130,7 @@ func TestGitHubJournalCLIImportForwardAndResume(t *testing.T) {
 				if !bytes.Equal(state, importFixtureStateBytes(t)) {
 					t.Fatal("receipt-only apply replayed target writes")
 				}
-				if failure == "receipt-denied" {
+				if failure == "receipt-denied" || failure == "receipt-capacity" {
 					if !observation.Applied || observation.Journal.ImportForward == nil || observation.Journal.ImportForward.Observation.SessionID == before[0].SessionID {
 						t.Fatal("completed observation lost actual observer", observation)
 					}

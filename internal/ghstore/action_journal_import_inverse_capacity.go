@@ -12,7 +12,8 @@ import (
 // only mutable clocks and at most one close/reopen event can grow. Reserve the
 // complete result before the inverse's first target write, using maximum-width
 // clocks/event IDs and the original executor's known session identity.
-// Forward import capacity must additionally be checked before allocation.
+// Forward execution checks each actual publication; it may stop with a capacity
+// error after earlier effects. Predicting all future forward sizes is not required.
 func checkImportInverseCapacity(a ActionJournal) error {
 	if a.Phase != "undo_prepared" || a.ImportInverse == nil || a.ImportInverse.Started != 0 || len(a.ImportInverse.Results) != 0 {
 		return fmt.Errorf("import inverse capacity requires an unstarted complete plan")

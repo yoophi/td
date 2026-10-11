@@ -5,7 +5,7 @@ command intents, v34 reference archives, owned execution, completed command
 history, explicit resume and receipt-only reconciliation. These formats remain
 unpublished to live repositories. Whole-command undo and compensated reimport
 now pass local CLI acceptance, including reuse of the same native issue IDs.
-Remaining failure/capacity and native acceptance requirements below still gate
+Remaining failure and native acceptance requirements below still gate
 #65 and the intermediate release; local success is not final acceptance.
 
 ## One executor, one original command
@@ -174,11 +174,19 @@ roots are explicit errors. No source history becomes live review authority.
 Preserve existing large-import capability: the 4 MiB decoded journal limit is
 not a new total import-history limit. Preparation checks original root/reference
 capacity before uploads, and completion checks its realized result capacity.
-Inverse preparation now reserves completed inverse reference capacity before
-its first target write. Preflight of worst-case forward/inverse reference
-metadata before the first forward target write remains a release gate. Missing,
-edited, duplicate or foreign referenced parts fail explicitly. Partial archive uploads stay inert until a
-verified root owns them; they cannot authorize target changes. Resolving
+Inverse preparation reserves completed inverse reference capacity before
+its first target write. A capacity error may stop an import or its undo; the
+command must retain the original error, disclose earlier effects and never
+automatically replay an uncertain write or report incomplete work as successful.
+Earlier changes and native history remain available for inspection; a capacity
+failure does not promise automatic rollback or successful retry with the same
+oversized result. Per-publication limits stay enforced. Predicting every possible
+forward/inverse result before the first forward write, unlimited import sizes,
+and automatic storage expansion are not release requirements. This follows the
+user's explicit 2026-10-11 decision to allow clear capacity errors and stopping.
+Missing, edited, duplicate or foreign referenced parts fail explicitly. Partial
+archive uploads stay inert until a verified root owns them; they cannot authorize
+target changes. Resolving
 references adds no per-source or per-part GitHub GET requests to bulk reads.
 Incremental reads defer reference validation until the delta is merged with
 unchanged baseline chunks.
@@ -220,3 +228,15 @@ implementation has not published native v33/v34 records or switched installation
 Each scenario also checks preserved native history, no SQLite access, original
 error visibility, and absence of automatic replay after an uncertain response.
 Local model tests alone do not satisfy the runtime/CLI/native acceptance gate.
+
+## Release preparation tracking
+
+The remaining required checks are separate tasks under
+[release preparation epic #74](https://github.com/yoophi/td/issues/74), starting
+with [capacity error handling #75](https://github.com/yoophi/td/issues/75).
+#65 retains its original scope and aggregates the evidence; it must not serve as
+the only active work item. Only the current implementation/verification task is
+marked in progress. Broad API optimization (#73), additional archive
+deduplication and a generalized workflow framework are outside this release gate.
+After preparation is reviewed and complete, a separate deployment task publishes
+the release and verifies `yoophi/homebrew-tap` and the installed version.
