@@ -30,6 +30,22 @@ type Client struct {
 	run               func(context.Context, string, []byte, ...string) ([]byte, error)
 }
 
+// OpenRemote opens an explicitly selected destination remote without changing
+// project configuration. Resolve/access/auth checks run once; only credential
+// digests survive construction. An existing store's pinned repo still uses Open.
+func OpenRemote(ctx context.Context, dir, remote string) (*Client, error) {
+	var tokenCopy []byte
+	defer func() { clear(tokenCopy) }()
+	resolved, err := resolveRepositoryCredential(ctx, dir, remote, func(token []byte) { tokenCopy = append([]byte(nil), token...) })
+	if err != nil {
+		return nil, err
+	}
+	return &Client{dir: dir, repo: resolved.Repo, run: runAPI, cache: newSnapshotCache(resolved.Repo, tokenCopy), invalidationCache: newSnapshotCacheIdentity(resolved.Repo, tokenCopy), cooldown: newAPICooldown(resolved.Repo, tokenCopy), audit: func(event auditlog.SecurityEvent) error { return auditlog.LogSecurityEvent(dir, event) }}, nil
+}
+
+// Repository is the validated canonical repository, never a guessed URL.
+func (c *Client) Repository() string { return c.repo }
+
 // Open revalidates the selected remote on each invocation. A changed remote must
 // be explicitly reconfigured rather than silently directing writes elsewhere.
 func Open(ctx context.Context, dir string, cfg *models.GitHubStoreConfig) (*Client, error) {

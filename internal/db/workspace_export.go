@@ -80,6 +80,24 @@ func ReadSQLiteWorkspaceLimited(ctx context.Context, baseDir string, maxBytes in
 	if store != config.StoreSQLite {
 		return nil, fmt.Errorf("SQLite source collection requires store=sqlite; no SQLite fallback attempted")
 	}
+	return readSQLiteWorkspaceReadOnly(ctx, baseDir, budget)
+}
+
+// ReadSQLiteTransferDestination inspects an explicitly selected SQLite target,
+// regardless of the project's current store selection. It never initializes,
+// migrates or selects SQLite as a fallback for a failed GitHub source/target.
+func ReadSQLiteTransferDestination(ctx context.Context, baseDir string, maxBytes int64) (*SQLiteWorkspaceExport, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	budget, err := transferlimit.New(maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	return readSQLiteWorkspaceReadOnly(ctx, ResolveBaseDir(baseDir), budget)
+}
+
+func readSQLiteWorkspaceReadOnly(ctx context.Context, baseDir string, budget *transferlimit.Budget) (*SQLiteWorkspaceExport, error) {
 	path, err := filepath.Abs(filepath.Join(baseDir, dbFile))
 	if err != nil {
 		return nil, err

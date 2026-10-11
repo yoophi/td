@@ -149,6 +149,23 @@ selectors require an explicit preservation/loss policy.
 Recorded native 196-task inputs were replayed in both directions without API or
 database writes. This verifies mapping/query processing against captured data,
 not live destination authorization, receipt validation or migration execution.
-#92 still needs runtime target inspection (including new SQLite destinations),
-checked receipt reconciliation, relation/position plans and the complete
-preservation/loss report before its final review.
+`InspectTarget` now validates an explicitly selected destination without
+changing store configuration. An existing SQLite target is read with the same
+private read-only transaction and schema checks, even if the project's current
+store is GitHub. This explicit destination opt-in never weakens the source's
+no-fallback guard. A missing database is represented as needing initialization;
+preview does not create directories or databases. Dangling destination
+directories fail inspection.
+
+GitHub target inspection uses `OpenRemote`: one remote/auth/Issues preflight
+opens the canonical repository without first selecting it in configuration.
+Credential copies are cleared after digest-based client construction. Namespace
+mismatch is rejected. Target collection retains the one-bulk-observation
+contract. The native run observed a new SQLite target without initialization,
+197 existing SQLite identities with unchanged database SHA256, and 211 GitHub
+identities with one auth, one repo preflight and one issue/comment collection
+each. No remote writes or GitHub-to-SQLite fallback occurred. Inspection does
+not guarantee future write permissions, capacity or unchanged remote state.
+
+#92 still needs checked receipt reconciliation, relation/position plans and the
+complete preservation/loss report before its final review.
