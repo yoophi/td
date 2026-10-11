@@ -214,5 +214,9 @@ CLI regression includes the original sequential command pattern and refuses
 foreign fields/clocks, missing effects, foreign authors and observed-only inverse
 proofs without target or journal writes. Native event changes that advance the
 issue clock also remain conflicts; review/event baselines, where recorded, keep
-their existing stricter event checks. Full final-source regression is still
-running. This record does not declare #68 or #9 complete.
+their existing stricter event checks. Final-source sequential CLI race regression
+passed (155.798 s), the full ghstore race suite passed (203.855 s), and Linux
+lint reported zero issues. The original native fixture comments are absent;
+both fixtures were logically deleted with their native IDs/history retained.
+The broader command-writer race suite and CI are still running as #68 gates.
+This record does not declare #68 or #9 complete.
