@@ -4,6 +4,47 @@ All notable changes to td are documented in this file.
 
 ## [Unreleased]
 
+## [v0.67.0] - 2026-10-11
+
+### GitHub Issues storage
+
+- Expanded `store=gh-issue` support across task workflows, dependencies, dates,
+  boards, notes, queries, work sessions and import/export. GitHub access uses the
+  installed `gh` CLI and the configured repository remote; failures retain their
+  original cause and never switch task storage to SQLite.
+- Added `td serve` GitHub adapters for supported issue, workflow, activity,
+  dependency, board, position, session, focus and event routes. Project metadata
+  advertises available capabilities. Monitor uses the same mutation policies.
+- Added durable command history, guarded undo and receipt-only recovery for
+  compound task changes, claim sweeps and work-session fan-out. Import retains
+  its original input through interruption/resume, supports whole-command undo
+  and reuses the same GitHub IDs after a completed undo. Native identities and
+  retained import history survive compensation; later external changes conflict.
+
+### Reads and diagnostics
+
+- Bulk issue/comment reads, validated local snapshots and incremental refresh
+  avoid per-task history fetches on collection views. Status and priority labels
+  mirror authoritative task data. Monitor defaults to a one-minute refresh and
+  accepts intervals down to 30 seconds.
+- Rate-limit errors preserve the GitHub error and available reset/retry time.
+  Uncertain writes are not automatically repeated. Partial and capacity failures
+  report earlier effects and stop instead of reporting success.
+- Development version strings work with td-gui's version discovery. The local
+  install helpers identify the active build and can restore the Homebrew release.
+
+### Upgrade and scope
+
+- Restart running monitors and servers with this version before publishing new
+  command journals to their repository; replacing the installed executable does
+  not upgrade an already-running reader.
+- This is an intermediate release. Full command/flag and GUI contract audits,
+  portable journal history, initial builtin-board setup grouping and broader
+  mutation/undo API-cost optimization remain tracked work. See the
+  [writer audit](docs/storage/github-writer-audit.md) for verified paths,
+  compensation limits and follow-up issues. Remote undo does not restore
+  device-local focus, tags or preferences.
+
 ## [v0.66.0] - 2026-09-29
 
 ### HTTP API
