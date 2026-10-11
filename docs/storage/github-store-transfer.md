@@ -155,6 +155,22 @@ integration and persistent checkpoint/resume are still required.
 
 ## GitHub passive workspace archive (#93, entity execution in progress)
 
+`Client.CompletedImportMappings` now obtains a fresh complete import observation
+and returns task IDs only for unchanged imports with completion receipts and
+verified source history. Pending allocations, fields-only receipts, missing
+history, changed sources or edited destinations produce no partial mapping.
+Success counters or a caller-created `ImportResult` are not accepted as proof.
+It uses the existing bulk issue/comment observation, not per-task GETs.
+
+`BindGitHubTaskIDs` bridges those importer keys (including stable SQLite proxies)
+back to original qualified workspace keys. It rejects missing/extra/duplicate
+or noncanonical bindings. This pure bridge does not authenticate evidence;
+`ObserveGitHubEntityInputs` combines native completion observation, the bridge
+and note/board projection before any dependent entity write inputs are returned.
+An actual GET-only `yoophi/td-sample` check resolved the completed #96 imports
+to `gh-215`/`gh-216` with no remote writes. Checked whole-workspace execution,
+explicit adoption, checkpoint/resume and writer audit are still required.
+
 `BuildGitHubEntityInputs` prepares SQLite notes/boards from the immutable source.
 It requires complete, unique canonical task bindings, rewrites exact query
 references and maps active positions. Deleted position rows remain passive.
