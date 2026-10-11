@@ -253,3 +253,12 @@ successful first update because it expected a single JSON object instead of
 multiple JSON rows. An explicit continuation freshly verifies that completed
 command and resumes at the second update without replaying creates or the first
 update. These are pending gates, not claimed successes; #85 remains open.
+
+Sequential inverse recovery also passes the race regression (68.883 s): after
+the later command has been undone, an earlier inverse's deleted-comment reply
+loss or completion-receipt denial is reconciled without changing native targets
+again, and its remaining inverse restores the original fields/comments.
+Native acceptance completed the later command inverse (271.229 s), restoring
+the exact first-command native fields/identity/creation/author. The earlier
+command inverse remains in progress; neither full native acceptance nor #85
+completion is claimed yet.
