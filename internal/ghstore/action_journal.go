@@ -475,6 +475,13 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if (a.ImportCommand != nil) != (start == actionImportCommandStart) {
 		return nil, fmt.Errorf("import command version differs from payload")
 	}
+	if a.ImportCommand != nil {
+		client := &Client{repo: a.ImportCommand.Repository}
+		number, err := client.commentIssueNumber(comment.IssueURL)
+		if err != nil || fmt.Sprintf("gh-%d", number) != a.CarrierID {
+			return nil, fmt.Errorf("import command repository differs from its native carrier")
+		}
+	}
 	if (a.CreationCommand != nil) != (start == actionCreationCommandStart) || (a.CreationOwner != "") != (start == actionCreationRelationsStart) || !creationNativeAuthor(a, comment.User.Login) {
 		return nil, fmt.Errorf("creation command version or native attribution differs from payload")
 	}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
-	"strings"
 	"time"
 )
 
@@ -115,7 +114,7 @@ func (c *Client) readSnapshotIncremental(ctx context.Context, baseline *Snapshot
 				}
 				// A manifest can reference unchanged parts absent from this delta.
 				// The merged complete collection below validates it before publish.
-				if !strings.Contains(comment.Body, actionMultipartJournalStart) {
+				if !journalNeedsCollection(comment.Body) {
 					if _, err := decodeActivity(comment, fmt.Sprintf("gh-%d", number)); err != nil {
 						return nil, err
 					}

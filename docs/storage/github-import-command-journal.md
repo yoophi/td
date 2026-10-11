@@ -1,9 +1,10 @@
 # Import command journal contract (#65)
 
-Status: implementation in progress. The v33 prepared-intent model is local and
-unpublished; import is not yet connected to command history, whole-command undo
-or reconciliation. This document specifies the required runtime behavior, not
-completed support. #65 and the intermediate release remain gated on it.
+Status: implementation in progress. The v33 prepared-intent model and v34
+reference archive transport have local implementation/tests and are unpublished.
+Import is not yet connected to command history, whole-command undo or
+reconciliation. The execution sections below specify required runtime behavior,
+not completed support. #65 and the intermediate release remain gated on it.
 
 ## One executor, one original command
 
@@ -71,18 +72,41 @@ generations; execution ownership does not.
 
 ## Storage and capacity
 
-The current inline prototype is not the publication format. Do not copy entire
-portable input and all native comment bodies into every root/rewrite. The root
-must reference immutable, digest-checked source and destination archive parts,
-reusing existing import provenance and bulk collection readers. Native comment
-identity, clocks, author and content digests bind references to actual evidence.
+The v34 publication format keeps immutable input and original-observation
+documents in existing v1 journal-part comments. The root references their actual
+native IDs, creation clocks and body hashes, with document sizes/content hashes.
+Transfer identity binds every chunk to the owning command, carrier, document and
+offset. Raw chunks use the existing bounded part decoder; there is no unbounded
+compressed document expansion. Rewrites reuse original documents and reject
+changes to the original session, input, mapping or before-state before uploads.
+
+The normal journal publisher and native collection readers handle roots, including
+compressed/multipart roots when reference metadata itself is large. Uploads are
+verified in a fresh collection before publication. A lost response is never
+automatically retried; an explicit attempt can reuse exactly matching unedited
+orphan chunks while no root exists. Duplicate/foreign chunks and existing command
+roots are explicit errors. No source history becomes live review authority.
 
 Preserve existing large-import capability: the 4 MiB decoded journal limit is
-not a new total import-history limit. Check root/manifest and final proof capacity
-before target writes. Missing, edited, duplicate or foreign referenced parts
-fail explicitly. Partial archive uploads stay inert until a verified root owns
-them; they cannot authorize target changes. Resolving references adds no
-per-source or per-part GitHub GET requests to bulk reads.
+not a new total import-history limit. Preparation checks root/reference capacity
+before uploads; preflight of final forward/inverse proof metadata remains part
+of the unfinished execution integration. Missing, edited, duplicate or foreign
+referenced parts fail explicitly. Partial archive uploads stay inert until a
+verified root owns them; they cannot authorize target changes. Resolving
+references adds no per-source or per-part GitHub GET requests to bulk reads.
+Incremental reads defer reference validation until the delta is merged with
+unchanged baseline chunks.
+
+Local tests cover input history beyond 4 MiB, multipart reference roots, changed
+native/semantic evidence, partial upload recovery, original-document reuse and
+bulk/incremental reading. This does not claim live GitHub or complete import
+execution acceptance. Source/destination provenance already written by the
+legacy executor is unchanged; reuse across that format and command documents is
+a future integration/efficiency concern, not a claim of zero storage duplication.
+
+Active monitors/servers must understand v34 before it is published to their
+repository. Installing a new CLI alone does not replace running readers. This
+implementation has not published native v33/v34 records or switched installations.
 
 ## Required acceptance scenarios
 

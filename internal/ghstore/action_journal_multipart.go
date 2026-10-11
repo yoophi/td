@@ -48,15 +48,19 @@ type actionJournalManifest struct {
 // journalPublication separates pure capacity planning from native publication.
 // Multipart parts must be verified before a manifest can authorize a write.
 type journalPublication struct {
-	operationID string
-	carrierID   string
-	body        string
-	partBodies  []string
-	summary     string
-	manifest    actionJournalManifest
+	operationID   string
+	carrierID     string
+	body          string
+	partBodies    []string
+	summary       string
+	manifest      actionJournalManifest
+	importArchive *importArchivePublication
 }
 
 func planActionJournalPublication(a ActionJournal) (*journalPublication, error) {
+	if a.ImportCommand != nil {
+		return planImportArchivePublication(a)
+	}
 	body, err := renderEncodedActionJournal(a)
 	if err != nil {
 		return nil, err
@@ -65,8 +69,12 @@ func planActionJournalPublication(a ActionJournal) (*journalPublication, error) 
 	if carrier == "" {
 		carrier = a.IssueID
 	}
+	return planJournalBodyPublication(body, a.OperationID, carrier)
+}
+
+func planJournalBodyPublication(body, operationID, carrier string) (*journalPublication, error) {
 	if len(body) <= actionCommentBudget {
-		return &journalPublication{body: body, operationID: a.OperationID, carrierID: carrier}, nil
+		return &journalPublication{body: body, operationID: operationID, carrierID: carrier}, nil
 	}
 	index := strings.Index(body, actionCompressedJournalStart)
 	if index < 0 {
@@ -83,13 +91,13 @@ func planActionJournalPublication(a ActionJournal) (*journalPublication, error) 
 	if _, err := Number(carrier); err != nil {
 		return nil, fmt.Errorf("multipart journal requires a carrier identity: %w", err)
 	}
-	plan := &journalPublication{operationID: a.OperationID, carrierID: carrier, summary: body[:index], manifest: actionJournalManifest{
-		OperationID: a.OperationID, CarrierID: carrier, Transfer: journalTransportHash(body),
+	plan := &journalPublication{operationID: operationID, carrierID: carrier, summary: body[:index], manifest: actionJournalManifest{
+		OperationID: operationID, CarrierID: carrier, Transfer: journalTransportHash(body),
 		EncodedSize: len(envelope.Data), Envelope: envelope, Parts: make([]actionJournalPartRef, count),
 	}}
 	plan.manifest.Envelope.Data = ""
 	for i := 0; i < count; i++ {
-		part := actionJournalPart{OperationID: a.OperationID, CarrierID: carrier, Transfer: plan.manifest.Transfer,
+		part := actionJournalPart{OperationID: operationID, CarrierID: carrier, Transfer: plan.manifest.Transfer,
 			Index: i, Count: count, Data: envelope.Data[i*actionJournalPartBytes : min((i+1)*actionJournalPartBytes, len(envelope.Data))]}
 		partBody, err := renderJournalPart(part)
 		if err != nil {
@@ -244,7 +252,7 @@ func decodeMultipartActionJournal(root apiComment, carrier string, comments []ap
 func decodeJournalFromCollection(root apiComment, carrier string, collection *journalPartCollection) (*ActionJournalRecord, error) {
 	index := strings.Index(root.Body, actionMultipartJournalStart)
 	if index < 0 {
-		return decodeActionJournal(root, carrier)
+		return decodeInlineJournalFromCollection(root, carrier, collection)
 	}
 	block := root.Body[index:]
 	if len(root.Body) > actionCommentBudget || !strings.HasSuffix(block, markerEnd) {
@@ -305,7 +313,7 @@ func decodeJournalFromCollection(root apiComment, carrier string, collection *jo
 	}
 	logical := root
 	logical.Body = root.Body[:index] + plain
-	record, err := decodeActionJournal(logical, carrier)
+	record, err := decodeInlineJournalFromCollection(logical, carrier, collection)
 	if err != nil {
 		return nil, err
 	}

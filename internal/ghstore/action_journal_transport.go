@@ -29,7 +29,7 @@ type actionJournalEnvelope struct {
 
 func actionSchemaStart(schema string) (string, bool) {
 	switch schema {
-	case "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33":
+	case "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33", "v34":
 		return actionJournalPrefix + schema + "\n", true
 	default:
 		return "", false
@@ -51,8 +51,18 @@ func renderWriteActionJournal(a ActionJournal) (string, error) {
 // through a multipart-aware path.
 func renderEncodedActionJournal(a ActionJournal) (string, error) {
 	body, err := renderActionJournal(a)
-	if err != nil || len(body) <= actionCommentBudget {
-		return body, err
+	if err != nil {
+		return "", err
+	}
+	return encodeJournalBody(body)
+}
+
+// Callers provide an already validated logical journal or archive manifest.
+// Archive documents are independent immutable parts; this limit still bounds
+// the root metadata, not the total portable import history it references.
+func encodeJournalBody(body string) (string, error) {
+	if len(body) <= actionCommentBudget {
+		return body, nil
 	}
 	index := strings.Index(body, actionJournalPrefix)
 	block := body[index:]

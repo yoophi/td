@@ -152,7 +152,7 @@ func (c *Client) decodeJournalResponse(ctx context.Context, data []byte, expecte
 	if err != nil || fmt.Sprintf("gh-%d", number) != carrierID || comment.Body != expectedBody || comment.User.Login == "" || comment.CreatedAt.IsZero() || comment.UpdatedAt.IsZero() {
 		return nil, fmt.Errorf("journal comment response identity, content or author is unverified")
 	}
-	if strings.Contains(comment.Body, actionMultipartJournalStart) {
+	if journalNeedsCollection(comment.Body) {
 		parts, err := c.readJournalParts(ctx, carrierID)
 		if err != nil {
 			return nil, err

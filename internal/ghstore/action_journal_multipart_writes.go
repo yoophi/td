@@ -112,6 +112,9 @@ func (c *Client) publishJournal(ctx context.Context, path string, plan *journalP
 	if plan == nil {
 		return nil, fmt.Errorf("journal publication plan is required")
 	}
+	if plan.importArchive != nil {
+		return c.publishImportArchiveJournal(ctx, path, plan, old, fence)
+	}
 	carrier, err := Number(plan.carrierID)
 	if err != nil {
 		return nil, err
@@ -212,8 +215,8 @@ func (c *Client) publishJournal(ctx context.Context, path string, plan *journalP
 	if err != nil {
 		return nil, err
 	}
-	if len(plan.partBodies) > 0 {
-		// Decoding a multipart response already reads the complete native carrier
+	if journalNeedsCollection(body) {
+		// Decoding a reference manifest already reads the complete native carrier
 		// collection and compares its root with the response before resolving all
 		// referenced parts. That verified collection is the readback for this
 		// publication; it is not retained as permission for a subsequent write.
