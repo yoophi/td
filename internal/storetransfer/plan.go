@@ -24,6 +24,7 @@ type PositionPlan struct {
 	Handling  string     `json:"handling"`
 }
 type BoardQueryPlan struct {
+	Handling         string       `json:"handling"`
 	BoardKey         string       `json:"board_key"`
 	Original         string       `json:"original"`
 	Rewrite          QueryRewrite `json:"rewrite"`
@@ -74,6 +75,9 @@ func BuildDataPlan(source, target *Source, bindings map[string]string) (*DataPla
 		if deleted != nil && target.Envelope.Store == "gh-issue" {
 			handling = "passive_archive"
 		}
+		if archivedSQLiteBoard(s, target.Envelope.Store, board) {
+			handling = "passive_archive"
+		}
 		plan.Positions = append(plan.Positions, PositionPlan{keys[board], keys[issue], index, added, deleted, handling})
 	}
 	boardQuery := func(board, text string) error {
@@ -81,7 +85,11 @@ func BuildDataPlan(source, target *Source, bindings map[string]string) (*DataPla
 		if err != nil {
 			return err
 		}
-		row := BoardQueryPlan{BoardKey: keys[board], Original: text, Rewrite: *r, PendingKeys: []string{}, MissingSourceIDs: []string{}}
+		handling := "apply"
+		if archivedSQLiteBoard(s, target.Envelope.Store, board) {
+			handling = "passive_archive"
+		}
+		row := BoardQueryPlan{Handling: handling, BoardKey: keys[board], Original: text, Rewrite: *r, PendingKeys: []string{}, MissingSourceIDs: []string{}}
 		for _, id := range r.Unmapped {
 			if key, exists := taskKeys[id]; exists {
 				row.PendingKeys = append(row.PendingKeys, key)
@@ -235,10 +243,16 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 			}
 		}
 	}
+	archivedBoards := 0
+	for _, a := range plan.Identities.Assignments {
+		if a.Action == "archive" {
+			archivedBoards++
+		}
+	}
 	result := []Disclosure{
 		{"task_content_state_schedule_deletion", "preserve", tasks, "Plan task content, status/type/priority/acceptance/labels/sprint/files/schedule/logical deletion with mapped IDs; executor is not implemented by this report."},
 		{"notes_content_flags", "preserve", notes, "Plan note content and pinned/archived/deleted flags; original authors and clocks remain source provenance."},
-		{"boards_configuration_queries", "preserve", boards, "Plan board configuration and mapped queries; blocked queries require explicit policy or confirmed mappings before board writes. Device last-view state is excluded."},
+		{"boards_configuration_queries", "preserve", boards - archivedBoards, "Plan live board configuration and mapped queries; blocked queries require explicit policy or confirmed mappings before board writes. Device last-view state is excluded."},
 		{"relationships", "preserve", activeRelations, "Plan current parents and dependencies using qualified source keys; archival legacy relations are listed separately and never activated."},
 		{"board_positions", "preserve", activePositions, "Plan board membership/order with mapped IDs; archival position tombstones are listed separately and never activated."},
 		{"original_actors_reviews_history", "passive_archive", history, "Count collected typed history records (projections can overlap raw native evidence). Original authors, sessions, reviews, transitions, logs, handoffs, snapshots and comments are provenance, not destination actors, active approvals or executable undo history."},
@@ -269,6 +283,7 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 		result = append(result, Disclosure{"github_extensions_native_history", "passive_archive", len(source.GitHub.Native), "Native carrier/comment identity, author/clocks and GitHub-specific data lack SQLite shared columns; retain the source archive rather than claim lossless column restoration."})
 	}
 	if source.SQLite != nil {
+		result = append(result, Disclosure{"previous_workspace_archives", "passive_archive", len(source.SQLite.TransferArchives), "Previously transferred full inputs/mappings remain opaque passive evidence. Nested input capacity limits still apply."})
 		kinds := []string{}
 		for kind := range source.SQLite.ExcludedActions {
 			kinds = append(kinds, kind)
@@ -279,7 +294,13 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 		}
 		result = append(result, Disclosure{"hard_deleted_board_data", "limitation", 0, "SQLite cascade-deleted board/position rows cannot be reconstructed from absent data; available logged before-images remain passive provenance."})
 	}
+	if archivedBoards > 0 {
+		result = append(result, Disclosure{"deleted_github_boards", "passive_archive", archivedBoards, "SQLite has no logical board tombstone column. Deleted GitHub boards and positions remain in the full source capsule, never recreated as live boards."})
+	}
 	for _, row := range plan.BoardQueries {
+		if row.Handling == "passive_archive" {
+			continue
+		}
 		if len(row.PendingKeys) > 0 {
 			result = append(result, Disclosure{"query_pending_creation", "deferred", len(row.PendingKeys), "Exact query references await confirmed destination IDs."})
 		}

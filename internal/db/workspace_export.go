@@ -18,12 +18,13 @@ import (
 // Device session registries, work bundles, credentials and configuration are
 // deliberately absent. Unknown/local action kinds are reported by count.
 type SQLiteWorkspaceExport struct {
-	SchemaVersion   int                 `json:"schema_version"`
-	Tasks           []SQLiteExportTask  `json:"tasks"`
-	Notes           []models.Note       `json:"notes"`
-	Boards          []SQLiteExportBoard `json:"boards"`
-	Actions         []models.ActionLog  `json:"actions"`
-	ExcludedActions map[string]int      `json:"excluded_actions"`
+	TransferArchives []WorkspaceTransferArchive `json:"transfer_archives,omitempty"`
+	SchemaVersion    int                        `json:"schema_version"`
+	Tasks            []SQLiteExportTask         `json:"tasks"`
+	Notes            []models.Note              `json:"notes"`
+	Boards           []SQLiteExportBoard        `json:"boards"`
+	Actions          []models.ActionLog         `json:"actions"`
+	ExcludedActions  map[string]int             `json:"excluded_actions"`
 }
 
 type SQLiteExportTask struct {
@@ -219,6 +220,9 @@ func (db *DB) readWorkspaceLimited(ctx context.Context, version int, budget *tra
 	}
 	if err := budget.Add(result.ExcludedActions); err != nil {
 		return nil, err
+	}
+	if result.TransferArchives, err = db.readTransferArchives(ctx, budget); err != nil {
+		return nil, fmt.Errorf("read passive transfer archives: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

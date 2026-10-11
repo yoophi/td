@@ -59,6 +59,40 @@ fixture replay, not completion of whole-store execution. #93 still requires
 checked task/note/board writes, workspace archive installation, verified target
 ownership/receipts and writer audit before `--execute` becomes available.
 
+The private SQLite writer now inserts prepared tasks, notes, live boards,
+positions and the complete original capsule/mappings in one `BEGIN IMMEDIATE`
+transaction. It compares the current destination against its prior observation
+while holding the write transaction, rejects colliding IDs/history rows/active
+position slots, and resolves parents explicitly because the current SQLite
+schema has no parent foreign key. Dependency and position foreign keys are
+deferred until commit. A failed write rolls back both entity rows and the
+archive table creation. Capacity errors stop before mutation; commit errors
+retain the original error and require observation before any retry.
+
+The passive capsule lives in `store_transfer_archives`, created transactionally
+only when writing. Read-only collection never creates this table, but includes
+existing capsules in the next workspace input. Previous capsules do not become
+active reviews, source actors, or executable action history. Nested capsule
+data remains subject to the existing capacity limit; exhaustion is an explicit
+error rather than a promise of unlimited history storage.
+
+Deleted GitHub boards have no corresponding SQLite board tombstone column.
+Their configuration and positions remain in the complete capsule; the planner
+marks them `archive` and does not recreate them as live boards. Their queries
+and positions are reported as passive rather than pending writes. Board names
+are preserved under the current SQLite schema, which permits duplicate names;
+identities remain distinct by ID.
+
+A captured GitHub input was projected and atomically written into a private
+temporary SQLite destination: 196 tasks, 5 notes, 4 live boards, 1 active
+position, 49 logs, 52 handoffs, 20 dependencies, 4 files and 119 deleted tasks.
+Six deleted boards remained passive in one complete source capsule. Subsequent
+source collection retained that capsule and mappings, with zero active source
+workflow actors/reviews and unchanged original input bytes. This validates the
+SQLite primitive against captured native input, not public CLI execution or a
+live GitHub destination. Checked execution, adoption policy, GitHub writes and
+checkpoint/resume remain required in #93/#94.
+
 ## Source collection (#90)
 
 The GitHub collector `Client.ExportWorkspace` takes one fresh complete issue

@@ -65,6 +65,14 @@ func PlanIdentities(source, target *Source, bindings map[string]string) (*Identi
 	plan := &IdentityPlan{SourceSHA256: s.Envelope.SHA256, TargetSHA256: t.Envelope.SHA256, Assignments: []Assignment{}}
 	for _, identity := range sp.Identities {
 		assignment := Assignment{Kind: identity.Kind, SourceID: identity.ID, SourceKey: identity.Key, Action: "create"}
+		if archivedSQLiteBoard(s, t.Envelope.Store, identity.ID) {
+			if _, exists := bindings[identity.Key]; exists {
+				return nil, fmt.Errorf("deleted GitHub board %q cannot adopt a live SQLite board", identity.ID)
+			}
+			assignment.Action = "archive"
+			plan.Assignments = append(plan.Assignments, assignment)
+			continue
+		}
 		if id, exists := bindings[identity.Key]; exists {
 			assignment.Action = "adopt"
 			assignment.TargetID = id
@@ -90,6 +98,17 @@ func PlanIdentities(source, target *Source, bindings map[string]string) (*Identi
 		plan.Assignments = append(plan.Assignments, assignment)
 	}
 	return plan, nil
+}
+
+func archivedSQLiteBoard(source *Source, targetStore, id string) bool {
+	if targetStore == "sqlite" && source.GitHub != nil {
+		for _, b := range source.GitHub.Boards {
+			if b.ID == id {
+				return b.Details.DeletedAt != nil
+			}
+		}
+	}
+	return false
 }
 
 func builtinBoard(source *Source, id string) bool {
