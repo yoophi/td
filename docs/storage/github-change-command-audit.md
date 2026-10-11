@@ -73,6 +73,8 @@ Inventory is an enumeration; behavioral evidence appears below.
 | `td ws start` | none | none |
 | `td ws tag` | `--no-start` | none |
 | `td ws untag` | none | none |
+| `td epic create` | `--acceptance`, `--acceptance-file`, `--blocks`, `--body`, `--defer`, `--depends-on`, `--desc`, `--description`, `--description-file`, `--due`, `--epic`, `--label`, `--labels`, `--minor`, `--notes`, `--parent`, `--points`, `--priority`, `--tag`, `--tags`, `--title`, `--type` | none |
+| `td task create` | `--acceptance`, `--acceptance-file`, `--blocks`, `--body`, `--defer`, `--depends-on`, `--desc`, `--description`, `--description-file`, `--due`, `--epic`, `--label`, `--labels`, `--minor`, `--notes`, `--parent`, `--points`, `--priority`, `--tag`, `--tags`, `--title`, `--type` | none |
 
 ## Dispatch and behavioral evidence
 
@@ -88,6 +90,10 @@ compared with their handlers at this revision:
   `TestGitHubMixedUpdatePreservesValidCombinedEffects`,
   `TestGitHubCreateUpdateRelationsReplacePreflightAndPartialFailures`, and the
   `TestGitHubJournalCLIUpdate*` / `TestGitHubJournalCLICreate*` suites.
+  `task.go` and `epic.go` delegate typed creation to the same live `createCmd.RunE`
+  after setting the fixed type and rejecting conflicts. Their full create flags
+  are included above; `TestGitHubTypeShortcuts` and the shortcut conflicting-type
+  tests cover this additional canonical entry point.
 - `gh_transitions.go` accepts the captured transition options, including reason
   aliases, `--all`, claim selection, review attribution/record-only and admin
   exceptions. These remain subject to the shared review policy; accepting a flag
