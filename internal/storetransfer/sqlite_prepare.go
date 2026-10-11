@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/transferlimit"
 )
 
 // PreparedSQLiteWrite owns the validated, frozen input and destination basis.
@@ -19,6 +20,49 @@ type PreparedSQLiteWrite struct {
 	rows     *db.SQLiteWorkspaceExport
 	archive  db.WorkspaceTransferArchive
 	limit    int64
+}
+
+// PrepareSQLiteDestination performs projection/capacity checks before creating
+// a new database. Existing targets use their original observation unchanged.
+// Initialization returns its private staging baseline, rather than accepting
+// arbitrary edits observed after publication. Apply still checks that baseline
+// while holding the destination write transaction.
+func PrepareSQLiteDestination(ctx context.Context, source *Source, target *InspectedTarget, bindings map[string]string, maxBytes int64) (*PreparedSQLiteWrite, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if target == nil {
+		return nil, fmt.Errorf("explicit SQLite destination required")
+	}
+	if !target.NeedsSQLiteInitialization {
+		return PrepareSQLiteWrite(source, target, bindings, maxBytes)
+	}
+	copyTarget := *target
+	copyTarget.NeedsSQLiteInitialization = false
+	prepared, err := PrepareSQLiteWrite(source, &copyTarget, bindings, maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	if len(prepared.expected.Tasks)+len(prepared.expected.Notes)+len(prepared.expected.Boards)+len(prepared.expected.Actions)+len(prepared.expected.TransferArchives)+len(prepared.expected.ExcludedActions) != 0 {
+		return nil, fmt.Errorf("new SQLite destination observation is not empty; no initialization attempted")
+	}
+	// Match the DB boundary budget before any directories/schema are created.
+	budget, err := transferlimit.New(maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	if err := budget.Add(prepared.rows); err != nil {
+		return nil, err
+	}
+	if err := budget.Add(prepared.archive); err != nil {
+		return nil, err
+	}
+	baseline, err := db.InitializeSQLiteTransferDestination(ctx, prepared.root)
+	if err != nil {
+		return nil, fmt.Errorf("initialize explicit SQLite destination: %w", err)
+	}
+	prepared.expected = baseline
+	return prepared, nil
 }
 
 // PrepareSQLiteWrite allocates fresh local IDs once and resolves every active

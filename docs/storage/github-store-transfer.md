@@ -107,9 +107,22 @@ replace the frozen prepared rows.
 file with an encoded URI and `mode=rw`, without running initialization or
 migrations. It does not use configured-backend fallback. A prepared write checks
 the handle's project and then uses the transaction's destination comparison.
-The caller still must initialize a new destination explicitly and reobserve it;
-new-destination orchestration, CLI activation, journal integration and persistent
-execution/checkpoint receipts are not implemented by these helpers.
+`PrepareSQLiteDestination` connects new-destination initialization after source,
+mapping, query and combined row/capsule capacity checks. Initialization builds
+the schema in a private sibling staging directory, closes and syncs it, then
+publishes with a no-overwrite hard link. Existing files (including dangling
+symlinks) and a concurrent publisher cannot be overwritten. Literal `?`/`#`
+paths use encoded URIs. Initialization captures its baseline before publication,
+so post-publication edits cannot become an accepted replacement observation.
+The prepared apply rejects them transactionally. Store configuration is unchanged.
+
+A failed preflight does not create the destination directory/database. Failed
+initialization removes its private staging data; an already published empty
+database is retained if subsequent apply fails. Publication/directory sync
+errors preserve the original error and explicitly require inspection before
+retry; no automatic retry or deletion of a published destination occurs.
+CLI activation, journal integration and persistent execution/checkpoint receipts
+are still not implemented by these helpers.
 
 ## Source collection (#90)
 
