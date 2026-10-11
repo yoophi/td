@@ -79,7 +79,7 @@ func TestCLIInventoryHelperProcess(t *testing.T) {
 	}
 	SetVersion("inventory-fixture")
 	rootCmd.InitDefaultHelpCmd()
-	rootCmd.InitDefaultCompletionCmd()
+	configureCompletion()
 	if err := json.NewEncoder(os.Stdout).Encode(collectCLIInventory(rootCmd)); err != nil {
 		t.Fatal(err)
 	}

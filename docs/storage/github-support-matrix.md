@@ -61,6 +61,26 @@ unchanged store selection. Config tests reject GitHub writes to global SQLite
 sync settings and separately validate SQLite config persistence and invalid
 value rejection. Human output, help and untested remaining flags stay pending.
 
+## Completion output contract: #87
+
+`td completion bash|zsh|fish|powershell` emits the shell script by default.
+With `--json`, it emits `{ "shell": "bash", "script": "..." }` (using the
+requested shell); `--no-descriptions` applies to the script inside that envelope
+as well. `--refresh` does not turn script generation into an issue-data request.
+Generated help keeps the normal human/JSON help contracts. An unknown shell or
+extra positional argument now fails explicitly rather than returning successful
+help. Running `td completion` without arguments still shows help.
+
+The CLI tests compare decoded JSON scripts with ordinary output for all four
+shells, with/without descriptions, both stores and both sync modes. They cover
+JSON help/errors and assert no GitHub call, issue SQLite database or issue
+session. The inventory retains all 151 commands/975 flags; only the completion
+parent becomes runnable so it can validate arguments before showing help.
+The actual development binary was also checked for these outputs and invalid
+arguments; Bash and Zsh script syntax passed. Fish/PowerShell runtime execution
+is not claimed by output generation tests. This change does not replace the
+already installed Homebrew release.
+
 ## Action journal audit: #9 and #65
 
 `last` and `undo --list` read current-session journals from bulk issue/comment

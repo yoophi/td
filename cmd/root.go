@@ -85,6 +85,7 @@ func initLogFile() *os.File {
 var errSilentExit = errors.New("td: silent exit")
 
 func Execute() {
+	configureCompletion()
 	if f := initLogFile(); f != nil {
 		defer func() { _ = f.Close() }()
 	}

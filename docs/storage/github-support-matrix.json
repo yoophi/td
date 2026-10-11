@@ -372,71 +372,160 @@
     },
     {
       "command": "td completion",
-      "owner": "#31",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "owner": "#87",
+      "state": "partial",
+      "reason": "Four-shell CLI checks cover raw/JSON script equality, no-descriptions, help and failures, both stores and sync modes, and no issue database/network/session access. Parent has explicit unknown-shell rejection; full shell runtime execution remains separate.",
+      "evidence": [
+        "TestCompletionCLIJSONAndOfflineStores"
+      ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "refresh": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "work-dir": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ]
       }
     },
     {
       "command": "td completion bash",
-      "owner": "#31",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "owner": "#87",
+      "state": "partial",
+      "reason": "Four-shell CLI checks cover raw/JSON script equality, no-descriptions, help and failures, both stores and sync modes, and no issue database/network/session access. Parent has explicit unknown-shell rejection; full shell runtime execution remains separate.",
+      "evidence": [
+        "TestCompletionCLIJSONAndOfflineStores"
+      ],
       "flags": {
-        "help": "pending",
-        "json": "pending",
-        "no-descriptions": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "help": "partial",
+        "json": "partial",
+        "no-descriptions": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "help": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "json": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "no-descriptions": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "refresh": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "work-dir": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ]
       }
     },
     {
       "command": "td completion fish",
-      "owner": "#31",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "owner": "#87",
+      "state": "partial",
+      "reason": "Four-shell CLI checks cover raw/JSON script equality, no-descriptions, help and failures, both stores and sync modes, and no issue database/network/session access. Parent has explicit unknown-shell rejection; full shell runtime execution remains separate.",
+      "evidence": [
+        "TestCompletionCLIJSONAndOfflineStores"
+      ],
       "flags": {
-        "help": "pending",
-        "json": "pending",
-        "no-descriptions": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "help": "partial",
+        "json": "partial",
+        "no-descriptions": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "help": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "json": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "no-descriptions": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "refresh": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "work-dir": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ]
       }
     },
     {
       "command": "td completion powershell",
-      "owner": "#31",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "owner": "#87",
+      "state": "partial",
+      "reason": "Four-shell CLI checks cover raw/JSON script equality, no-descriptions, help and failures, both stores and sync modes, and no issue database/network/session access. Parent has explicit unknown-shell rejection; full shell runtime execution remains separate.",
+      "evidence": [
+        "TestCompletionCLIJSONAndOfflineStores"
+      ],
       "flags": {
-        "help": "pending",
-        "json": "pending",
-        "no-descriptions": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "help": "partial",
+        "json": "partial",
+        "no-descriptions": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "help": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "json": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "no-descriptions": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "refresh": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "work-dir": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ]
       }
     },
     {
       "command": "td completion zsh",
-      "owner": "#31",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "owner": "#87",
+      "state": "partial",
+      "reason": "Four-shell CLI checks cover raw/JSON script equality, no-descriptions, help and failures, both stores and sync modes, and no issue database/network/session access. Parent has explicit unknown-shell rejection; full shell runtime execution remains separate.",
+      "evidence": [
+        "TestCompletionCLIJSONAndOfflineStores"
+      ],
       "flags": {
-        "help": "pending",
-        "json": "pending",
-        "no-descriptions": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "help": "partial",
+        "json": "partial",
+        "no-descriptions": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "help": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "json": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "no-descriptions": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "refresh": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ],
+        "work-dir": [
+          "TestCompletionCLIJSONAndOfflineStores"
+        ]
       }
     },
     {

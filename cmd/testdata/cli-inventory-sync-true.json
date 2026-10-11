@@ -856,7 +856,7 @@
     "path": "td completion",
     "use": "completion",
     "aliases": [],
-    "runnable": false,
+    "runnable": true,
     "flags": [
       {
         "name": "help",
