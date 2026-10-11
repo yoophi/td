@@ -302,3 +302,21 @@ observed-proof rejection race passed (207.670 s), and full ghstore race passed
 (210.459 s). Existing update/activity writer recovery regression and native
 acceptance remain pending gates. #86 is still in progress; this record does
 not claim #68 or #9 complete.
+
+Final #86 validation passed: existing update/activity writer/partial-recovery
+race regression passed (284.009 s). On native sample `gh-212`, `due` followed by
+a field/comment update completed both inverses (162.464 s and 168.946 s).
+Fresh repository collection reads confirmed exact original native fields,
+identity, creation clock and author; both companion activities are absent and
+no SQLite file exists. Cleanup logically deletes the disposable task while
+preserving its native ID/history. Production-code CI run 38155255139 remains
+part of the broader #68 gate rather than a claimed completed test job.
+
+The #68 broad CLI race run exhausted its 60-minute package budget when
+`UpdateRelationsRecovery` began. Its unfinished tests were split into groups.
+One mixed-workflow test hit its default 30-second child CLI budget both in the
+group and in isolation. With the existing workflow-fixture budget of two minutes,
+its review update completed in 32.331 s and all original assertions passed
+(race suite 81.471 s). Only this test's budget/logging changed; production
+behavior and semantic assertions were retained. The remaining group and final
+source CI are still pending #68 gates, not broad claimed successes.
