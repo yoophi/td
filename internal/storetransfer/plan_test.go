@@ -142,3 +142,17 @@ func TestDataPlanResolversRejectUnknownHandlingAndNil(t *testing.T) {
 		t.Fatal("unknown handling silently activated")
 	}
 }
+
+func TestPreservationReportIncludesBoardHistoryAsPassiveEvidence(t *testing.T) {
+	source := &Source{GitHub: &ghstore.WorkspaceExport{Boards: []ghstore.BoardRecord{{Details: ghstore.BoardDetails{History: []ghstore.BoardEvent{{Action: "move"}, {Action: "delete"}}}}}}}
+	target := &Source{Envelope: Envelope{Store: "sqlite"}}
+	for _, d := range preservationReport(source, target, &DataPlan{}) {
+		if d.Code == "original_actors_reviews_history" {
+			if d.Count != 2 || d.Handling != "passive_archive" {
+				t.Fatalf("board history omitted or activated: %+v", d)
+			}
+			return
+		}
+	}
+	t.Fatal("missing history disclosure")
+}

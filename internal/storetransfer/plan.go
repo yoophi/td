@@ -223,6 +223,9 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 				history += len(d.Reviews) + len(d.Sessions) + len(d.Transitions)
 			}
 		}
+		for _, b := range source.GitHub.Boards {
+			history += len(b.Details.History)
+		}
 		for _, n := range source.GitHub.Native {
 			nativeComments += len(n.Comments)
 		}
