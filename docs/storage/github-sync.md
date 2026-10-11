@@ -71,9 +71,42 @@ that global configuration; change global SQLite settings from a SQLite project.
 with the sync feature enabled. They do not affect direct gh writes or GitHub
 monitor/tail intervals. No setting starts SQLite or td-sync for a GitHub store.
 
+## Acceptance and explicit exceptions (#30)
+
 The setup validator is reachable on both sync parents; the SQLite setup wizard
-still requires the sync CLI feature. The #30 implementation still requires
-native acceptance and task review.
-SQLite snapshot bootstrap, action-log replay and
-FK repair are store-specific operations; they cannot be reported as successful
-GitHub transfers. Native repository checks and task review are still pending.
+still requires the sync CLI feature. GitHub has no local pending-event queue,
+SQLite snapshot bootstrap, action-log replay or SQL FK/orphan repair to transfer.
+These store-specific operations are explicitly excluded. Use direct task writes,
+`sync`/`sync --pull` for fresh observation, `sync status` for cache diagnostics,
+and project `config set store gh-issue` for setup. Inspect remote state before
+retrying an uncertain write. GitHub autosync toggles are rejected; monitor/tail
+polling uses their own interval options instead.
+
+Native acceptance used source `2256bc0` in a disposable Git checkout selecting
+`yoophi/td-sample`, with an enforced GET-only gh wrapper. Eighteen checks cover
+both feature modes for `status`, `--status`, `init`, `conflicts` and rejected
+`--push`; complete refresh, `--pull`, tail, rejected enable/disable, conflicting
+transfer flags, a below-minimum interval and rejected global sync setting writes.
+The environment deliberately enabled autosync and supplied an unreachable
+localhost td-sync URL. All expected results were verified, with zero remote
+writes, no SQLite database, and unchanged project settings and Git remotes.
+Fresh sync took 6.562 seconds and pull took 7.335 seconds; these are observations
+of this sample and do not promise fixed latency or API-cost limits. Each refresh
+used one paginated issue collection and one paginated comment collection; no
+per-task detail requests were observed. A gh invocation is not an HTTP page count.
+
+Race-enabled command tests additionally cover empty snapshots, collection errors
+without partial success, missing gh, root feature registration/error envelopes,
+follow cancellation and deduplicated edits, offline repository-scoped conflict
+records, and blocked global settings. Shared runtime tests check the GitHub gate
+even when autosync is enabled and an unusable SQLite handle is supplied. SQLite
+sync and global configuration regressions remain part of verification.
+
+Evidence is retained in `artifacts/task-audit-2026-10-10/gh-30-native-summary.json`,
+`gh-30-request-counts.json` and the `gh-30-*-race.log` files. Command tests passed
+in 48.144 seconds; targeted gates passed in 11.214 seconds. The complete shared
+SQLite sync/config/runtime suites passed in 1.556/2.659/19.857 seconds, and the
+selected monitor/runtime regressions passed in 80.029/1.715 seconds. Earlier
+filtered runs reporting no tests for a package are not counted as its coverage.
+Live validation does not fabricate a server push queue, lossless event stream
+or an atomic GitHub snapshot.
