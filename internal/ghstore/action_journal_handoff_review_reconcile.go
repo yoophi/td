@@ -26,7 +26,7 @@ func (c *Client) reconcilePairedGroup(ctx context.Context, root *ActionJournalRe
 		return result, nil
 	}
 	if observed.Pending != nil {
-		if err := c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present()); err != nil {
+		if err := c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present(), observed.Bridges); err != nil {
 			return nil, err
 		}
 		if _, err := c.ReconcileAction(ctx, observed.Pending.ID, session, true); err != nil {

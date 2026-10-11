@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -72,7 +73,7 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 		next := root.ActionJournal
 		next.Phase, next.UndoOperationID = "undo_prepared", "td-op-"+rand.Text()
 		written, err := c.writeGroupReceipt(ctx, root, next, func() error {
-			return c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present())
+			return c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present(), observed.Bridges)
 		})
 		if err != nil {
 			return nil, err
@@ -84,7 +85,7 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 		if member.Phase == "prepared" || member.Phase == "undone" {
 			continue
 		}
-		if err := c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present()); err != nil {
+		if err := c.fencePairedGroup(ctx, root, observed.Receipts, observed.States, observed.present(), observed.Bridges); err != nil {
 			return nil, err
 		}
 		fenceMember := func(actual *ActionJournalRecord, current *Record, deleted bool) error {
@@ -100,7 +101,7 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 			if actual.Action == "comment_create" {
 				present[current.ID] = !deleted
 			}
-			return c.fencePairedGroup(ctx, root, want, states, present)
+			return c.fencePairedGroup(ctx, root, want, states, present, observed.Bridges)
 		}
 		gate := &groupUndoGate{OperationID: root.OperationID,
 			Member: func(actual *ActionJournalRecord) error {
@@ -110,6 +111,8 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 				return nil
 			},
 			Plan: func(actual *ActionJournalRecord, current *Record, session, author string) (*IssueUndoPlan, error) {
+				var plan *IssueUndoPlan
+				var err error
 				if root.Group.fieldCommentGroup() {
 					chain := []*ActionJournalRecord{}
 					for _, receipt := range observed.Receipts {
@@ -117,9 +120,15 @@ func (c *Client) undoPairedGroup(ctx context.Context, root *ActionJournalRecord,
 							chain = append(chain, receipt)
 						}
 					}
-					return updateActivityUndoPlan(actual, current, session, author, chain)
+					plan, err = updateActivityUndoPlan(actual, current, session, author, chain)
+				} else {
+					plan, err = handoffReviewUndoPlan(actual, current, session, author, observed.Receipts)
 				}
-				return handoffReviewUndoPlan(actual, current, session, author, observed.Receipts)
+				var conflict *ConflictError
+				if errors.As(err, &conflict) && len(observed.Bridges[actual.IssueID]) > 0 {
+					plan, _, err = planUndoThroughReceipts(actual, current, session, author, observed.History)
+				}
+				return plan, err
 			},
 			CommentFence: fenceMember,
 			UpdateFence:  func(actual *ActionJournalRecord, current *Record) error { return fenceMember(actual, current, false) },
@@ -161,8 +170,15 @@ func (c *Client) preflightPairedInverse(ctx context.Context, root *ActionJournal
 				if !sameActionContents(*r.After, observed.States[r.IssueID]) {
 					return &ConflictError{ID: r.IssueID}
 				}
-			} else if _, err := r.PlanIssueUndo(observed.Current[r.IssueID], session, author); err != nil {
-				return err
+			} else {
+				_, err := r.PlanIssueUndo(observed.Current[r.IssueID], session, author)
+				var conflict *ConflictError
+				if errors.As(err, &conflict) && len(observed.Bridges[r.IssueID]) > 0 {
+					_, _, err = planUndoThroughReceipts(r, observed.Current[r.IssueID], session, author, observed.History)
+				}
+				if err != nil {
+					return err
+				}
 			}
 			if err := c.checkUndoOriginalReview(ctx, r, false); err != nil {
 				return err

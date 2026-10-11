@@ -226,3 +226,30 @@ lint reported zero issues. The original native fixture comments are absent;
 both fixtures were logically deleted with their native IDs/history retained.
 The broader command-writer race suite and CI are still running as #68 gates.
 This record does not declare #68 or #9 complete.
+
+Further native-pattern regression found a separate paired-command gap tracked
+in [#85](https://github.com/yoophi/td/issues/85): two successive grouped field/
+comment updates could undo the second command, but the first command's observer
+still rejected the restored native clock. The real CLI regression failed before
+the correction (13.16 s). The paired observer now verifies the same whole-command
+receipt chain against its fresh snapshot and rechecks that chain at each inverse
+write fence. Only saved-result comparisons use the original expected clocks;
+source receipts and current target observations are not rewritten.
+
+The sequential CLI race suite passed (321.827 s), including both the basic-group
+and paired-command patterns and their foreign-field/clock, missing-effect,
+foreign-author, observed-inverse and native-event rejection cases. The full
+ghstore race suite passed (203.673 s), and Linux lint reported zero issues.
+The handoff/review cross-command race regression passed (31.650 s). A separate
+`due` then field/comment update sequence failed at the earlier command inverse
+(13.73 s): scheduling/file-link commands use the distinct update/activity
+observer, not the paired-command observer. This implementable gap is registered
+as [#86](https://github.com/yoophi/td/issues/86) and blocks #68. Its failing real
+CLI regression is preserved for the next task rather than claimed as fixed.
+
+Existing paired-command recovery regressions and native acceptance on disposable
+sample tasks `gh-210`/`gh-211` are running. The native harness stopped after a
+successful first update because it expected a single JSON object instead of
+multiple JSON rows. An explicit continuation freshly verifies that completed
+command and resumes at the second update without replaying creates or the first
+update. These are pending gates, not claimed successes; #85 remains open.

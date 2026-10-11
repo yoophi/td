@@ -9,6 +9,9 @@ import (
 )
 
 type pairedGroupObservation struct {
+	Snapshot                 *Snapshot
+	History                  []ActionJournalRecord
+	Bridges                  map[string][]ActionJournalRecord
 	Current                  map[string]*Record
 	States                   map[string]ActionIssueState
 	Comments                 map[string]*ActionCommentState
@@ -34,7 +37,7 @@ func (c *Client) readPairedGroup(ctx context.Context, root *ActionJournalRecord)
 	if err != nil {
 		return nil, err
 	}
-	out := &pairedGroupObservation{Current: map[string]*Record{}, States: map[string]ActionIssueState{}, Comments: map[string]*ActionCommentState{}}
+	out := &pairedGroupObservation{Snapshot: snapshot, History: history, Bridges: map[string][]ActionJournalRecord{}, Current: map[string]*Record{}, States: map[string]ActionIssueState{}, Comments: map[string]*ActionCommentState{}}
 	for _, m := range root.Group.Members {
 		out.Current[m.IssueID] = nil
 	}
@@ -124,10 +127,17 @@ func (c *Client) readPairedGroup(ctx context.Context, root *ActionJournalRecord)
 	return out, nil
 }
 
-func (c *Client) fencePairedGroup(ctx context.Context, root *ActionJournalRecord, receipts []*ActionJournalRecord, states map[string]ActionIssueState, present map[string]bool) error {
+func (c *Client) fencePairedGroup(ctx context.Context, root *ActionJournalRecord, receipts []*ActionJournalRecord, states map[string]ActionIssueState, present map[string]bool, bridges ...map[string][]ActionJournalRecord) error {
 	current, err := c.readPairedGroup(ctx, root)
 	if err != nil {
 		return err
+	}
+	for _, byIssue := range bridges {
+		for _, witnesses := range byIssue {
+			if err := c.checkUndoWitnessesSnapshot(ctx, current.Snapshot, witnesses); err != nil {
+				return err
+			}
+		}
 	}
 	if !slices.EqualFunc(current.Receipts, receipts, func(a, b *ActionJournalRecord) bool { return reflect.DeepEqual(a, b) }) {
 		return fmt.Errorf("paired command effect receipts changed")
@@ -242,9 +252,31 @@ func (c *Client) observePairedGroup(ctx context.Context, root *ActionJournalReco
 			}
 		}
 	}
+	comparisonStates := maps.Clone(expected)
 	for _, m := range root.Group.Members {
 		if expected[m.IssueID].Revision != out.States[m.IssueID].Revision {
-			return nil, &ConflictError{ID: m.IssueID}
+			// A later completed command may restore the exact contents with a
+			// new native clock. Only its full verified receipt chain can bridge
+			// that clock; never change this command's original observations.
+			var terminal *ActionJournalRecord
+			if !normal && root.Phase != "prepared" && root.Phase != "undone" {
+				for _, receipt := range out.Receipts {
+					if receipt.IssueID == m.IssueID && receipt.Phase == "applied" && receipt.After.Revision == expected[m.IssueID].Revision {
+						terminal = receipt
+					}
+				}
+			}
+			if terminal == nil {
+				return nil, &ConflictError{ID: m.IssueID}
+			}
+			_, witnesses, err := planUndoThroughReceipts(terminal, out.Current[m.IssueID], root.SessionID, root.Author, out.History)
+			if err != nil {
+				return nil, err
+			}
+			if err := c.checkUndoWitnessesSnapshot(ctx, out.Snapshot, witnesses); err != nil {
+				return nil, err
+			}
+			out.Bridges[m.IssueID] = witnesses
 		}
 		result := results[m.IssueID]
 		result.State = out.States[m.IssueID]
@@ -257,12 +289,20 @@ func (c *Client) observePairedGroup(ctx context.Context, root *ActionJournalReco
 	if inverse {
 		saved = root.Group.Inverse
 	}
-	if saved != nil && !equalGroupMemberResults(saved.Members, out.Members) {
+	comparison := slices.Clone(out.Members)
+	// Compare immutable saved results using their original clocks, while
+	// retaining actual current states for the inverse and its write fences.
+	for i := range comparison {
+		if len(out.Bridges[comparison[i].IssueID]) > 0 {
+			comparison[i].State = comparisonStates[comparison[i].IssueID]
+		}
+	}
+	if saved != nil && !equalGroupMemberResults(saved.Members, comparison) {
 		return nil, fmt.Errorf("paired command completed result changed")
 	}
 	return out, nil
 }
 
 func samePairedGroupObservation(a, b *pairedGroupObservation) bool {
-	return maps.EqualFunc(a.States, b.States, func(x, y ActionIssueState) bool { return x.Revision == y.Revision }) && reflect.DeepEqual(a.Receipts, b.Receipts) && reflect.DeepEqual(a.Comments, b.Comments) && equalGroupMemberResults(a.Members, b.Members)
+	return maps.EqualFunc(a.States, b.States, func(x, y ActionIssueState) bool { return x.Revision == y.Revision }) && reflect.DeepEqual(a.Receipts, b.Receipts) && reflect.DeepEqual(a.Comments, b.Comments) && equalGroupMemberResults(a.Members, b.Members) && reflect.DeepEqual(a.Bridges, b.Bridges)
 }

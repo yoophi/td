@@ -250,6 +250,10 @@ func (c *Client) recheckUndoWitnesses(ctx context.Context, witnesses []ActionJou
 	if err != nil {
 		return err
 	}
+	return c.checkUndoWitnessesSnapshot(ctx, snapshot, witnesses)
+}
+
+func (c *Client) checkUndoWitnessesSnapshot(ctx context.Context, snapshot *Snapshot, witnesses []ActionJournalRecord) error {
 	history, err := snapshot.ActionHistory("")
 	if err != nil {
 		return err

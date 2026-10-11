@@ -63,11 +63,20 @@ func TestGitHubJournalCLISequentialStartUpdateCommentsUndo(t *testing.T) {
 }
 
 func TestGitHubJournalCLISequentialGroupUndoRejectsUnprovenBridge(t *testing.T) {
+	testSequentialUndoRejectsUnprovenBridge(t, false)
+}
+
+func testSequentialUndoRejectsUnprovenBridge(t *testing.T, paired bool) {
+	t.Helper()
 	for _, mode := range []string{"foreign-title", "foreign-clock", "missing-effect", "foreign-author", "observed-inverse", "native-event"} {
 		t.Run(mode, func(t *testing.T) {
 			_, _, run := journalCLI(t)
 			useHandoffReviewFixture(t)
-			for _, args := range [][]string{{"create", "First"}, {"create", "Second"}, {"start", "gh-6", "gh-7"}, {"update", "gh-6", "gh-7", "--title", "Changed", "--comment", "Companion"}, {"undo"}} {
+			first := []string{"start", "gh-6", "gh-7"}
+			if paired {
+				first = []string{"update", "gh-6", "gh-7", "--title", "First command", "--comment", "First companion"}
+			}
+			for _, args := range [][]string{{"create", "First"}, {"create", "Second"}, first, {"update", "gh-6", "gh-7", "--title", "Changed", "--comment", "Companion"}, {"undo"}} {
 				if out, stderr, err := run(append(args, "--json")...); err != nil {
 					t.Fatal(args, out, stderr, err)
 				}
@@ -101,6 +110,15 @@ func TestGitHubJournalCLISequentialGroupUndoRejectsUnprovenBridge(t *testing.T) 
 				for i, row := range comments {
 					comment := row.(map[string]any)
 					body := comment["body"].(string)
+					parts := strings.SplitN(body, "<!-- td:action:", 2)
+					var journal struct{ Phase string }
+					if len(parts) != 2 {
+						continue
+					}
+					payload := strings.SplitN(parts[1], "\n", 2)
+					if len(payload) != 2 || json.Unmarshal([]byte(strings.TrimSuffix(payload[1], "\n-->")), &journal) != nil || journal.Phase != "undone" {
+						continue // Mutate the completed later command, not the selected earlier command.
+					}
 					if mode == "missing-effect" && strings.Contains(body, "<!-- td:action:v26\n") {
 						native["comments"] = append(comments[:i], comments[i+1:]...)
 						found = true
