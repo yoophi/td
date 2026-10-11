@@ -204,11 +204,13 @@ If-Match, returning saved revision/ETag. Move candidates preserve the board
 query even when a moved closed task bypasses the status filter.
 A virtual builtin is tied to its originating repository and materialized only
 after task/move validation. A carrier appearing after the virtual observation
-causes conflict, requiring refresh. Creation and position writes are separate
-GitHub requests: if positioning fails after creation, the error explicitly says
-the carrier was created. Removing a virtual position fails without creating a
+causes conflict, requiring refresh. Initial settings are included in the one
+carrier creation POST and its existing create journal (#83). Uncertain creation
+or confirmation errors identify the operation/journal for inspection; they do
+not cause an automatic retry. Removing a virtual position fails without creating a
 carrier; removing a saved position permits missing/deleted targets for cleanup.
-Restoration/undo and CLI/TUI adapters remain pending.
+CLI/TUI adapters share this writer. Later settings support guarded undo; builtin
+creation retains identity/history and requires explicit setting resets.
 
 Clients with strict v1 decoders must be upgraded before board carriers using the
 new field are written. Do not remove unknown fields or rewrite auxiliary bodies
@@ -651,8 +653,9 @@ board's query, without an implicit list deferral filter.
 Explicit CLI configuration edits are shared: name, TDQ, and `--view-mode` are
 saved together in one carrier update. Board history records the actual actor.
 The builtin cannot be renamed, filtered, or deleted; an explicit view/position
-write may materialize its virtual carrier. If a subsequent position write
-fails, the error reports that creation already occurred. `move` uses a positive,
+write may materialize its virtual carrier with those settings already present,
+as one tracked creation. Confirmation failures may leave that configured carrier
+present and must be inspected before retrying. `move` uses a positive,
 one-based slot among saved positions, matching the SQLite CLI contract;
 unpositioned cards retain query order. `unposition` also permits cleanup of a
 saved reference to a missing or logically deleted task.

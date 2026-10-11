@@ -42,7 +42,7 @@ func (f *moveBoardFixture) MoveBoardBeforeObserved(_ context.Context, b *ghstore
 	}
 	return b, f.failure
 }
-func TestGitHubBoardMoveFrozenObservationVisibleSubsetAndPartialCreation(t *testing.T) {
+func TestGitHubBoardMoveFrozenObservationVisibleSubsetAndSingleCreation(t *testing.T) {
 	f := &moveBoardFixture{viewBoardFixture: viewBoardFixture{boardSourceFixture: boardSourceFixture{
 		boards:  []ghstore.BoardRecord{{Board: models.Board{ID: "bd-gh-1", Name: "Original", ViewMode: "backlog"}, Number: 1, Details: ghstore.BoardDetails{Version: 1, ViewMode: "backlog"}}},
 		records: []ghstore.Record{{Issue: models.Issue{ID: "gh-1", Status: models.StatusOpen}}, {Issue: models.Issue{ID: "gh-2", Status: models.StatusOpen}}, {Issue: models.Issue{ID: "gh-3", Status: models.StatusOpen}}},
@@ -80,8 +80,9 @@ func TestGitHubBoardMoveFrozenObservationVisibleSubsetAndPartialCreation(t *test
 	f.boards[0].IsBuiltin = true
 	loaded = source.LoadBoard("bd-all-issues", DefaultBoardStatusFilter())
 	f.failure = errors.New("write outcome unknown")
-	if err := loaded.MoveStore.MoveBefore("gh-1", "", []string{"gh-1", "gh-3"}); err == nil || !strings.Contains(err.Error(), "carrier was created") || f.creates != 1 {
-		t.Fatalf("partial %v", err)
+	before := f.writes
+	if err := loaded.MoveStore.MoveBefore("gh-1", "", []string{"gh-1", "gh-3"}); err == nil || !strings.Contains(err.Error(), "write outcome unknown") || f.creates != 0 || f.writes != before+1 {
+		t.Fatalf("single creation %v", err)
 	}
 }
 

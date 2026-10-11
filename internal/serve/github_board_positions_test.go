@@ -19,7 +19,7 @@ type githubBoardPositionsFixture struct {
 	slot              int
 	candidates        []models.Issue
 	materializations  int
-	materializeErr    error
+	virtualWrites     int
 	gets              int
 }
 
@@ -46,9 +46,6 @@ func (f *githubBoardPositionsFixture) BoardQueryObserved(b *ghstore.BoardRecord)
 }
 func (f *githubBoardPositionsFixture) MaterializeBuiltinBoardObserved(_ context.Context, b *ghstore.BoardRecord, actor string) (*ghstore.BoardRecord, error) {
 	f.materializations++
-	if f.materializeErr != nil {
-		return nil, f.materializeErr
-	}
 	f.writes++
 	f.actor = actor
 	f.board = *b
@@ -57,6 +54,9 @@ func (f *githubBoardPositionsFixture) MaterializeBuiltinBoardObserved(_ context.
 }
 func (f *githubBoardPositionsFixture) MoveBoardPositionObserved(_ context.Context, b *ghstore.BoardRecord, id string, slot int, actor string) (*ghstore.BoardRecord, error) {
 	f.writes++
+	if b.Number == 0 {
+		f.virtualWrites++
+	}
 	f.issueID = id
 	f.slot = slot
 	f.actor = actor
@@ -67,6 +67,9 @@ func (f *githubBoardPositionsFixture) MoveBoardPositionObserved(_ context.Contex
 }
 func (f *githubBoardPositionsFixture) MoveBoardBeforeObserved(_ context.Context, b *ghstore.BoardRecord, id, before string, candidates []models.Issue, actor string) (*ghstore.BoardRecord, error) {
 	f.writes++
+	if b.Number == 0 {
+		f.virtualWrites++
+	}
 	f.issueID = id
 	f.beforeID = before
 	f.candidates = candidates
@@ -169,21 +172,24 @@ func TestGitHubBoardPositionHTTPValidationMovesAndBuiltin(t *testing.T) {
 	if f.writes != before || f.materializations != 0 {
 		t.Fatal("invalid virtual operations materialized")
 	}
-	f.materializeErr = &ghstore.ConflictError{ID: "bd-all-issues"}
+	f.failure = &ghstore.ConflictError{ID: "bd-all-issues"}
 	request("POST", "/v1/boards/bd-all-issues/issues", `{"issue_id":"gh-1"}`, "virtual", 409)
-	if f.writes != before {
-		t.Fatal("materialization conflict wrote")
+	if f.writes != before+1 || f.virtualWrites != 1 || f.materializations != 0 {
+		t.Fatal("virtual observation was not passed to the single store operation")
 	}
-	f.materializeErr = nil
-	f.failure = errors.New("permission denied during position write")
+	f.failure = errors.New("board creation journal ghc-101: write outcome may be unknown: permission denied")
 	message := request("POST", "/v1/boards/bd-all-issues/issues", `{"issue_id":"gh-1"}`, "virtual", 502)
-	if !strings.Contains(message, "carrier was created") || f.materializations != 2 {
+	if !strings.Contains(message, f.failure.Error()) || f.materializations != 0 || f.virtualWrites != 2 {
 		t.Fatal(message)
 	}
 	f.failure = nil
 	request("POST", "/v1/boards/bd-all-issues/issues", `{"issue_id":"gh-1","position":2}`, "", 200)
 	if f.slot != 2 || f.actor != "actual-web" {
 		t.Fatalf("builtin %+v", f)
+	}
+	request("POST", "/v1/boards/bd-all-issues/move", `{"issue_id":"gh-3","before_id":"gh-1"}`, "virtual", 200)
+	if f.virtualWrites != 4 || f.materializations != 0 || f.beforeID != "gh-1" {
+		t.Fatal("move materialized separately", f)
 	}
 	unsupported = true
 	request("POST", "/v1/boards/bd-gh-8/issues", `{"issue_id":"gh-1"}`, "", 501)

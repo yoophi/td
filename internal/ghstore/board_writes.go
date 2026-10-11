@@ -48,6 +48,12 @@ func (c *Client) CreateBoard(ctx context.Context, name, expression, actor string
 }
 
 func (c *Client) createBoard(ctx context.Context, name, expression, actor string, builtin bool) (*BoardRecord, error) {
+	return c.createBoardConfigured(ctx, name, expression, actor, builtin, nil)
+}
+
+// Initial builtin settings belong to the creation payload and its existing
+// create journal. There is no intermediate empty carrier or second PATCH.
+func (c *Client) createBoardConfigured(ctx context.Context, name, expression, actor string, builtin bool, initial *boardConfigMutation) (result *BoardRecord, err error) {
 	name = strings.TrimSpace(name)
 	if name == "" || strings.TrimSpace(actor) == "" {
 		return nil, &WorkflowInputError{Reason: "board creation requires a name and actual actor"}
@@ -55,6 +61,12 @@ func (c *Client) createBoard(ctx context.Context, name, expression, actor string
 	now := time.Now().UTC()
 	operation := "td-board-op-" + rand.Text()
 	details := BoardDetails{Version: 1, Builtin: builtin, Query: expression, ViewMode: "swimlanes", History: []BoardEvent{{OperationID: operation, Action: "create", SessionID: actor, At: now}}}
+	if initial != nil {
+		if err := initial.apply(&details); err != nil {
+			return nil, err
+		}
+		details.History[0].Reason = initial.reason
+	}
 	if err := details.validate(); err != nil {
 		return nil, &WorkflowInputError{Reason: err.Error()}
 	}
@@ -64,17 +76,23 @@ func (c *Client) createBoard(ctx context.Context, name, expression, actor string
 			return nil, &WorkflowInputError{Reason: "builtin must be named All Issues"}
 		}
 		except = "bd-all-issues"
+	}
+	checkCreation := func() error {
 		boards, err := c.ListBoards(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, b := range boards {
-			if b.IsBuiltin && b.Number > 0 {
-				return nil, &ConflictError{ID: "bd-all-issues"}
+			if builtin && b.IsBuiltin && b.Number > 0 {
+				return &ConflictError{ID: "bd-all-issues"}
+			}
+			if b.ID != except && strings.EqualFold(b.Name, name) {
+				return workflowStateError("board name %q already exists as %s; use a distinct name", name, b.ID)
 			}
 		}
+		return nil
 	}
-	if err := c.checkBoardName(ctx, name, except); err != nil {
+	if err := checkCreation(); err != nil {
 		return nil, err
 	}
 	body, err := encodeBody("Board configuration managed by td.", metadata{EntityKind: "board", Board: &details, OperationID: operation, Type: models.TypeTask, Priority: models.PriorityP2})
@@ -86,7 +104,12 @@ func (c *Client) createBoard(ctx context.Context, name, expression, actor string
 		return nil, err
 	}
 	if journal != nil {
-		if err := c.checkBoardName(ctx, name, except); err != nil {
+		defer func() {
+			if err != nil {
+				err = fmt.Errorf("board creation journal %s (operation %s): %w", journal.ID, operation, err)
+			}
+		}()
+		if err := checkCreation(); err != nil {
 			return nil, err
 		}
 	}
@@ -148,6 +171,19 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 		return nil, &WorkflowInputError{Reason: "board write requires an observation and actual actor"}
 	}
 	original := observed.observed
+	if observed.Number == 0 {
+		if original.repository != c.repo || original.Number != 0 || original.revision != ([32]byte{}) || observed.ID != "bd-all-issues" || !observed.IsBuiltin {
+			return nil, &WorkflowInputError{Reason: "builtin configuration requires a virtual observation from this repository"}
+		}
+		if deleted || changes.Name != nil || changes.Query != nil || mutation == nil {
+			return nil, &PolicyError{Reason: "cannot rename, filter or delete the builtin All Issues board"}
+		}
+		if mutation.action != "set_view_mode" && mutation.action != "set_position" && mutation.action != "move" {
+			return nil, workflowStateError("virtual board has no saved configuration; no write attempted")
+		}
+		// Use canonical defaults, never mutable public observation fields.
+		return c.createBoardConfigured(ctx, "All Issues", "", actor, true, mutation)
+	}
 	if original.repository != c.repo || original.revision == ([32]byte{}) || original.Number != observed.Number || original.Number <= 0 {
 		return nil, &WorkflowInputError{Reason: "board write requires a persisted observation from this repository"}
 	}

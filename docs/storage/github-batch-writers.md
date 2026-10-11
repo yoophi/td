@@ -316,10 +316,10 @@ same observer provenance in v19 members. The writer audit links the mixed
 writers above to their aggregate membership, execution and inverse evidence.
 
 Existing board/note updates mutate one carrier; rendering and filter loops do
-not constitute batch writes. Initial builtin-board materialization followed by
-a shared mode/position write still creates separate tracked actions. This
-implementable setup/undo boundary is recorded as #83 under the broader #9/#68
-gate, rather than declared an impossible API exception. Monitor view/visit
+not constitute batch writes. Initial builtin-board shared settings are part of
+one carrier-creation POST and create journal (#83), without a follow-up PATCH.
+Builtin creation retains the explicit carrier-preservation limit; settings can
+be reset explicitly and subsequent updates retain guarded undo. Monitor view/visit
 preferences remain device-local. Session cleanup and work-session
 start/end/tag removal change device-local JSON; remote journal undo must not
 claim to restore those local records. Portable history remains #66. Multipart

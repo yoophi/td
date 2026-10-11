@@ -17,7 +17,6 @@ type githubBoardPositionClient interface {
 	issuestore.GitHubBoardReader
 	Get(context.Context, string) (*ghstore.Record, error)
 	GetBoard(context.Context, string) (*ghstore.BoardRecord, error)
-	MaterializeBuiltinBoardObserved(context.Context, *ghstore.BoardRecord, string) (*ghstore.BoardRecord, error)
 	MoveBoardPositionObserved(context.Context, *ghstore.BoardRecord, string, int, string) (*ghstore.BoardRecord, error)
 	MoveBoardBeforeObserved(context.Context, *ghstore.BoardRecord, string, string, []models.Issue, string) (*ghstore.BoardRecord, error)
 	RemoveBoardPositionObserved(context.Context, *ghstore.BoardRecord, string, string) (*ghstore.BoardRecord, error)
@@ -59,19 +58,6 @@ func (s *GitHubWriteStore) openBoardPositions(w http.ResponseWriter, r *http.Req
 	}
 	return c, b, true
 }
-func (s *GitHubWriteStore) materializeBoard(ctx context.Context, c githubBoardPositionClient, b *ghstore.BoardRecord) (*ghstore.BoardRecord, bool, error) {
-	if b.Number > 0 {
-		return b, false, nil
-	}
-	persisted, err := c.MaterializeBuiltinBoardObserved(ctx, b, s.sessionID)
-	return persisted, err == nil, err
-}
-func boardPositionError(w http.ResponseWriter, err error, created bool) {
-	if created {
-		err = fmt.Errorf("builtin board carrier was created, but its position write failed; inspect GitHub before retrying: %w", err)
-	}
-	boardReadError(w, err)
-}
 func boardPositionResponse(w http.ResponseWriter, b *ghstore.BoardRecord) {
 	w.Header().Set("ETag", `"`+b.Revision()+`"`)
 	WriteSuccess(w, map[string]any{"positioned": true, "revision": b.Revision()}, 200)
@@ -91,14 +77,9 @@ func (s *GitHubWriteStore) positionBoardIssue(w http.ResponseWriter, r *http.Req
 		boardReadError(w, err)
 		return
 	}
-	b, created, err := s.materializeBoard(r.Context(), c, b)
-	if err != nil {
-		boardReadError(w, err)
-		return
-	}
 	updated, err := c.MoveBoardPositionObserved(r.Context(), b, body.IssueID, max(1, body.Position), s.sessionID)
 	if err != nil {
-		boardPositionError(w, err, created)
+		boardReadError(w, err)
 		return
 	}
 	boardPositionResponse(w, updated)
@@ -146,14 +127,9 @@ func (s *GitHubWriteStore) moveBoardIssue(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	b, created, err := s.materializeBoard(r.Context(), c, b)
-	if err != nil {
-		boardReadError(w, err)
-		return
-	}
 	updated, err := c.MoveBoardBeforeObserved(r.Context(), b, body.IssueID, body.BeforeID, candidates, s.sessionID)
 	if err != nil {
-		boardPositionError(w, err, created)
+		boardReadError(w, err)
 		return
 	}
 	boardPositionResponse(w, updated)

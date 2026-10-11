@@ -472,6 +472,57 @@ the supported compensation for custom entities. Builtin board materialization
 cannot be logically deleted under the builtin policy; select another board or
 explicitly adjust its settings while retaining identity/history.
 
+### Initial builtin settings (#83)
+
+The first CLI `board edit bd-all-issues --view-mode ...`, CLI `board move`, HTTP
+board position/move, or monitor board move constructs the requested settings
+before materializing the virtual builtin. The complete settings are sent in a
+single board-creation POST, with one existing v3 create intent/result. Its
+creation event reason records the requested mode, sort key, slot, or relative
+anchor and candidate order. No new journal schema is required. The setting is
+not a second PATCH that can fail after an empty carrier has been created.
+
+Invalid input and a builtin carrier observed before creation stop the write.
+The catalog is checked again after intent publication; a newly appeared carrier
+is not adopted or overwritten. GitHub still has no atomic catalog lock, so a
+simultaneous allocation detected after POST remains an explicit error. Response,
+readback or receipt failures retain the original error and journal/operation
+identity. They may leave the fully configured board present. Inspect the named
+journal and run `td undo --reconcile ghc-N` for a read-only preview; explicit
+`--apply` records the observed result without replaying the creation POST.
+
+As with existing standalone builtin creation, `td undo` cannot erase the
+carrier. After inspecting current settings, reset its shared mode with
+`td board edit bd-all-issues --view-mode swimlanes` and remove each applicable
+saved position with `td board unposition bd-all-issues gh-N`. A relative move
+can save positions for multiple preceding tasks, so inspect the complete
+creation intent. These explicit updates keep identity/history, use fresh
+conflict checks, and have their usual guarded undo. They are not a lossless
+undo of native creation. Monitor mode and visit preferences stay device-local.
+
+Regression coverage includes `TestBuiltinInitialConfiguration*`,
+`TestGitHubJournalCLIInitialBuiltinSettingsUseOneCreation`,
+`TestGitHubHTTPInitialBuiltinSettingsUseOneCreation` and
+`TestGitHubMonitorInitialBuiltinSettingsUseOneCreation`. Failure fixtures cover
+intent denial, uncertain creation, failed readback/receipt, catalog races and
+preview/apply/repeated reconciliation without repeating target writes.
+
+Native acceptance on 2026-10-11 used an isolated loopback server with Go 1.27.0
+and `yoophi/td-sample`. An HTTP initial position for `gh-138` materialized carrier
+[#207](https://github.com/yoophi/td-sample/issues/207) and one applied
+[creation journal](https://github.com/yoophi/td-sample/issues/127#issuecomment-6109402909).
+The frozen input, verified result and native board body matched, with the actual
+web session preserved. It completed in 37.667 s: 22 API invocations, 48 HTTP
+responses and three writes (intent, configured carrier, receipt). This is a
+first-setup observation, not a general latency or API-budget guarantee; broader
+read optimization remains #73. A guarded removal restored the empty positions,
+preserving the carrier and both history events. The referenced task was
+unchanged, no SQLite file appeared, and the isolated server was stopped.
+
+The ghstore, HTTP and monitor race suites passed, together with focused CLI
+board/auxiliary undo tests, command inventory/matrix checks and pinned Linux
+lint. These are the checks for this change, not a new full release validation.
+
 
 ### Creation collection visibility
 

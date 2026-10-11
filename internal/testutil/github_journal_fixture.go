@@ -46,10 +46,16 @@ type GitHubJournalReceipt struct {
 	Group            *struct {
 		Command string `json:"command"`
 	} `json:"group"`
-	Action       string `json:"action"`
-	Phase        string `json:"phase"`
-	SessionID    string `json:"session_id"`
-	CarrierID    string `json:"carrier_id"`
+	Action      string `json:"action"`
+	Phase       string `json:"phase"`
+	SessionID   string `json:"session_id"`
+	CarrierID   string `json:"carrier_id"`
+	CreateInput *struct {
+		Body string `json:"body"`
+	} `json:"create_input"`
+	After *struct {
+		Body string `json:"body"`
+	} `json:"after"`
 	CommentAfter *struct {
 		Author string `json:"author"`
 	} `json:"comment_after"`

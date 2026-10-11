@@ -790,6 +790,50 @@ func TestGitHubJournalCLITracksAuxiliaryEntityChangesAndHistoryIdentity(t *testi
 
 }
 
+func TestGitHubJournalCLIInitialBuiltinSettingsUseOneCreation(t *testing.T) {
+	for _, operation := range []string{"mode", "move"} {
+		t.Run(operation, func(t *testing.T) {
+			dir, actor, run := journalCLI(t)
+			args := []string{"board", "edit", "bd-all-issues", "--view-mode", "backlog", "--json"}
+			if operation == "move" {
+				args = []string{"board", "move", "bd-all-issues", "gh-1", "1", "--json"}
+			}
+			out, stderr, err := run(args...)
+			if err != nil || !json.Valid([]byte(out)) {
+				t.Fatal(out, stderr, err)
+			}
+			actions := fixtureAllJournals(t)
+			if len(actions) != 1 || actions[0].Action != "create" || actions[0].Phase != "applied" || actions[0].SessionID != actor || actions[0].CreateInput.Body != actions[0].After.Body {
+				t.Fatal("first board setting was split across actions", actions)
+			}
+			kind, id := actions[0].EntityIdentity()
+			if kind != "board" || id != "bd-all-issues" {
+				t.Fatal(kind, id)
+			}
+			out, stderr, err = run("undo", "--json")
+			if err == nil || !strings.Contains(out+stderr, "retain its carrier identity/history") {
+				t.Fatal("creation undo omitted retained identity limit", out, stderr, err)
+			}
+			// Subsequent explicit settings keep their normal inverse support.
+			out, stderr, err = run("board", "edit", "bd-all-issues", "--view-mode", "swimlanes", "--json")
+			if err != nil {
+				t.Fatal(out, stderr, err)
+			}
+			out, stderr, err = run("undo", "--json")
+			if err != nil {
+				t.Fatal(out, stderr, err)
+			}
+			actions = fixtureAllJournals(t)
+			if len(actions) != 2 || actions[1].Phase != "undone" || actions[0].Phase != "applied" {
+				t.Fatal("later settings cannot be undone independently", actions)
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(err) {
+				t.Fatal("GitHub board settings created SQLite", err)
+			}
+		})
+	}
+}
+
 func TestGitHubJournalCLIAuxiliarySequentialUndo(t *testing.T) {
 	for _, kind := range []string{"note", "board"} {
 		t.Run(kind, func(t *testing.T) {

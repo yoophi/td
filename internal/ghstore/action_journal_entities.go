@@ -183,7 +183,7 @@ func (a ActionJournal) EntityIdentity() (string, string) {
 func (a ActionJournal) CreationUndoLimit() string {
 	kind, id := a.EntityIdentity()
 	if kind == "board" && id == "bd-all-issues" {
-		return "builtin board materialization cannot be erased safely; select another board or explicitly adjust its settings while retaining the carrier identity/history"
+		return "builtin board materialization cannot be erased safely; retain its carrier identity/history and explicitly reset settings (td board edit bd-all-issues --view-mode swimlanes; td board unposition bd-all-issues gh-N for each saved position) after inspecting current settings"
 	}
 	command := "td delete " + id
 	if kind == "note" {

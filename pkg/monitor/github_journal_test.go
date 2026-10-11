@@ -256,3 +256,37 @@ func TestGitHubMonitorModelJournalsBoardAndNotesWriters(t *testing.T) {
 		t.Fatal(actions)
 	}
 }
+
+func TestGitHubMonitorInitialBuiltinSettingsUseOneCreation(t *testing.T) {
+	f := testutil.NewGitHubJournalFixture(t)
+	m, err := NewGitHubModel(context.Background(), f.Directory, time.Minute, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = m.Close() }()
+	source := m.BoardSource.(*GitHubBoardSource)
+	loaded := source.LoadBoard("bd-all-issues", DefaultBoardStatusFilter())
+	if loaded.Error != nil {
+		t.Fatal(loaded.Error)
+	}
+	if err := loaded.MoveStore.MoveBefore("gh-1", "", []string{"gh-1"}); err != nil {
+		t.Fatal(err)
+	}
+	actions := f.Journals(t)
+	if len(actions) != 1 || actions[0].Action != "create" || actions[0].Phase != "applied" || actions[0].SessionID != m.SessionID || actions[0].CreateInput.Body != actions[0].After.Body || !strings.Contains(actions[0].After.Body, `"positions":[{"issue_id":"gh-1"`) {
+		t.Fatal("monitor split initial settings from creation", actions)
+	}
+	requests, err := os.ReadFile(f.RequestsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(requests)), "\n") {
+		var request struct{ Method, Path string }
+		if err := json.Unmarshal([]byte(line), &request); err != nil {
+			t.Fatal(err)
+		}
+		if request.Method == "PATCH" && request.Path == "repos/owner/repo/issues/2" {
+			t.Fatal("monitor initial configuration required a second carrier write")
+		}
+	}
+}

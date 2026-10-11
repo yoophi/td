@@ -185,13 +185,6 @@ func runGitHubBoard(cmd *cobra.Command, args []string, cfg *models.Config) error
 		}
 		return nil
 	case "edit":
-		// The virtual builtin may only be materialized for an explicit mode change.
-		if board.Number == 0 && changes.Name == nil && changes.Query == nil && mode != nil {
-			board, err = client.MaterializeBuiltinBoardObserved(cmd.Context(), board, actor)
-			if err != nil {
-				return err
-			}
-		}
 		updated, err := client.UpdateBoardConfigObserved(cmd.Context(), board, changes, mode, actor)
 		if err != nil {
 			return err
@@ -220,19 +213,8 @@ func runGitHubBoard(cmd *cobra.Command, args []string, cfg *models.Config) error
 		if err != nil {
 			return err
 		}
-		materialized := false
-		if board.Number == 0 {
-			board, err = client.MaterializeBuiltinBoardObserved(cmd.Context(), board, actor)
-			if err != nil {
-				return err
-			}
-			materialized = true
-		}
 		updated, err := client.MoveBoardPositionObserved(cmd.Context(), board, issue.ID, position, actor)
 		if err != nil {
-			if materialized {
-				return fmt.Errorf("builtin board was saved, but position write failed; inspect GitHub before retrying: %w", err)
-			}
 			return err
 		}
 		return printGitHubBoardSaved(cmd, updated, "Set position on")

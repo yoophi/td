@@ -15,7 +15,6 @@ type BoardMoveStore interface {
 }
 type githubBoardMoveClient interface {
 	Get(context.Context, string) (*ghstore.Record, error)
-	MaterializeBuiltinBoardObserved(context.Context, *ghstore.BoardRecord, string) (*ghstore.BoardRecord, error)
 	MoveBoardBeforeObserved(context.Context, *ghstore.BoardRecord, string, string, []models.Issue, string) (*ghstore.BoardRecord, error)
 }
 type githubBoardMove struct {
@@ -56,20 +55,7 @@ func (m *githubBoardMove) MoveBefore(id, before string, visible []string) error 
 			}
 		}
 	}
-	observed := m.observed
-	created := false
-	if observed.Number == 0 {
-		b, err := writer.MaterializeBuiltinBoardObserved(m.source.ctx, &observed, m.source.actor)
-		if err != nil {
-			return err
-		}
-		observed = *b
-		created = true
-	}
-	_, err = writer.MoveBoardBeforeObserved(m.source.ctx, &observed, id, before, candidates, m.source.actor)
-	if err != nil && created {
-		return fmt.Errorf("builtin carrier was created, but move failed; inspect GitHub before retrying: %w", err)
-	}
+	_, err = writer.MoveBoardBeforeObserved(m.source.ctx, &m.observed, id, before, candidates, m.source.actor)
 	return err
 }
 

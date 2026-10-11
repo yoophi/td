@@ -57,14 +57,15 @@ transactions or recovery after arbitrary external changes.
 No omitted compound **task** writer was found in the listed CLI/HTTP/monitor
 routes. The audit did identify a separate setup boundary:
 
-- A virtual builtin board may first be materialized, then have its initial
-  shared mode/position changed. CLI `board edit --view-mode` / `board move`, HTTP
-  board position/move and monitor board movement perform those as separate
-  tracked writes. One undo does not represent the entire initial setup. This is
-  an implementable follow-up, [#83](https://github.com/yoophi/td/issues/83), required
-  by the broader #68/#9 completion gate. It is not an impossible API exception
-  or a new release-preparation requirement. Monitor view/last-visited preferences
-  are device-local and do not materialize the board.
+- [#83](https://github.com/yoophi/td/issues/83) combines a virtual builtin board's
+  initial shared mode/position with its creation: one carrier POST and one
+  existing create journal. CLI `board edit --view-mode` / `board move`, HTTP
+  board position/move and monitor board movement share this ghstore path. No
+  empty carrier is created first. The original setting/order request remains
+  in the creation event reason and complete intent body. Creation undo retains
+  the existing builtin carrier policy; explicit setting resets preserve its
+  identity/history. Later settings retain guarded update undo. Monitor
+  view/last-visited preferences are device-local and do not materialize a board.
 - Existing board/note updates mutate one carrier; rendering/filter loops are
   reads. Device-local focus, tags, work-session membership/end state, preferences
   and session cleanup are not restored by remote journal undo.

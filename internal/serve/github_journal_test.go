@@ -2,7 +2,9 @@ package serve
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -29,6 +31,7 @@ func journalHTTP(t *testing.T) (testutil.GitHubJournalFixture, string, func(stri
 	s.EnableGitHubWorkflow(store)
 	s.EnableGitHubDeletion(store)
 	s.EnableGitHubBoardWrites(store)
+	s.EnableGitHubBoardPositions(store)
 	request := func(method, path, body string, want int) string {
 		t.Helper()
 		w := httptest.NewRecorder()
@@ -132,5 +135,31 @@ func TestGitHubHTTPProductionFactoryJournalsBoardChanges(t *testing.T) {
 	}
 	if actions[0].Action != "create" || actions[1].Action != "board" || actions[2].Action != "board" {
 		t.Fatal(actions)
+	}
+}
+
+func TestGitHubHTTPInitialBuiltinSettingsUseOneCreation(t *testing.T) {
+	for _, path := range []string{"issues", "move"} {
+		t.Run(path, func(t *testing.T) {
+			f, actor, request := journalHTTP(t)
+			request("POST", "/v1/boards/bd-all-issues/"+path, `{"issue_id":"gh-1"}`, 200)
+			actions := f.Journals(t)
+			if len(actions) != 1 || actions[0].Action != "create" || actions[0].Phase != "applied" || actions[0].SessionID != actor || actions[0].CreateInput.Body != actions[0].After.Body || !strings.Contains(actions[0].After.Body, `"positions":[{"issue_id":"gh-1"`) {
+				t.Fatal("initial board position did not belong to its creation", actions)
+			}
+			requests, err := os.ReadFile(f.RequestsPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, line := range strings.Split(strings.TrimSpace(string(requests)), "\n") {
+				var request struct{ Method, Path string }
+				if err := json.Unmarshal([]byte(line), &request); err != nil {
+					t.Fatal(err)
+				}
+				if request.Method == "PATCH" && request.Path == "repos/owner/repo/issues/2" {
+					t.Fatal("HTTP initial configuration required a second carrier write")
+				}
+			}
+		})
 	}
 }

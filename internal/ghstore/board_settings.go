@@ -10,6 +10,7 @@ import (
 
 type boardConfigMutation struct {
 	action string
+	reason string
 	apply  func(*BoardDetails) error
 }
 
@@ -22,7 +23,7 @@ func (c *Client) UpdateBoardConfigObserved(ctx context.Context, board *BoardReco
 	if *mode != "swimlanes" && *mode != "backlog" {
 		return nil, &WorkflowInputError{Reason: "board view mode must be swimlanes or backlog"}
 	}
-	return c.writeBoardObserved(ctx, board, changes, false, actor, "", &boardConfigMutation{action: "set_view_mode", apply: func(d *BoardDetails) error { d.ViewMode = *mode; return nil }})
+	return c.writeBoardObserved(ctx, board, changes, false, actor, "", &boardConfigMutation{action: "set_view_mode", reason: "Initial view mode: " + *mode, apply: func(d *BoardDetails) error { d.ViewMode = *mode; return nil }})
 }
 
 func (c *Client) SetBoardViewModeObserved(ctx context.Context, board *BoardRecord, mode, actor string) (*BoardRecord, error) {
@@ -38,7 +39,7 @@ func (c *Client) SetBoardPositionObserved(ctx context.Context, board *BoardRecor
 	if err != nil || issueID != fmt.Sprintf("gh-%d", number) || position < 0 {
 		return nil, &WorkflowInputError{Reason: "board position requires a canonical gh-N issue and nonnegative sort key"}
 	}
-	return c.writeBoardObserved(ctx, board, BoardChanges{}, false, actor, "", &boardConfigMutation{action: "set_position", apply: func(d *BoardDetails) error {
+	return c.writeBoardObserved(ctx, board, BoardChanges{}, false, actor, "", &boardConfigMutation{action: "set_position", reason: fmt.Sprintf("Initial position: %s at sort key %d", issueID, position), apply: func(d *BoardDetails) error {
 		if _, err := c.Get(ctx, issueID); err != nil {
 			return fmt.Errorf("verify board position target (no write attempted): %w", err)
 		}
@@ -85,7 +86,7 @@ func (c *Client) MoveBoardPositionObserved(ctx context.Context, board *BoardReco
 	if err != nil || issueID != fmt.Sprintf("gh-%d", number) || slot < 1 {
 		return nil, &WorkflowInputError{Reason: "board move requires a canonical gh-N issue and a positive slot"}
 	}
-	return c.writeBoardObserved(ctx, board, BoardChanges{}, false, actor, "", &boardConfigMutation{action: "move", apply: func(d *BoardDetails) error {
+	return c.writeBoardObserved(ctx, board, BoardChanges{}, false, actor, "", &boardConfigMutation{action: "move", reason: fmt.Sprintf("Initial move: %s to slot %d", issueID, slot), apply: func(d *BoardDetails) error {
 		if _, err := c.Get(ctx, issueID); err != nil {
 			return fmt.Errorf("verify board move target (no write attempted): %w", err)
 		}

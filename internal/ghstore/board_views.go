@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/marcus/td/internal/models"
@@ -71,7 +72,12 @@ func (c *Client) MoveBoardBeforeObserved(ctx context.Context, board *BoardRecord
 	if issueID == beforeID {
 		return nil, &WorkflowInputError{Reason: "cannot move a task before itself"}
 	}
-	return c.writeBoardObserved(ctx, board, BoardChanges{}, false, actor, "", &boardConfigMutation{action: "move", apply: func(d *BoardDetails) error {
+	ids := make([]string, len(candidates))
+	for i, candidate := range candidates {
+		ids[i] = candidate.ID
+	}
+	reason := fmt.Sprintf("Initial move: %s before %q; candidate order: %s", issueID, beforeID, strings.Join(ids, ", "))
+	return c.writeBoardObserved(ctx, board, BoardChanges{}, false, actor, "", &boardConfigMutation{action: "move", reason: reason, apply: func(d *BoardDetails) error {
 		views, err := ApplyBoardPositions(&BoardRecord{Board: board.Board, Details: *d}, candidates)
 		if err != nil {
 			return err
