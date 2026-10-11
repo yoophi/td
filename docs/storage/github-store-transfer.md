@@ -44,7 +44,23 @@ pagination and are not HTTP request counts or quota guarantees.
 
 ## Remaining required work
 
-#90 still needs SQLite source collection and the versioned, capacity-bounded
+The SQLite collector `db.ReadSQLiteWorkspace` opens only an existing database
+with an encoded file URI and a private read-only connection. Every table read
+shares one read transaction, including logical deletions and historical task
+data, deleted notes, board queries and position tombstones. It requires the
+current schema and never initializes or migrates the source. Unsupported local
+action kinds are reported by count without exporting their payloads. Invalid
+note or position clocks fail collection instead of inventing timestamps.
+
+Tests verify the original database bytes remain unchanged, literal `?`/`#` and
+Unicode filenames work, missing/old schemas and cancellation fail without
+initialization, and concurrent committed writes do not change the read
+transaction's observation. A real temporary SQLite dataset retained 196 tasks,
+49 logs, 52 handoffs, 20 dependencies, 4 file links, 119 deleted tasks and 20
+scheduled tasks; its database SHA256 was unchanged after collection. The common
+SQLite initializer's separate literal-path bug is tracked by #91.
+
+#90 still needs the versioned, capacity-bounded
 input envelope with strict identity/reference/checksum validation. The source
 must be preserved; previews may not initialize, upgrade or mutate it. Original
 authors, sessions and reviews are historical provenance, not destination actors
