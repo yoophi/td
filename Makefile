@@ -53,9 +53,9 @@ lint lint-all lint-linux:
 	fi
 	GOOS=linux GOWORK=off GOTOOLCHAIN=go$(shell GOWORK=off go list -m -f '{{.GoVersion}}') golangci-lint run ./...
 
-# The CLI's subprocess integration suite can exceed Go's default 10m package
-# limit. Keep a finite shared budget for local, CI and release verification.
-TEST_TIMEOUT ?= 30m
+# The CLI's subprocess integration suite took 40m29s with workflow recovery
+# coverage. Keep a finite shared budget with headroom for cold CI runners.
+TEST_TIMEOUT ?= 60m
 
 test:
 	env -u TD_FEATURE_SYNC_AUTOSYNC -u TD_FEATURE_SYNC_CLI GOWORK=off go test -timeout "$(TEST_TIMEOUT)" ./...
