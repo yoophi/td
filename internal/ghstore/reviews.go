@@ -121,6 +121,13 @@ func (c *Client) stateEvents(ctx context.Context, id string) (string, error) {
 }
 
 func (c *Client) readStateEvents(ctx context.Context, id string) ([]nativeStateEvent, error) {
+	if observation, ok := ctx.Value(nativeEventObservationKey{}).(*nativeEventObservation); ok {
+		return observation.read(ctx, c, id)
+	}
+	return c.readStateEventsUncached(ctx, id)
+}
+
+func (c *Client) readStateEventsUncached(ctx context.Context, id string) ([]nativeStateEvent, error) {
 	n, err := Number(id)
 	if err != nil {
 		return nil, err

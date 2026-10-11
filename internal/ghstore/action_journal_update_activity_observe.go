@@ -106,6 +106,7 @@ func (c *Client) readUpdateActivity(ctx context.Context, root *ActionJournalReco
 }
 
 func (c *Client) fenceUpdateActivity(ctx context.Context, root *ActionJournalRecord, receipts []*ActionJournalRecord, state ActionIssueState, present bool, bridges ...[]ActionJournalRecord) error {
+	ctx = withNativeEventObservation(ctx)
 	current, err := c.readUpdateActivity(ctx, root)
 	if err != nil {
 		return err
@@ -122,6 +123,7 @@ func (c *Client) fenceUpdateActivity(ctx context.Context, root *ActionJournalRec
 }
 
 func (c *Client) observeUpdateActivity(ctx context.Context, root *ActionJournalRecord, normal bool) (*updateActivityObservation, error) {
+	ctx = withNativeEventObservation(ctx)
 	out, err := c.readUpdateActivity(ctx, root)
 	if err != nil {
 		return nil, err

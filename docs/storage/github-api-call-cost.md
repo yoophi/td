@@ -387,3 +387,63 @@ remain 5, 1 and 6 for start, recovery and undo respectively. The saved API
 invocations are exactly the removed point read and carrier collection per
 publication. The large-operation cost remains substantial; these results do
 not assert an API-limit guarantee for arbitrary workloads.
+
+### #73 native-event observations within a validation boundary
+
+The sequential paired-command CLI trace exposed repeated event collections
+inside one fresh proof check: the same completed command is a witness for both
+members, and each member rechecked every event baseline in that command.
+The actual CLI regression first failed with 290 event collection invocations
+and 50 adjacent repeated reads. Ordinary open-task field updates had no event
+proofs, so that initial experiment was not used as evidence of this duplication.
+
+Paired/update-activity observations and fences now allocate a private event
+observation. Witness checks in that same read-only boundary share it; every
+recorded baseline is still compared independently. Planning and the next fence
+allocate another observation, including after intent publication or a target
+write. There is no TTL/process cache and no replacement of fresh issue/comment
+collections, membership/receipt/author/session checks, or uncertain-write
+handling. Returned event arrays are copied, clients are isolated, cancellation
+is checked even on a hit, and errors are returned without automatic retries.
+The observation remains best-effort rather than atomic with a later write.
+
+The real CLI fixture creates two tasks, starts/reviews them, makes two paired
+points/comment updates, and undoes both while retaining the original native
+fields. It measures each command separately. Both zero and 1,000 additional
+historical native comments give the same invocation reduction:
+
+| Command | gh invocations before → after | Event collection invocations before → after |
+| --- | ---: | ---: |
+| Review both | 277 → 277 | 76 → 76 |
+| First paired update | 119 → 119 | 28 → 28 |
+| Second paired update | 119 → 119 | 28 → 28 |
+| Undo later command | 190 → 190 | 54 → 54 |
+| Undo earlier command through the completed-command witnesses | 240 → 190 | 104 → 54 |
+
+Here gh invocations include authentication commands, while the events column
+counts paginated API invocations. These are not HTTP page counts. The fixture
+returns each collection in one page: added history increases payload/processing
+work but cannot model GitHub's extra pagination requests. The two history sizes
+both pass native-field restoration and report zero adjacent duplicate reads.
+Baseline and candidate test durations use different race instrumentation and
+are not used to claim a latency speedup. Original single-command handoff/review
+cost and intentional reads across write boundaries are not claimed to improve.
+
+A GET-only integration against `yoophi/td-sample` compares two synthetic proof
+inputs against actual event collections for sample tasks 135/138. Two checks
+inside one boundary use two requests instead of four; the next boundary makes
+two fresh requests, and a differing expected event baseline is still rejected.
+No native compound command, task, receipt or access write is performed by this
+integration, so it does not claim a live compound-command latency measurement.
+Run it explicitly with `TD_GH73_NATIVE_DIR=<validated-sample-checkout>` and
+`go test -race ./internal/ghstore -run '^TestNativeEventObservationLiveReadOnly$'`.
+Ordinary CI skips this opt-in live test and runs the deterministic boundaries.
+
+Validation: full ghstore race 206.713 s; two-volume CLI race 159.452 s;
+sequential paired/update-activity foreign-change and partial-inverse recovery
+race 382.177 s; GET-only integration race 7.010 s. Native event changes, missing
+receipts/effects, foreign fields/clocks/authors, observed-only proof and uncertain
+completion/deletion continue to be rejected or reconciled without write replay.
+Local evidence: `artifacts/task-audit-2026-10-10/gh-73-*`, including the per-command
+comparison, baseline failures and native observation log. These savings do not
+establish a rate-limit guarantee for arbitrary repository/workload sizes.

@@ -128,6 +128,7 @@ func (c *Client) readPairedGroup(ctx context.Context, root *ActionJournalRecord)
 }
 
 func (c *Client) fencePairedGroup(ctx context.Context, root *ActionJournalRecord, receipts []*ActionJournalRecord, states map[string]ActionIssueState, present map[string]bool, bridges ...map[string][]ActionJournalRecord) error {
+	ctx = withNativeEventObservation(ctx)
 	current, err := c.readPairedGroup(ctx, root)
 	if err != nil {
 		return err
@@ -151,6 +152,7 @@ func (c *Client) fencePairedGroup(ctx context.Context, root *ActionJournalRecord
 }
 
 func (c *Client) observePairedGroup(ctx context.Context, root *ActionJournalRecord, normal bool) (*pairedGroupObservation, error) {
+	ctx = withNativeEventObservation(ctx)
 	out, err := c.readPairedGroup(ctx, root)
 	if err != nil {
 		return nil, err

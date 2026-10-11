@@ -208,6 +208,7 @@ func (c *Client) planUndo(ctx context.Context, action *ActionJournalRecord, curr
 	if err != nil {
 		return nil, nil, err
 	}
+	ctx = withNativeEventObservation(ctx)
 	plan, witnesses, err := planUndoThroughReceipts(action, current, sessionID, author, history)
 	if err != nil {
 		return nil, nil, err
@@ -258,6 +259,7 @@ func (c *Client) recheckUndoWitnesses(ctx context.Context, witnesses []ActionJou
 }
 
 func (c *Client) checkUndoWitnessesSnapshot(ctx context.Context, snapshot *Snapshot, witnesses []ActionJournalRecord) error {
+	ctx = ensureNativeEventObservation(ctx)
 	history, err := snapshot.ActionHistory("")
 	if err != nil {
 		return err
