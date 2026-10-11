@@ -49,25 +49,46 @@ func planUndoThroughReceipts(action *ActionJournalRecord, current *Record, sessi
 		}
 		seen[expected] = true
 		var edge *ActionJournalRecord
+		var restored *ActionIssueState
+		var edgeWitnesses []ActionJournalRecord
 		for i := range history {
 			a := &history[i]
-			if a.IssueID != action.IssueID || a.Before == nil || a.Before.Revision != expected || a.OperationID == action.OperationID {
+			if a.OperationID == action.OperationID || a.GroupOperationID != "" {
+				continue
+			}
+			matches := a.IssueID == action.IssueID && a.Before != nil && a.Before.Revision == expected
+			if a.Group != nil {
+				for _, member := range a.Group.Members {
+					matches = matches || member.IssueID == action.IssueID && member.Before.Revision == expected
+				}
+			}
+			if !matches {
 				continue
 			}
 			// Ambiguous edges and unfinished outcomes are not proof of restoration.
 			if edge != nil || a.Phase != "undone" || a.SessionID != sessionID || !strings.EqualFold(a.Author, author) || a.CarrierID != action.CarrierID {
 				return fail()
 			}
-			if a.GroupOperationID != "" || a.UpdateObservation != nil || a.CommentObservation != nil || a.NativeUndo != nil || a.UndoObservation != nil || a.validate() != nil || (a.Action != "comment_create" && scalarUndoScope(a) != nil) || !sameActionContents(*a.Before, *a.Restored) || a.Restored.UpdatedAt.Before(a.After.UpdatedAt) {
+			if a.Group != nil {
+				var err error
+				restored, edgeWitnesses, err = completedGroupBridge(a, action.IssueID, history)
+				if err != nil {
+					return nil, nil, err
+				}
+				edge = a
+				continue
+			}
+			if a.UpdateObservation != nil || a.CommentObservation != nil || a.NativeUndo != nil || a.UndoObservation != nil || a.validate() != nil || (a.Action != "comment_create" && scalarUndoScope(a) != nil) || !sameActionContents(*a.Before, *a.Restored) || a.Restored.UpdatedAt.Before(a.After.UpdatedAt) {
 				return fail()
 			}
-			edge = a
+			edge, restored = a, a.Restored
+			edgeWitnesses = []ActionJournalRecord{*a}
 		}
 		if edge == nil {
 			return fail()
 		}
-		witnesses = append(witnesses, *edge)
-		expected = edge.Restored.Revision
+		witnesses = append(witnesses, edgeWitnesses...)
+		expected = restored.Revision
 	}
 	// Only the ephemeral planner uses the proven revision. Original snapshots
 	// remain immutable in the intent and completion receipt.
@@ -90,16 +111,28 @@ func sameActionContents(a, b ActionIssueState) bool {
 }
 
 func verifyUndoWitnesses(witnesses, history []ActionJournalRecord) error {
+	groups := map[string]bool{}
 	for _, witness := range witnesses {
-		if witness.GroupOperationID != "" || witness.UpdateObservation != nil || witness.CommentObservation != nil || witness.NativeUndo != nil || witness.UndoObservation != nil {
+		if witness.Group != nil {
+			groups[witness.OperationID] = true
+			id := witness.IssueID
+			for _, member := range witness.Group.Inverse.Members {
+				if member.Status == "undone" {
+					id = member.IssueID
+					break
+				}
+			}
+			if _, _, err := completedGroupBridge(&witness, id, history); err != nil {
+				return err
+			}
+		}
+	}
+	for _, witness := range witnesses {
+		if witness.UpdateObservation != nil || witness.CommentObservation != nil || witness.NativeUndo != nil || witness.UndoObservation != nil || witness.GroupOperationID != "" && !groups[witness.GroupOperationID] {
 			return &ConflictError{ID: witness.IssueID}
 		}
 		matches := 0
-		edges := 0
 		for _, observed := range history {
-			if observed.IssueID == witness.IssueID && observed.Before != nil && observed.Before.Revision == witness.Before.Revision {
-				edges++
-			}
 			if observed.ID == witness.ID {
 				if !reflect.DeepEqual(observed, witness) {
 					return &ConflictError{ID: witness.IssueID}
@@ -107,7 +140,16 @@ func verifyUndoWitnesses(witnesses, history []ActionJournalRecord) error {
 				matches++
 			}
 		}
-		if matches != 1 || edges != 1 {
+		if matches != 1 {
+			return &ConflictError{ID: witness.IssueID}
+		}
+		if witness.Group != nil {
+			for _, member := range witness.Group.Members {
+				if revisionEdgeCount(history, member.IssueID, member.Before.Revision) != 1 {
+					return &ConflictError{ID: member.IssueID}
+				}
+			}
+		} else if witness.GroupOperationID == "" && revisionEdgeCount(history, witness.IssueID, witness.Before.Revision) != 1 {
 			return &ConflictError{ID: witness.IssueID}
 		}
 	}
@@ -174,6 +216,14 @@ func (c *Client) planUndo(ctx context.Context, action *ActionJournalRecord, curr
 		return nil, nil, err
 	}
 	for i := range witnesses {
+		if witnesses[i].Group != nil {
+			if witnesses[i].Group.pairedGroup() {
+				if err := c.verifyPairedGroupEvents(ctx, &witnesses[i]); err != nil {
+					return nil, nil, err
+				}
+			}
+			continue // Member receipts carry review/event proofs; the root has no snapshots.
+		}
 		if err := c.checkUndoOriginalReview(ctx, &witnesses[i], false); err != nil {
 			return nil, nil, err
 		}
@@ -208,6 +258,14 @@ func (c *Client) recheckUndoWitnesses(ctx context.Context, witnesses []ActionJou
 		return err
 	}
 	for i := range witnesses {
+		if witnesses[i].Group != nil {
+			if witnesses[i].Group.pairedGroup() {
+				if err := c.verifyPairedGroupEvents(ctx, &witnesses[i]); err != nil {
+					return err
+				}
+			}
+			continue // Member receipts carry review/event proofs; the root has no snapshots.
+		}
 		if err := c.checkUndoOriginalReview(ctx, &witnesses[i], false); err != nil {
 			return err
 		}

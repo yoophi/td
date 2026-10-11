@@ -192,6 +192,27 @@ observations and journal receipts remain intact for the mandatory bug
 fix [#84](https://github.com/yoophi/td/issues/84). No uncertain write was retried, and the fixtures remain logically visible
 for diagnosis rather than being silently cleaned up.
 
-This record does not declare #68 or #9 complete. Sequential compound inverses
-must pass before their final review; exact native event/identity restoration
-continues to be the separate API exclusion described above.
+The #84 correction verifies a completed exact-restoration group as one causal
+revision edge using its immutable root and full effect receipts. It checks
+same native author/session/carrier, original effect digests/order, all verified
+inverse states, and the final restored native revision. Individual group effects
+never independently authorize unrelated inverses. Original snapshots are not
+rewritten. Receipt-only observations and native compensations that retain new
+audit content do not become exact-restoration edges. Comment deletion and any
+recorded native-event/review proofs are checked again at write fences.
+
+Native #84 acceptance resumed the preserved sample `gh-208`/`gh-209` only after
+confirming that every field and clock still matched the previous verified update
+inverse. The corrected earlier start inverse succeeded (151.439 s), retaining
+native identity/creation/author and restoring the exact original title/body/state/
+labels. No SQLite file was created. The call used 80 API invocations/224 HTTP
+responses, including 8 writes; it read repository collections without per-task
+history enumeration. Repeated verification cost remains #73, not a claim of
+optimized request volume.
+
+CLI regression includes the original sequential command pattern and refuses
+foreign fields/clocks, missing effects, foreign authors and observed-only inverse
+proofs without target or journal writes. Native event changes that advance the
+issue clock also remain conflicts; review/event baselines, where recorded, keep
+their existing stricter event checks. Full final-source regression is still
+running. This record does not declare #68 or #9 complete.

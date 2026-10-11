@@ -92,8 +92,8 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 	if a.Phase == "undone" {
 		return &ActionUndoResult{Issue: &root, Journal: a, AlreadyUndone: true, GroupMembers: observed.Members, UndoOutcome: groupResultOutcome(a, true)}, nil
 	}
-	// Check every remaining member policy before the first inverse. No causal
-	// bridging or sibling changes are accepted as equivalent current revisions.
+	// Check every remaining member policy before the first inverse. A changed
+	// clock needs exact verified command receipts, never content equality alone.
 	for _, m := range observed.Members {
 		if m.Status != "applied" && m.Status != "observed" {
 			continue
@@ -120,7 +120,7 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 		if err := scalarUndoScope(receipt); err != nil {
 			return nil, err
 		}
-		if _, err := receipt.PlanIssueUndo(&current, session, user.Login); err != nil {
+		if _, _, err := c.planUndo(ctx, receipt, &current, session, user.Login); err != nil {
 			return nil, err
 		}
 		if err := c.checkUndoOriginalReview(ctx, receipt, false); err != nil {
@@ -157,6 +157,23 @@ func (c *Client) undoActionGroup(ctx context.Context, a *ActionJournalRecord, se
 		expected[m.IssueID] = m.State
 	}
 	fence := func() error {
+		witnesses := []ActionJournalRecord{}
+		seen := map[string]ActionJournalRecord{}
+		for _, bridge := range observed.Bridges {
+			for _, witness := range bridge {
+				if old, exists := seen[witness.ID]; exists {
+					if !reflect.DeepEqual(old, witness) {
+						return fmt.Errorf("group bridge has inconsistent receipt identity")
+					}
+					continue
+				}
+				seen[witness.ID] = witness
+				witnesses = append(witnesses, witness)
+			}
+		}
+		if err := c.recheckUndoWitnesses(ctx, witnesses); err != nil {
+			return err
+		}
 		body, err := renderExistingActionJournal(a)
 		if err != nil {
 			return err

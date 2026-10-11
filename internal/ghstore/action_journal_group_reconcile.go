@@ -9,6 +9,7 @@ import (
 )
 
 type groupObservation struct {
+	Bridges   map[string][]ActionJournalRecord
 	Members   []ActionGroupResultMember
 	Receipts  map[string]*ActionJournalRecord
 	Records   map[string]Record
@@ -38,7 +39,24 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 	if err != nil {
 		return nil, err
 	}
-	out := &groupObservation{Members: []ActionGroupResultMember{}, Receipts: map[string]*ActionJournalRecord{}, Records: map[string]Record{}}
+	out := &groupObservation{Bridges: map[string][]ActionJournalRecord{}, Members: []ActionGroupResultMember{}, Receipts: map[string]*ActionJournalRecord{}, Records: map[string]Record{}}
+	checkRevision := func(receipt *ActionJournalRecord, current *Record, state ActionIssueState) error {
+		if receipt.After != nil && state.Revision == receipt.After.Revision {
+			return nil
+		}
+		if normal || a.Phase == "prepared" || receipt.After == nil {
+			return &ConflictError{ID: receipt.IssueID}
+		}
+		_, witnesses, err := planUndoThroughReceipts(receipt, current, a.SessionID, a.Author, history)
+		if err != nil {
+			return err
+		}
+		if err := verifyCommentUndoWitnesses(snapshot, witnesses); err != nil {
+			return err
+		}
+		out.Bridges[receipt.IssueID] = witnesses
+		return nil
+	}
 	carriers, found := 0, 0
 	for _, record := range snapshot.records {
 		if record.meta.EntityKind == "journal" {
@@ -136,8 +154,8 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 				result.ReceiptID = receipt.ID
 				switch receipt.Phase {
 				case "applied":
-					if state.Revision != receipt.After.Revision {
-						return nil, &ConflictError{ID: m.IssueID}
+					if err := checkRevision(receipt, &current, state); err != nil {
+						return nil, err
 					}
 					result.Status = "applied"
 					out.Remaining = true
@@ -200,8 +218,8 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 					return nil, &ConflictError{ID: m.IssueID}
 				}
 			case "applied":
-				if receipt.After == nil || state.Revision != receipt.After.Revision {
-					return nil, &ConflictError{ID: m.IssueID}
+				if err := checkRevision(receipt, &current, state); err != nil {
+					return nil, err
 				}
 				if receipt.UpdateIntent != nil && receipt.UpdateIntent.NativeEvents != nil && !a.Group.hasPlannedInputs() {
 					events, err := c.readStateEvents(withReviewCost(ctx), m.IssueID)
@@ -227,14 +245,20 @@ func (c *Client) observeActionGroup(ctx context.Context, a *ActionJournalRecord,
 	if inverse {
 		saved = a.Group.Inverse
 	}
-	if saved != nil && !equalGroupMemberResults(saved.Members, out.Members) {
+	comparison := append([]ActionGroupResultMember{}, out.Members...)
+	for i := range comparison {
+		if len(out.Bridges[comparison[i].IssueID]) > 0 {
+			comparison[i].State = *out.Receipts[comparison[i].IssueID].After
+		}
+	}
+	if saved != nil && !equalGroupMemberResults(saved.Members, comparison) {
 		return nil, fmt.Errorf("group result or member revision changed after completion")
 	}
 	return out, nil
 }
 
 func sameGroupObservation(a, b *groupObservation) bool {
-	return equalGroupMemberResults(a.Members, b.Members) && reflect.DeepEqual(a.Receipts, b.Receipts)
+	return equalGroupMemberResults(a.Members, b.Members) && reflect.DeepEqual(a.Receipts, b.Receipts) && reflect.DeepEqual(a.Bridges, b.Bridges)
 }
 
 func (c *Client) writeGroupReceipt(ctx context.Context, a *ActionJournalRecord, next ActionJournal, fence func() error) (*ActionJournalRecord, error) {
