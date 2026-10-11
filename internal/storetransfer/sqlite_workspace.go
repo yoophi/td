@@ -14,6 +14,10 @@ import (
 // complete passive capsule, rather than recreate them as live boards.
 // Mapping ownership and destination freshness must be checked by the executor.
 func ProjectSQLiteWorkspace(source *Source, targetIDs map[string]string) (*db.SQLiteWorkspaceExport, error) {
+	return projectSQLiteWorkspace(source, targetIDs, nil)
+}
+
+func projectSQLiteWorkspace(source *Source, targetIDs map[string]string, adopted map[string]bool) (*db.SQLiteWorkspaceExport, error) {
 	if source == nil {
 		return nil, fmt.Errorf("source is required")
 	}
@@ -86,6 +90,9 @@ func ProjectSQLiteWorkspace(source *Source, targetIDs map[string]string) (*db.SQ
 		}
 		if board.IsBuiltin && id != "bd-all-issues" || !board.IsBuiltin && id == "bd-all-issues" {
 			return nil, fmt.Errorf("builtin board mapping differs")
+		}
+		if adopted[id] {
+			continue
 		}
 		q, err := RewriteQuery(board.Query, queryIDs)
 		if err != nil {

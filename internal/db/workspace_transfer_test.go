@@ -4,13 +4,69 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/transferlimit"
 )
+
+func TestOpenSQLiteTransferDestinationIsExplicitExistingAndNeverMigrates(t *testing.T) {
+	ctx := context.Background()
+	missing := t.TempDir()
+	if err := os.Mkdir(filepath.Join(missing, ".todos"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if database, err := OpenSQLiteTransferDestination(ctx, missing); err == nil || database != nil {
+		t.Fatal("missing database created")
+	}
+	if _, err := os.Stat(filepath.Join(missing, dbFile)); !os.IsNotExist(err) {
+		t.Fatal("missing destination mutated", err)
+	}
+	root := filepath.Join(t.TempDir(), "original")
+	database, err := Initialize(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+	literal := root + "?cache=shared#literal"
+	if err := os.Rename(root, literal); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.SetStore(literal, "gh-issue", &models.GitHubStoreConfig{Remote: "origin", Repo: "owner/repo"}); err != nil {
+		t.Fatal(err)
+	}
+	writer, err := OpenSQLiteTransferDestination(ctx, literal)
+	if err != nil {
+		t.Fatal("explicit target with literal path and GH selection rejected", err)
+	}
+	if _, err := writer.conn.Exec("UPDATE schema_info SET value='37' WHERE key='version'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(literal, dbFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if writer, err := OpenSQLiteTransferDestination(ctx, literal); err == nil || writer != nil || !strings.Contains(err.Error(), "no migration attempted") {
+		t.Fatal("older schema opened/migrated", err)
+	}
+	after, err := os.ReadFile(filepath.Join(literal, dbFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("older schema database changed")
+	}
+}
 
 func transferFixture(t *testing.T) (*DB, *SQLiteWorkspaceExport, *SQLiteWorkspaceExport, WorkspaceTransferArchive) {
 	t.Helper()

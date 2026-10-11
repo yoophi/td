@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +23,35 @@ type WorkspaceTransferArchive struct {
 	TargetNamespace string            `json:"target_namespace"`
 	SourceEnvelope  json.RawMessage   `json:"source_envelope"`
 	Mappings        map[string]string `json:"mappings"`
+}
+
+// OpenSQLiteTransferDestination explicitly opens an existing destination for
+// writes, even if its configured store is GitHub. It never initializes or
+// migrates, and mode=rw prevents a missing file from being silently created.
+func OpenSQLiteTransferDestination(ctx context.Context, baseDir string) (*DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	baseDir = ResolveBaseDir(baseDir)
+	path, err := filepath.Abs(filepath.Join(baseDir, dbFile))
+	if err != nil {
+		return nil, err
+	}
+	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=rw"}).String()
+	conn, err := OpenSQLite(dsn, OpenOptions{MaxOpenConns: 1})
+	if err != nil {
+		return nil, fmt.Errorf("open explicit SQLite transfer destination: %w", err)
+	}
+	var version string
+	if err := conn.QueryRowContext(ctx, "SELECT value FROM schema_info WHERE key='version'").Scan(&version); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("read SQLite transfer destination schema: %w", err)
+	}
+	if version != fmt.Sprint(SchemaVersion) {
+		_ = conn.Close()
+		return nil, fmt.Errorf("SQLite transfer destination schema %q differs from required %d; no migration attempted", version, SchemaVersion)
+	}
+	return &DB{conn: conn, baseDir: baseDir}, nil
 }
 
 // ApplyWorkspaceTransfer inserts an entire prepared workspace and its source

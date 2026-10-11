@@ -57,8 +57,12 @@ func BuildDataPlan(source, target *Source, bindings map[string]string) (*DataPla
 	plan := &DataPlan{Identities: *identity, Relations: []RelationPlan{}, Positions: []PositionPlan{}, BoardQueries: []BoardQueryPlan{}, Disclosures: []Disclosure{}}
 	keys := map[string]string{}
 	taskKeys := map[string]string{}
+	adopted := map[string]bool{}
 	for _, a := range identity.Assignments {
 		keys[a.SourceID] = a.SourceKey
+		if target.Envelope.Store == "sqlite" && a.Action == "adopt" {
+			adopted[a.SourceID] = true
+		}
 		if a.Kind == "task" {
 			taskKeys[a.SourceID] = a.SourceKey
 		}
@@ -68,6 +72,9 @@ func BuildDataPlan(source, target *Source, bindings map[string]string) (*DataPla
 		if kind == "blocks" && target.Envelope.Store == "gh-issue" {
 			handling = "passive_archive"
 		}
+		if adopted[from] {
+			handling = "passive_archive"
+		}
 		plan.Relations = append(plan.Relations, RelationPlan{kind, keys[from], keys[to], handling})
 	}
 	position := func(board, issue string, index int, added time.Time, deleted *time.Time) {
@@ -75,7 +82,7 @@ func BuildDataPlan(source, target *Source, bindings map[string]string) (*DataPla
 		if deleted != nil && target.Envelope.Store == "gh-issue" {
 			handling = "passive_archive"
 		}
-		if archivedSQLiteBoard(s, target.Envelope.Store, board) {
+		if archivedSQLiteBoard(s, target.Envelope.Store, board) || adopted[board] {
 			handling = "passive_archive"
 		}
 		plan.Positions = append(plan.Positions, PositionPlan{keys[board], keys[issue], index, added, deleted, handling})
@@ -86,7 +93,7 @@ func BuildDataPlan(source, target *Source, bindings map[string]string) (*DataPla
 			return err
 		}
 		handling := "apply"
-		if archivedSQLiteBoard(s, target.Envelope.Store, board) {
+		if archivedSQLiteBoard(s, target.Envelope.Store, board) || adopted[board] {
 			handling = "passive_archive"
 		}
 		row := BoardQueryPlan{Handling: handling, BoardKey: keys[board], Original: text, Rewrite: *r, PendingKeys: []string{}, MissingSourceIDs: []string{}}
@@ -244,21 +251,35 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 		}
 	}
 	archivedBoards := 0
+	adoptedTasks, adoptedNotes, adoptedBoards := 0, 0, 0
 	for _, a := range plan.Identities.Assignments {
 		if a.Action == "archive" {
 			archivedBoards++
 		}
+		if target.Envelope.Store == "sqlite" && a.Action == "adopt" {
+			switch a.Kind {
+			case "task":
+				adoptedTasks++
+			case "note":
+				adoptedNotes++
+			case "board":
+				adoptedBoards++
+			}
+		}
 	}
 	result := []Disclosure{
-		{"task_content_state_schedule_deletion", "preserve", tasks, "Plan task content, status/type/priority/acceptance/labels/sprint/files/schedule/logical deletion with mapped IDs; executor is not implemented by this report."},
-		{"notes_content_flags", "preserve", notes, "Plan note content and pinned/archived/deleted flags; original authors and clocks remain source provenance."},
-		{"boards_configuration_queries", "preserve", boards - archivedBoards, "Plan live board configuration and mapped queries; blocked queries require explicit policy or confirmed mappings before board writes. Device last-view state is excluded."},
+		{"task_content_state_schedule_deletion", "preserve", tasks - adoptedTasks, "Plan task content, status/type/priority/acceptance/labels/sprint/files/schedule/logical deletion with mapped IDs; executor is not implemented by this report."},
+		{"notes_content_flags", "preserve", notes - adoptedNotes, "Plan note content and pinned/archived/deleted flags; original authors and clocks remain source provenance."},
+		{"boards_configuration_queries", "preserve", boards - archivedBoards - adoptedBoards, "Plan live board configuration and mapped queries; blocked queries require explicit policy or confirmed mappings before board writes. Device last-view state is excluded."},
 		{"relationships", "preserve", activeRelations, "Plan current parents and dependencies using qualified source keys; archival legacy relations are listed separately and never activated."},
 		{"board_positions", "preserve", activePositions, "Plan board membership/order with mapped IDs; archival position tombstones are listed separately and never activated."},
 		{"original_actors_reviews_history", "passive_archive", history, "Count collected typed history records (projections can overlap raw native evidence). Original authors, sessions, reviews, transitions, logs, handoffs, snapshots and comments are provenance, not destination actors, active approvals or executable undo history."},
 		{"device_state_credentials", "excluded", 0, "Device session registries, credentials, focus/UI settings and local work bundles are not transfer input."},
 		{"text_search_identity_semantics", "limitation", 0, "Text remains unchanged; bare searches also match IDs, so matching behavior involving renamed IDs may differ."},
 		{"destination_access_and_receipts", "unverified", 0, "Observation does not prove future write permission, unchanged target state or completion receipt provenance."},
+	}
+	if n := adoptedTasks + adoptedNotes + adoptedBoards; n > 0 {
+		result = append(result, Disclosure{"explicit_sqlite_adoption", "reuse_existing", n, "Explicitly mapped destination entities remain unchanged, including their relations and board positions. Original source content/history remains in the passive capsule; new entities may reference the adopted IDs."})
 	}
 	if target.Envelope.Store == "gh-issue" {
 		blocks, deletedPositions := 0, 0

@@ -93,6 +93,24 @@ SQLite primitive against captured native input, not public CLI execution or a
 live GitHub destination. Checked execution, adoption policy, GitHub writes and
 checkpoint/resume remain required in #93/#94.
 
+`PrepareSQLiteWrite` now freezes the validated source and destination basis,
+allocates fresh random local IDs once, and resolves new entity references before
+opening a writer. Explicit `--map` adoption reuses a destination entity unchanged:
+it does not overwrite content, history, parents/dependencies, or board positions.
+The original adopted source rows remain in the full passive capsule. New rows
+may reference adopted tasks. Preview marks adopted-owned relationships, board
+queries and positions passive and reports reuse separately from new row counts.
+Returning a mapping copy or mutating public typed source projections cannot
+replace the frozen prepared rows.
+
+`OpenSQLiteTransferDestination` opens an existing, explicitly chosen SQLite
+file with an encoded URI and `mode=rw`, without running initialization or
+migrations. It does not use configured-backend fallback. A prepared write checks
+the handle's project and then uses the transaction's destination comparison.
+The caller still must initialize a new destination explicitly and reobserve it;
+new-destination orchestration, CLI activation, journal integration and persistent
+execution/checkpoint receipts are not implemented by these helpers.
+
 ## Source collection (#90)
 
 The GitHub collector `Client.ExportWorkspace` takes one fresh complete issue

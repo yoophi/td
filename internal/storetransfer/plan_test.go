@@ -9,7 +9,7 @@ import (
 	"github.com/marcus/td/internal/models"
 )
 
-func TestDataPlanPendingReferencesAndResolvedDestinationIDs(t *testing.T) {
+func TestDataPlanPendingReferencesAndAdoptedSQLiteEntities(t *testing.T) {
 	data := sqliteReferenceFixture()
 	data.Boards[0].Board.Query = `any(id, "parent", "note", "future")`
 	source, err := NewSQLite("source", data, 0)
@@ -55,15 +55,15 @@ func TestDataPlanPendingReferencesAndResolvedDestinationIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(relations) != 2 || relations[0].FromID != "new-child" || relations[0].ToID != "new-parent" {
-		t.Fatalf("source IDs leaked into destination relations: %+v", relations)
+	if len(relations) != 0 || plan.Relations[0].Handling != "passive_archive" {
+		t.Fatalf("adopted task relations became writes: %+v", relations)
 	}
 	positions, err := plan.ReadyPositions()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(positions) != 1 || positions[0].BoardID != "new-board" || positions[0].IssueID != "new-child" || positions[0].Position != 1 {
-		t.Fatalf("incorrect position mapping: %+v", positions)
+	if len(positions) != 0 || plan.Positions[0].Handling != "passive_archive" || plan.BoardQueries[0].Handling != "passive_archive" {
+		t.Fatalf("adopted board configuration became writes: %+v", positions)
 	}
 	if len(plan.BoardQueries[0].PendingKeys) != 0 || len(plan.BoardQueries[0].MissingSourceIDs) != 2 {
 		t.Fatal("missing references silently rewritten")
