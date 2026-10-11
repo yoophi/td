@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
@@ -63,11 +64,15 @@ func TestGitHubMixedUpdatePreflightsAllInputs(t *testing.T) {
 }
 
 func TestGitHubMixedUpdatePreservesValidCombinedEffects(t *testing.T) {
-	_, session, run := journalCLI(t)
+	// This sequence includes multi-target relationship and workflow commands;
+	// use the same bounded budget as the other workflow CLI fixtures.
+	_, session, run := journalCLIWithTimeout(t, 2*time.Minute)
 	useHandoffReviewFixture(t)
 	execute := func(args ...string) string {
 		t.Helper()
+		started := time.Now()
 		out, stderr, err := run(args...)
+		t.Logf("command %s completed in %s", args[0], time.Since(started))
 		if err != nil {
 			t.Fatal(args, out, stderr, err)
 		}
