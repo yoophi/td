@@ -24,24 +24,7 @@ func (c *Client) ExportIssues(ctx context.Context, all, includeActivity bool) ([
 		if err != nil {
 			return nil, err
 		}
-		result := []ExportedIssue{}
-		records := map[int]Record{}
-		for _, r := range snapshot.Issues(true) {
-			records[r.Number] = r
-		}
-		for _, entry := range snapshot.entries {
-			item := entry.Issue
-			r, ok := records[item.Number]
-			if !ok || (!all && r.DeletedAt != nil) {
-				continue
-			}
-			activity, err := snapshot.Activity(r.ID)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, ExportedIssue{Version: 1, Repository: c.repo, Record: r, Body: item.Body, NativeState: item.State, Author: item.User.Login, Activity: activity})
-		}
-		return result, nil
+		return snapshot.exportIssues(c.repo, all)
 	}
 	// Match SQLite export: closed tasks are always retained; --all additionally
 	// includes logical deletions. Export is a backup, not the default task list.
@@ -77,6 +60,27 @@ func (c *Client) ExportIssues(ctx context.Context, all, includeActivity bool) ([
 			activity := []models.Activity{}
 			result = append(result, ExportedIssue{Version: 1, Repository: c.repo, Record: *r, Body: item.Body, NativeState: item.State, Author: item.User.Login, Activity: activity})
 		}
+	}
+	return result, nil
+}
+
+func (s *Snapshot) exportIssues(repo string, all bool) ([]ExportedIssue, error) {
+	result := []ExportedIssue{}
+	records := map[int]Record{}
+	for _, r := range s.Issues(true) {
+		records[r.Number] = r
+	}
+	for _, entry := range s.entries {
+		item := entry.Issue
+		r, ok := records[item.Number]
+		if !ok || (!all && r.DeletedAt != nil) {
+			continue
+		}
+		activity, err := s.Activity(r.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, ExportedIssue{Version: 1, Repository: repo, Record: r, Body: item.Body, NativeState: item.State, Author: item.User.Login, Activity: activity})
 	}
 	return result, nil
 }

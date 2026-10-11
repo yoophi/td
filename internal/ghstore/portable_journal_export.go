@@ -13,15 +13,19 @@ func (c *Client) ExportJournal(ctx context.Context) (*PortableJournalBundle, err
 	if err != nil {
 		return nil, err
 	}
+	return snapshot.exportJournal(c.repo)
+}
+
+func (snapshot *Snapshot) exportJournal(repo string) (*PortableJournalBundle, error) {
 	actions, err := snapshot.ActionHistory("")
 	if err != nil {
 		return nil, err
 	}
-	current, err := newPortableJournal(c.repo, actions)
+	current, err := newPortableJournal(repo, actions)
 	if err != nil {
 		return nil, err
 	}
-	archives, err := snapshot.journalArchives(c.repo)
+	archives, err := snapshot.journalArchives(repo)
 	if err != nil {
 		return nil, err
 	}
