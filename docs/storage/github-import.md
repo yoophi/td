@@ -5,6 +5,11 @@ The #24 implementation now connects validated batch execution to the CLI.
 field/relationship updates and completion publication. Native GitHub verification
 and task review/closure remain pending; local fixture tests are not live proof.
 
+Command history and whole-import undo are a separate, unfinished #65 gate.
+See the [import command journal contract](github-import-command-journal.md) for
+execution ownership, explicit resume, undo/reimport generations and capacity
+requirements. The prepared-intent prototype has not been published remotely.
+
 `td import FILE --format json|md --dry-run [--force] [--json] [--source NAME]` reads a file;
 `FILE=-` reads stdin. A `.md` extension selects Markdown with the default format.
 Every input item is parsed and validated before remote lookup. The target must
@@ -51,8 +56,8 @@ recognizes versioned native-comment completion receipts that bind a source
 key and input digest to a target ID and target content basis. An unchanged
 completed import is skipped. A changed source requires explicit `--force`;
 a destination edited after completion is a conflict even with `--force`.
-Receipt reading does not add per-issue or per-comment API calls. No completion
-receipt is emitted by the current nonempty CLI path yet.
+Receipt reading does not add per-issue or per-comment API calls. The batch
+executor publishes completion receipts after verifying field and history results.
 
 The internal preparation/completion publishers check fresh destination content
 before writing their native comments and read it again afterwards. An uncertain

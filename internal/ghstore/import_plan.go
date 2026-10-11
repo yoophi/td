@@ -62,6 +62,30 @@ func (c *Client) planImport(ctx context.Context, items []ImportItem, force bool)
 	if err := ValidateImportItems(items); err != nil {
 		return nil, err
 	}
+	var snapshot *Snapshot
+	if len(items) != 0 {
+		var err error
+		snapshot, err = c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return c.planImportSnapshot(items, force, snapshot)
+}
+
+// The same source/destination contract validates a live preparation and the
+// original or resulting native observations saved in a command journal.
+func (c *Client) planImportSnapshot(items []ImportItem, force bool, snapshot *Snapshot) (*ImportPlan, error) {
+	return c.planImportObservation(items, force, snapshot, snapshotImportIdentities(snapshot))
+}
+
+// A command journal keeps full native observations for selected destinations
+// and a compact identity inventory for all original tasks. Both that reader
+// and a fresh remote plan use exactly the same target and checkpoint decisions.
+func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot *Snapshot, identities []ImportTargetIdentity) (*ImportPlan, error) {
+	if err := ValidateImportItems(items); err != nil {
+		return nil, err
+	}
 	plan := &ImportPlan{Version: 1, Repository: c.repo, DryRun: true, Rows: []ImportPlanRow{}, Warnings: []string{
 		"Native authors and timestamps cannot be impersonated; originals will be retained as provenance.",
 		"Historical reviews are not active approvals in the destination repository.",
@@ -70,11 +94,14 @@ func (c *Client) planImport(ctx context.Context, items []ImportItem, force bool)
 	if len(items) == 0 {
 		return plan, nil
 	}
-	snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+	if snapshot == nil || !snapshot.fullHistory {
+		return nil, fmt.Errorf("import plan requires complete native issue and comment observations")
+	}
+	plan.snapshot = snapshot
+	index, err := newImportTargetIndex(identities)
 	if err != nil {
 		return nil, err
 	}
-	plan.snapshot = snapshot
 	receipts, bases, err := snapshotImportReceipts(snapshot)
 	if err != nil {
 		return nil, err
@@ -93,18 +120,14 @@ func (c *Client) planImport(ctx context.Context, items []ImportItem, force bool)
 	}
 	records := snapshot.Issues(true)
 	byID := map[string]Record{}
-	byOperation := map[string]Record{}
 	for _, r := range records {
 		if _, ok := byID[r.ID]; ok {
 			return nil, fmt.Errorf("import target listing repeated %s", r.ID)
 		}
-		byID[r.ID] = r
-		if strings.HasPrefix(r.meta.OperationID, "td-import-v1-") {
-			if prior, ok := byOperation[r.meta.OperationID]; ok {
-				return nil, fmt.Errorf("import identity appears in both %s and %s; resolve duplicate targets before import", prior.ID, r.ID)
-			}
-			byOperation[r.meta.OperationID] = r
+		if operation, found := index.byID[r.ID]; !found || operation != r.meta.OperationID {
+			return nil, fmt.Errorf("import observation %s differs from its original identity mapping", r.ID)
 		}
+		byID[r.ID] = r
 	}
 	for _, e := range items {
 		digest, err := e.Digest()
@@ -134,7 +157,11 @@ func (c *Client) planImport(ctx context.Context, items []ImportItem, force bool)
 				row.Action = "overwrite"
 			}
 			row.SourceChanged = !r.UpdatedAt.Equal(e.Issue.UpdatedAt) || r.Title != e.Issue.Title || r.Description != e.Issue.Description
-		} else if r, ok := byOperation[row.OperationID]; ok {
+		} else if id, ok := index.byOperation[row.OperationID]; ok {
+			r, observed := byID[id]
+			if !observed {
+				return nil, fmt.Errorf("import destination %s is missing its original native observation", id)
+			}
 			row.TargetID = r.ID
 			row.Observed = &r
 			row.Action = "resume"

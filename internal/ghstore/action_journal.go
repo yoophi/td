@@ -87,6 +87,7 @@ func (s ActionIssueState) validate() error {
 // not authentication. GitHub supplies the comment author and timestamps.
 // Prepared records are never treated as successful or automatically replayed.
 type ActionJournal struct {
+	ImportCommand          *ActionImportCommand      `json:"import_command,omitempty"`
 	CreationCommand        *ActionCreationCommand    `json:"creation_command,omitempty"`
 	CreationOwner          string                    `json:"creation_owner,omitempty"`
 	WorkflowStep           int                       `json:"workflow_step,omitempty"`
@@ -152,6 +153,9 @@ func (a ActionJournal) validate() error {
 	}
 	if !identity(a.OperationID) || !identity(a.SessionID) {
 		return fmt.Errorf("action history requires operation and session identity")
+	}
+	if a.ImportCommand != nil || a.Action == "import" {
+		return a.validateImportCommand()
 	}
 	if err := a.validateCreationScope(); err != nil {
 		return err
@@ -364,6 +368,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 	if a.CreationOwner != "" {
 		start = actionCreationRelationsStart
 	}
+	if a.ImportCommand != nil {
+		start, target = actionImportCommandStart, "repository "+a.ImportCommand.Repository
+	}
 	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, target, a.Phase, start, data, markerEnd), nil
 }
 
@@ -388,7 +395,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionCreationCommandStart) {
+	if strings.HasPrefix(block, actionImportCommandStart) {
+		start = actionImportCommandStart
+	} else if strings.HasPrefix(block, actionCreationCommandStart) {
 		start = actionCreationCommandStart
 	} else if strings.HasPrefix(block, actionCreationRelationsStart) {
 		start = actionCreationRelationsStart
@@ -462,6 +471,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	}
 	if err := a.validate(); err != nil {
 		return nil, err
+	}
+	if (a.ImportCommand != nil) != (start == actionImportCommandStart) {
+		return nil, fmt.Errorf("import command version differs from payload")
 	}
 	if (a.CreationCommand != nil) != (start == actionCreationCommandStart) || (a.CreationOwner != "") != (start == actionCreationRelationsStart) || !creationNativeAuthor(a, comment.User.Login) {
 		return nil, fmt.Errorf("creation command version or native attribution differs from payload")
