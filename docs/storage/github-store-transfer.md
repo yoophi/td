@@ -155,6 +155,23 @@ integration and persistent checkpoint/resume are still required.
 
 ## GitHub passive workspace archive (#93, entity execution in progress)
 
+`PrepareGitHubWorkspace` now freezes validated SQLite/GitHub observations and
+checks all task import inputs, explicit reuse bindings, note/board projections,
+query support and board-name conflicts before writes. Maximum-width provisional
+task IDs are used only for reference/capacity validation; they are never returned
+as real mappings or installed in a source archive. Final capsule manifest capacity
+is checked with worst-width native identities before carrier bootstrap/allocation.
+Source bytes and returned task/reuse inputs are isolated from caller mutation.
+
+The prepared target comparison ignores only `observed_at`; source/native content,
+author/server clocks, comments, memberships and receipts remain in its basis.
+It rejects changed repositories or workspace data before writes, but is a
+conservative observation check rather than an atomic GitHub CAS guarantee.
+Recorded 196-task SQLite input passed preflight against the live GET-only
+`yoophi/td-sample` target with zero remote writes. This completes another
+execution preparation boundary, not the whole GitHub executor, adoption handling,
+durable checkpoint/resume or writer audit.
+
 `Client.CompletedImportMappings` now obtains a fresh complete import observation
 and returns task IDs only for unchanged imports with completion receipts and
 verified source history. Pending allocations, fields-only receipts, missing
