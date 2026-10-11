@@ -52,8 +52,8 @@ the source of a grant and does not include pending invitations. Collaborator
 listing requires access beyond ordinary issue access; denial remains an explicit
 failure with the original gh diagnostics, not a successful empty list.
 See [GitHub collaborator API](https://docs.github.com/en/rest/collaborators/collaborators#list-repository-collaborators)
-for the effective role semantics and required permissions. Native verification
-is still pending; this list alone does not establish administrator privileges.
+for the effective role semantics and required permissions. The native sample
+read is verified; this list alone does not establish administrator privileges.
 
 `td sp kick LOGIN` removes the repository collaborator grant using a single
 DELETE request after the usual repository/origin/authentication validation.
@@ -113,5 +113,50 @@ does not match the current origin automatically. Configure a deliberate remote,
 then use `config set store gh-issue --remote NAME` or `sp link OWNER/REPO --remote NAME`.
 The visibility option is rejected by SQLite handlers.
 
-Native repository acceptance and task review remain pending #29 requirements.
-#29 is not complete.
+## Acceptance scope and exceptions (#29)
+
+The implementation covers create, link, join, list (configured and account-wide),
+members, invite, role and kick. Origin selection remains device-local; repository
+creation and collaborator grants are shared GitHub changes. None of these paths
+migrates existing task data, grants organization membership, or contacts td-sync.
+
+The following td-sync meanings cannot be preserved by a GitHub repository API:
+
+- A repository-less GitHub store after unlink: explicitly switch to SQLite with
+  `td config set store sqlite`, or select another existing Git remote.
+- Join by email/invitation code or an interactive td-sync project picker: provide
+  `OWNER/REPO`; accept actual GitHub invitations separately in GitHub.
+- Automatic mapping of td-sync owner/writer/reader roles or numeric account IDs:
+  provide the literal GitHub login and permission. Organization custom roles
+  require `--custom-role`; personal repositories cannot select those roles.
+- Removal of all effective inherited access: manage organization/team grants in
+  GitHub separately. A successful collaborator removal does not establish this.
+
+These are explicit semantic exceptions with alternatives, rather than silent
+fallback or fabricated success. Repository checks, role validation and any
+single-attempt API failures retain their original diagnostics. Changing access
+is best-effort; the check and write are not an atomic transaction.
+
+Acceptance distinguishes live observation from controlled mutation fixtures.
+The exact source under review is `2256bc0`. Live commands use a disposable Git
+checkout pointing at `yoophi/td-sample`, with an enforced GET-only gh wrapper:
+configured list, matching link/join, members and credential-visible list;
+feature modes on/off and both `sp`/`sync-project` spellings are covered.
+Mismatch, force, unlink, email, td-sync role and unsupported personal-repository
+permissions must fail without changing selection, Git remotes or remote data.
+No SQLite database is created.
+
+Creation, invitation, role change and removal are checked by race-enabled
+command/client tests rather than creating repositories or changing real account
+access. They cover literal targets and arguments, collection pagination/empty
+results, API denial, malformed receipts, uncertain writes, invitation races,
+preserved configuration, single attempts, and SQLite feature routing. They do
+not prove a real organization-specific permission grant. API semantics were
+cross-checked with the linked official documentation on 2026-10-12.
+
+Local evidence is in `artifacts/task-audit-2026-10-10/gh-29-project-race.log`
+and `gh-29-native-continuation-summary.json`. The first native harness rejected
+implicit GET during setup; no remote write or store change occurred. Its
+continuation permits implicit GET without request data and still blocks all
+remote mutations. The original failed attempt is retained as harness evidence,
+not reported as a product failure or successful acceptance.
