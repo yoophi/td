@@ -203,9 +203,15 @@ preserves observed attribution and never repeats an uncertain target write.
 Compensated reimport rejects subsequent field/comment/native-event changes,
 partial inverses and attempts to use an old inverse over a newer source receipt,
 including with `--force`, before target or command writes.
-Mixed overwrite/create and graph-detachment interruption still need runtime
-acceptance beyond model tests. This does not claim live GitHub or complete
-import execution acceptance. Source/destination provenance already written by the
+Mixed overwrite/create and graph-detachment interruption now pass local CLI
+acceptance (#76): a lost first-detachment response leaves one original command,
+read-only reconciliation does not replay work, and explicit resume preserves
+the original input/before-state, native issue identities/authors and comments,
+and unrelated tasks. Each existing task receives exactly one detach and one
+final PATCH; the newly allocated task receives one final PATCH and is not
+allocated again. A completed repeat makes no writes. Whole undo of the resumed
+mixed command remains #77, and live GitHub acceptance remains #78.
+Source/destination provenance already written by the
 legacy executor is unchanged; reuse across that format and command documents is
 a future integration/efficiency concern, not a claim of zero storage duplication.
 

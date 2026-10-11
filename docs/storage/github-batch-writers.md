@@ -291,9 +291,11 @@ detachment and native provenance comments. Do not close #65 by excluding this
 path. Both import execution and preview now freeze and validate complete source
 envelopes before the first remote observation; allocation, replanning, graph
 projection and provenance retain those same inputs. Mixed overwrite/create and
-graph-detachment failure runtime checks, the #65 writer audit and native
-acceptance remain release gates, tracked as separate tasks under release
-preparation epic #74. Capacity errors may stop with explicit original errors and
+graph-detachment failure/recovery pass local CLI acceptance in #76, including
+native identity/history and original-input preservation without duplicate
+allocations or repeated PATCHes. Resumed whole-command undo (#77), the #65
+writer audit (#79) and native acceptance (#78) remain release gates, tracked as
+separate tasks under release preparation epic #74. Capacity errors may stop with explicit original errors and
 partial-effect disclosure; worst-case future result sizing is not a release
 gate. See [the import command contract](github-import-command-journal.md).
 
