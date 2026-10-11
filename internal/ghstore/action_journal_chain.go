@@ -221,6 +221,10 @@ func (c *Client) planUndo(ctx context.Context, action *ActionJournalRecord, curr
 				if err := c.verifyPairedGroupEvents(ctx, &witnesses[i]); err != nil {
 					return nil, nil, err
 				}
+			} else if witnesses[i].Group.updateActivityGroup() {
+				if err := c.verifyUpdateActivityEvents(ctx, &witnesses[i]); err != nil {
+					return nil, nil, err
+				}
 			}
 			continue // Member receipts carry review/event proofs; the root has no snapshots.
 		}
@@ -265,6 +269,10 @@ func (c *Client) checkUndoWitnessesSnapshot(ctx context.Context, snapshot *Snaps
 		if witnesses[i].Group != nil {
 			if witnesses[i].Group.pairedGroup() {
 				if err := c.verifyPairedGroupEvents(ctx, &witnesses[i]); err != nil {
+					return err
+				}
+			} else if witnesses[i].Group.updateActivityGroup() {
+				if err := c.verifyUpdateActivityEvents(ctx, &witnesses[i]); err != nil {
 					return err
 				}
 			}

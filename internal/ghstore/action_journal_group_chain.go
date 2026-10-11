@@ -41,6 +41,11 @@ func completedGroupBridge(root *ActionJournalRecord, id string, history []Action
 		}
 	}
 	var restored *ActionIssueState
+	if root.Group.updateActivityGroup() {
+		if err := validateUpdateActivityForward(root, chains[root.IssueID]); err != nil {
+			return nil, nil, err
+		}
+	}
 	for i, member := range root.Group.Members {
 		forward, inverse := root.Group.Forward.Members[i], root.Group.Inverse.Members[i]
 		chain := chains[member.IssueID]

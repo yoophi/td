@@ -275,3 +275,30 @@ has passed lint/cross-build; its broad test job remains a #68 gate. Required
 dedicated update/activity sequential support remains #86, so neither #68 nor
 #9 is complete. Disposable sample tasks are being logically deleted while
 retaining native IDs and journal history.
+
+The #85 sample tasks were logically deleted in one successful command (66.430 s),
+then confirmed with a fresh repository collection read. Its cleanup harness
+misread the command's JSON array after the write; corrected read-only validation
+confirmed both deletions without replaying them. #85 is closed after genuine
+self-review, and its completion notification was sent.
+
+## Dedicated scheduling/file activity sequence (#86)
+
+The real CLI reproduction failed for all four commands `due`, `defer`, `link`
+and `unlink` before the correction (34.279 s). Their dedicated update/activity
+observer now retains the fresh full history and verifies completed-command
+bridges at observation and every inverse write fence. Comment preflight and
+member planning permit a revision conflict only through that verified evidence.
+Original observations/receipts remain immutable. Completed update/activity
+witnesses also validate original forward digests and recorded native events.
+
+All four original CLI sequences passed after the correction (44.521 s). The
+reverse ordering, where a scheduling/file activity command follows a field/
+comment update, passed the race regression for all four commands (82.014 s).
+Sequential partial inverse recovery passed both reply-loss/receipt-denial
+scenarios without native mutation replay (59.363 s). Linux lint reported zero
+issues. The original scheduling/file sequence and foreign-change/missing-effect/
+observed-proof rejection race passed (207.670 s), and full ghstore race passed
+(210.459 s). Existing update/activity writer recovery regression and native
+acceptance remain pending gates. #86 is still in progress; this record does
+not claim #68 or #9 complete.

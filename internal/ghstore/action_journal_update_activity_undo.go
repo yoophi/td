@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -37,6 +38,15 @@ func updateActivityUndoPlan(action *ActionJournalRecord, current *Record, sessio
 	return probe.PlanIssueUndo(current, session, author)
 }
 
+func (o *updateActivityObservation) planUndo(action *ActionJournalRecord, current *Record, session, author string) (*IssueUndoPlan, error) {
+	plan, err := updateActivityUndoPlan(action, current, session, author, o.Receipts)
+	var conflict *ConflictError
+	if errors.As(err, &conflict) && len(o.Bridges) > 0 {
+		plan, _, err = planUndoThroughReceipts(action, current, session, author, o.History)
+	}
+	return plan, err
+}
+
 func (c *Client) undoUpdateActivity(ctx context.Context, root *ActionJournalRecord, session string) (*ActionUndoResult, error) {
 	if root.SessionID != session {
 		return nil, fmt.Errorf("update/activity undo requires its original session")
@@ -68,7 +78,7 @@ func (c *Client) undoUpdateActivity(ctx context.Context, root *ActionJournalReco
 			continue
 		}
 		if receipt.Action == "comment_create" {
-			if _, err := receipt.planActionUndo(observed.Current, session, user.Login); err != nil {
+			if _, err := observed.planUndo(receipt, observed.Current, session, user.Login); err != nil {
 				return nil, err
 			}
 			if err := c.readNativeComment(ctx, receipt.CommentAfter); err != nil {
@@ -90,7 +100,7 @@ func (c *Client) undoUpdateActivity(ctx context.Context, root *ActionJournalReco
 		next := root.ActionJournal
 		next.Phase, next.UndoOperationID = "undo_prepared", "td-op-"+rand.Text()
 		written, err := c.writeGroupReceipt(ctx, root, next, func() error {
-			return c.fenceUpdateActivity(ctx, root, observed.Receipts, observed.State, observed.Comment != nil)
+			return c.fenceUpdateActivity(ctx, root, observed.Receipts, observed.State, observed.Comment != nil, observed.Bridges)
 		})
 		if err != nil {
 			return nil, err
@@ -102,7 +112,7 @@ func (c *Client) undoUpdateActivity(ctx context.Context, root *ActionJournalReco
 		if member.Phase == "prepared" || member.Phase == "undone" {
 			continue
 		}
-		if err := c.fenceUpdateActivity(ctx, root, observed.Receipts, observed.State, observed.Comment != nil); err != nil {
+		if err := c.fenceUpdateActivity(ctx, root, observed.Receipts, observed.State, observed.Comment != nil, observed.Bridges); err != nil {
 			return nil, err
 		}
 		fenceMember := func(actual *ActionJournalRecord, current *Record, present bool) error {
@@ -112,7 +122,7 @@ func (c *Client) undoUpdateActivity(ctx context.Context, root *ActionJournalReco
 			if err != nil {
 				return err
 			}
-			return c.fenceUpdateActivity(ctx, root, want, state, present)
+			return c.fenceUpdateActivity(ctx, root, want, state, present, observed.Bridges)
 		}
 		gate := &groupUndoGate{OperationID: root.OperationID,
 			Member: func(actual *ActionJournalRecord) error {
@@ -122,7 +132,7 @@ func (c *Client) undoUpdateActivity(ctx context.Context, root *ActionJournalReco
 				return nil
 			},
 			Plan: func(actual *ActionJournalRecord, current *Record, session, author string) (*IssueUndoPlan, error) {
-				return updateActivityUndoPlan(actual, current, session, author, observed.Receipts)
+				return observed.planUndo(actual, current, session, author)
 			},
 			CommentFence: func(actual *ActionJournalRecord, current *Record, deleted bool) error {
 				return fenceMember(actual, current, !deleted)

@@ -9,7 +9,7 @@ import (
 )
 
 func sameUpdateActivityObservation(a, b *updateActivityObservation) bool {
-	return a.State.Revision == b.State.Revision && reflect.DeepEqual(a.Receipts, b.Receipts) && reflect.DeepEqual(a.Comment, b.Comment) && equalGroupMemberResults(a.Members, b.Members)
+	return a.State.Revision == b.State.Revision && reflect.DeepEqual(a.Receipts, b.Receipts) && reflect.DeepEqual(a.Comment, b.Comment) && equalGroupMemberResults(a.Members, b.Members) && reflect.DeepEqual(a.Bridges, b.Bridges)
 }
 
 func (c *Client) reconcileUpdateActivity(ctx context.Context, root *ActionJournalRecord, session, actor string, apply, normal bool) (*ActionReconcileResult, error) {
@@ -32,7 +32,7 @@ func (c *Client) reconcileUpdateActivity(ctx context.Context, root *ActionJourna
 		return result, nil
 	}
 	if observed.Pending != nil {
-		if err := c.fenceUpdateActivity(ctx, root, observed.Receipts, observed.State, observed.Comment != nil); err != nil {
+		if err := c.fenceUpdateActivity(ctx, root, observed.Receipts, observed.State, observed.Comment != nil, observed.Bridges); err != nil {
 			return nil, err
 		}
 		if _, err := c.ReconcileAction(ctx, observed.Pending.ID, session, true); err != nil {

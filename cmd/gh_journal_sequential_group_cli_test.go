@@ -66,7 +66,7 @@ func TestGitHubJournalCLISequentialGroupUndoRejectsUnprovenBridge(t *testing.T) 
 	testSequentialUndoRejectsUnprovenBridge(t, false)
 }
 
-func testSequentialUndoRejectsUnprovenBridge(t *testing.T, paired bool) {
+func testSequentialUndoRejectsUnprovenBridge(t *testing.T, paired bool, firstCommand ...[]string) {
 	t.Helper()
 	for _, mode := range []string{"foreign-title", "foreign-clock", "missing-effect", "foreign-author", "observed-inverse", "native-event"} {
 		t.Run(mode, func(t *testing.T) {
@@ -75,6 +75,9 @@ func testSequentialUndoRejectsUnprovenBridge(t *testing.T, paired bool) {
 			first := []string{"start", "gh-6", "gh-7"}
 			if paired {
 				first = []string{"update", "gh-6", "gh-7", "--title", "First command", "--comment", "First companion"}
+			}
+			if len(firstCommand) > 0 {
+				first = firstCommand[0]
 			}
 			for _, args := range [][]string{{"create", "First"}, {"create", "Second"}, first, {"update", "gh-6", "gh-7", "--title", "Changed", "--comment", "Companion"}, {"undo"}} {
 				if out, stderr, err := run(append(args, "--json")...); err != nil {

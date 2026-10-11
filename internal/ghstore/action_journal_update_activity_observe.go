@@ -8,6 +8,9 @@ import (
 )
 
 type updateActivityObservation struct {
+	Snapshot  *Snapshot
+	History   []ActionJournalRecord
+	Bridges   []ActionJournalRecord
 	Current   *Record
 	State     ActionIssueState
 	Receipts  []*ActionJournalRecord
@@ -28,7 +31,7 @@ func (c *Client) readUpdateActivity(ctx context.Context, root *ActionJournalReco
 	if err != nil {
 		return nil, err
 	}
-	out := &updateActivityObservation{}
+	out := &updateActivityObservation{Snapshot: snapshot, History: history}
 	carriers, found := 0, false
 	for i := range snapshot.records {
 		r := &snapshot.records[i]
@@ -102,10 +105,15 @@ func (c *Client) readUpdateActivity(ctx context.Context, root *ActionJournalReco
 	return out, nil
 }
 
-func (c *Client) fenceUpdateActivity(ctx context.Context, root *ActionJournalRecord, receipts []*ActionJournalRecord, state ActionIssueState, present bool) error {
+func (c *Client) fenceUpdateActivity(ctx context.Context, root *ActionJournalRecord, receipts []*ActionJournalRecord, state ActionIssueState, present bool, bridges ...[]ActionJournalRecord) error {
 	current, err := c.readUpdateActivity(ctx, root)
 	if err != nil {
 		return err
+	}
+	for _, witnesses := range bridges {
+		if err := c.checkUndoWitnessesSnapshot(ctx, current.Snapshot, witnesses); err != nil {
+			return err
+		}
 	}
 	if current.State.Revision != state.Revision || !slices.EqualFunc(current.Receipts, receipts, func(a, b *ActionJournalRecord) bool { return reflect.DeepEqual(a, b) }) || (current.Comment != nil) != present {
 		return fmt.Errorf("update/activity task, native comment or effect receipts changed: %w", &ConflictError{ID: root.IssueID})
@@ -200,7 +208,25 @@ func (c *Client) observeUpdateActivity(ctx context.Context, root *ActionJournalR
 		}
 	}
 	if out.State.Revision != expected.Revision {
-		return nil, &ConflictError{ID: root.IssueID}
+		var terminal *ActionJournalRecord
+		if !normal && root.Phase != "prepared" && root.Phase != "undone" {
+			for _, receipt := range out.Receipts {
+				if receipt.Phase == "applied" && receipt.After.Revision == expected.Revision {
+					terminal = receipt
+				}
+			}
+		}
+		if terminal == nil {
+			return nil, &ConflictError{ID: root.IssueID}
+		}
+		_, witnesses, err := planUndoThroughReceipts(terminal, out.Current, root.SessionID, root.Author, out.History)
+		if err != nil {
+			return nil, err
+		}
+		if err := c.checkUndoWitnessesSnapshot(ctx, out.Snapshot, witnesses); err != nil {
+			return nil, err
+		}
+		out.Bridges = witnesses
 	}
 	if normal && (out.Pending != nil || !inverse && out.Partial) {
 		return nil, fmt.Errorf("successful update/activity callback omitted or failed to verify an effect")
@@ -211,7 +237,13 @@ func (c *Client) observeUpdateActivity(ctx context.Context, root *ActionJournalR
 	if inverse {
 		saved = root.Group.Inverse
 	}
-	if saved != nil && !equalGroupMemberResults(saved.Members, out.Members) {
+	// Compare saved clocks without rewriting original receipts or the actual
+	// current state used for the inverse and each fresh write fence.
+	comparison := result
+	if len(out.Bridges) > 0 {
+		comparison.State = expected
+	}
+	if saved != nil && !equalGroupMemberResults(saved.Members, []ActionGroupResultMember{comparison}) {
 		return nil, fmt.Errorf("update/activity completed result changed")
 	}
 	return out, nil

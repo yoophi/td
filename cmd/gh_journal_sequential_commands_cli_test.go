@@ -10,6 +10,11 @@ import (
 )
 
 func TestGitHubJournalCLISequentialPairedInverseRecovery(t *testing.T) {
+	testSequentialPairedInverseRecovery(t, nil)
+}
+
+func testSequentialPairedInverseRecovery(t *testing.T, firstCommand []string) {
+	t.Helper()
 	for _, failure := range []string{"undo-completion-denied", "delete-lost"} {
 		t.Run(failure, func(t *testing.T) {
 			_, _, run := journalCLI(t)
@@ -33,7 +38,11 @@ func TestGitHubJournalCLISequentialPairedInverseRecovery(t *testing.T) {
 			execute("create", "First")
 			execute("create", "Second")
 			original := read()
-			execute("update", "gh-6", "gh-7", "--title", "First command", "--comment", "First companion")
+			if firstCommand == nil {
+				execute("update", "gh-6", "gh-7", "--title", "First command", "--comment", "First companion")
+			} else {
+				execute(firstCommand...)
+			}
 			var rows []struct{ ID string }
 			last := execute("last", "--n", "1")
 			if json.Unmarshal([]byte(last), &rows) != nil || len(rows) != 1 {
