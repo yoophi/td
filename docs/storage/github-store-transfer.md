@@ -433,3 +433,14 @@ self-reviewed against #92's acceptance criteria; storetransfer, query, db and
 ghstore race suites passed. This does not complete the parent transfer task.
 Creation receipt verification and checkpoint reconciliation belong to
 the checked executor/resume stages (#93/#94), not to this read-only plan.
+
+The GitHub execution preparation now has a local `Checkpoint` boundary. It
+captures the exact checksummed source and target observations, explicit destination
+and adoption bindings, and one generated operation ID. Reading repeats strict
+JSON, checksum, identity and pure workspace preflight validation. Publishing
+syncs a private 0600 sibling file and uses a hard link so an existing checkpoint
+cannot be overwritten. Capacity errors occur before file creation; filesystem
+errors retain their original cause. An error after publication requires inspection
+before another attempt. Destination paths remain local controller state and are
+not included in remote provenance. This is not yet wired to GitHub CLI execution
+and does not implement phase receipts, reconciliation or resume.
