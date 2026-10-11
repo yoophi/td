@@ -32,7 +32,7 @@ func (c *Client) ExportIssues(ctx context.Context, all, includeActivity bool) ([
 		for _, entry := range snapshot.entries {
 			item := entry.Issue
 			r, ok := records[item.Number]
-			if !ok || (!all && (item.State != "open" || r.DeletedAt != nil)) {
+			if !ok || (!all && r.DeletedAt != nil) {
 				continue
 			}
 			activity, err := snapshot.Activity(r.ID)
@@ -43,11 +43,9 @@ func (c *Client) ExportIssues(ctx context.Context, all, includeActivity bool) ([
 		}
 		return result, nil
 	}
-	state := "open"
-	if all {
-		state = "all"
-	}
-	data, err := c.request(ctx, "GET", "/issues?state="+state+"&per_page=100", nil, true)
+	// Match SQLite export: closed tasks are always retained; --all additionally
+	// includes logical deletions. Export is a backup, not the default task list.
+	data, err := c.request(ctx, "GET", "/issues?state=all&per_page=100", nil, true)
 	if err != nil {
 		return nil, err
 	}

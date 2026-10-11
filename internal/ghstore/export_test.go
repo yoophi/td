@@ -44,7 +44,7 @@ func TestExportIssuesPaginationAuthorsDeletedAndCost(t *testing.T) {
 	}
 	calls = nil
 	rows, err = c.ExportIssues(context.Background(), false, false)
-	if err != nil || len(rows) != 1 || len(rows[0].Activity) != 0 || !reflect.DeepEqual(calls, []string{"repos/owner/repo/issues?state=open&per_page=100"}) {
+	if err != nil || len(rows) != 1 || len(rows[0].Activity) != 0 || !reflect.DeepEqual(calls, []string{"repos/owner/repo/issues?state=all&per_page=100"}) {
 		t.Fatal(rows, calls, err)
 	}
 	failure = true

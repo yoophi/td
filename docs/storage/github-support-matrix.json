@@ -1111,7 +1111,7 @@
       "command": "td export",
       "owner": "#23",
       "state": "partial",
-      "reason": "JSON/Markdown output and invalid-option contracts, complete bulk task export, backup preservation and fixture import/SQLite round-trip have selected evidence (#23/#88). Native full task archive and read-only same-repository preview were checked; #18/#9 parent gates, remaining global-option combinations and broader #24/#8 import/migration acceptance remain separate.",
+      "reason": "JSON/Markdown output, default closed-task preservation and --all deletion scope, explicit work-dir/refresh and offline help have selected actual CLI evidence (#23/#88/#89). Full native archive and read-only same-repository preview were checked; #18/#9 parent gates and broader #24/#8 import/migration acceptance remain separate.",
       "evidence": [
         "TestGitHubJournalPortableCLIExportRestoreAndDestinationUndo",
         "TestGitHubJournalPortableInvalidInputAndFlagsFailBeforeNetwork",
@@ -1119,22 +1119,25 @@
         "TestSQLiteExportSourceFailureProtectsOutput",
         "TestGitHubExportPreservesSharedDataAndCommonFormat",
         "TestGitHubExportFailureDoesNotReplaceBackupOrEmitPartialJSON",
-        "TestGitHubImportCLIExecuteExportReimportAndNoSQLiteFallback"
+        "TestGitHubImportCLIExecuteExportReimportAndNoSQLiteFallback",
+        "TestExportCLIStoreSelectionWorkDirAndRefresh",
+        "TestGitHubJSONHelpCLIContainsRealTreeAndFlagsOffline"
       ],
       "flags": {
         "all": "partial",
         "format": "partial",
-        "help": "pending",
+        "help": "partial",
         "json": "partial",
         "output": "partial",
-        "refresh": "pending",
+        "refresh": "partial",
         "render-markdown": "partial",
-        "work-dir": "pending"
+        "work-dir": "partial"
       },
       "flag_evidence": {
         "all": [
           "TestExportCLIOutputAndOptionContracts",
-          "TestGitHubExportPreservesSharedDataAndCommonFormat"
+          "TestGitHubExportPreservesSharedDataAndCommonFormat",
+          "TestExportCLIStoreSelectionWorkDirAndRefresh"
         ],
         "format": [
           "TestExportCLIOutputAndOptionContracts"
@@ -1149,6 +1152,17 @@
         ],
         "render-markdown": [
           "TestExportCLIOutputAndOptionContracts"
+        ],
+        "work-dir": [
+          "TestExportCLIStoreSelectionWorkDirAndRefresh",
+          "TestGitHubJSONHelpCLIContainsRealTreeAndFlagsOffline"
+        ],
+        "refresh": [
+          "TestExportCLIStoreSelectionWorkDirAndRefresh",
+          "TestGitHubJSONHelpCLIContainsRealTreeAndFlagsOffline"
+        ],
+        "help": [
+          "TestGitHubJSONHelpCLIContainsRealTreeAndFlagsOffline"
         ]
       }
     },

@@ -41,6 +41,7 @@ func TestGitHubJSONHelpCLIContainsRealTreeAndFlagsOffline(t *testing.T) {
 			{[]string{"task", "create", "--help"}, "td task create", "type"},
 			{[]string{"doctor", "fk", "--help"}, "td doctor fk", "work-dir"},
 			{[]string{"help", "list"}, "td list", "work-dir"},
+			{[]string{"export", "--help"}, "td export", "all"},
 		} {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			argv := append([]string{"-test.run=^TestGitHubSyncCLIHelperProcess$", "--", "--work-dir", dir, "--json"}, tc.args...)
@@ -79,8 +80,21 @@ func TestGitHubJSONHelpCLIContainsRealTreeAndFlagsOffline(t *testing.T) {
 			if tc.path == "td" && len(result.Commands) == 0 {
 				t.Fatal("missing root command tree")
 			}
+			if tc.path == "td export" {
+				for _, contract := range []string{"Closed tasks are included by default", "logically deleted", "requires store=gh-issue", "--render-markdown only applies to --format md", "success receipt"} {
+					if !strings.Contains(result.Long, contract) {
+						t.Fatal("export help omitted storage/output boundary", contract)
+					}
+				}
+			}
 			if tc.path == "td doctor fk" && !result.Hidden {
 				t.Fatal("missing hidden command marker")
+			}
+		}
+		text := runExportOutputCLIFrom(t, dir, t.TempDir(), false, "--help", "--refresh")
+		for _, contract := range []string{"Closed tasks are included by default", "requires store=gh-issue", "--work-dir", "--refresh", "--format", "--output"} {
+			if !bytes.Contains(text, []byte(contract)) {
+				t.Fatal("human export help omitted contract", contract)
 			}
 		}
 	}

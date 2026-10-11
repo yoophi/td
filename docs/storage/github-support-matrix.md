@@ -10,10 +10,14 @@ their canonical command's responsibility.
 This is an incomplete audit, not a completed support or acceptance report.
 
 Export's `--all`, `--format`, `--output`, `--json` and `--render-markdown` carry
-selected actual CLI and archive preservation evidence from #23/#88. Native
+selected actual CLI and archive preservation evidence from #23/#88. #89 adds
+default closed-task preservation, explicit work-dir from a different current
+directory, refresh, and offline JSON/human help in both sync feature modes.
+Native
 full-task export and a same-repository read-only import preview are described
 in the [export contract](github-export.md#task-archive-verification-2388).
-Remaining global options and parent/import/migration gates are still pending.
+The flag audit remains partial evidence; parent/import/migration gates are
+still pending.
 
 | State | Meaning |
 | --- | --- |

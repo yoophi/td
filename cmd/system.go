@@ -626,8 +626,13 @@ var sessionCleanupCmd = &cobra.Command{
 }
 
 var exportCmd = &cobra.Command{
-	Use:     "export",
-	Short:   "Export database",
+	Use:   "export",
+	Short: "Export tasks from the configured store",
+	Long: `Export task data from the configured store as JSON or Markdown.
+Closed tasks are included by default; --all also includes logically deleted tasks.
+--format journal preserves complete GitHub action history and requires store=gh-issue.
+--render-markdown only applies to --format md.
+With --json, file output returns a success receipt and Markdown stdout returns a document envelope.`,
 	GroupID: "system",
 	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -1087,7 +1092,7 @@ func init() {
 
 	exportCmd.Flags().String("format", "json", "Export format: json, md, or journal (GitHub history)")
 	exportCmd.Flags().StringP("output", "o", "", "Output file (default: stdout)")
-	exportCmd.Flags().Bool("all", false, "Include closed/deleted")
+	exportCmd.Flags().Bool("all", false, "Include deleted tasks (closed tasks are always included)")
 	exportCmd.Flags().BoolP("render-markdown", "m", false, "Render markdown output for humans")
 
 	importCmd.Flags().String("format", "json", "Import format: json, md, or journal (archival GitHub history)")

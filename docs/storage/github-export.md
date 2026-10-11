@@ -6,10 +6,16 @@ for its separate format, ID mappings, restore command and undo boundaries.
 
 `td export --format json|md --output PATH --all` uses
 the configured issue store. GitHub mode verifies the remote and credentials,
-uses gh directly and never opens SQLite. Without `--all`, only open,
-non-deleted task issues are selected. `--all` includes closed and logically
-deleted tasks. Pull requests, note carriers and board carriers are excluded,
+uses gh directly and never opens SQLite. Without `--all`, all non-deleted
+task issues are selected, including closed tasks. `--all` additionally includes
+logically deleted tasks. Pull requests, note carriers and board carriers are excluded,
 matching the task scope of the existing SQLite export command.
+
+This default includes every workflow status, not just the default `td list`
+scope. #89 corrected an earlier GitHub-only omission of closed tasks while
+preserving SQLite's existing selection behavior. Deferred tasks are included
+as well. A complete relationship restore may require `--all` when another
+task refers to a logically deleted task.
 
 JSON retains the existing array and `issue`, `logs`, `handoffs`, `dependencies`
 and `files` fields. A versioned `github` field additionally preserves the source
@@ -49,6 +55,12 @@ Markdown reads only the issue-list page set. Repository verification and
 pagination add actual HTTP requests. Rate-limit errors preserve the original
 GitHub diagnostic; there is no automatic retry.
 
+Export reads complete collections rather than a reusable or incremental cache
+baseline. `--refresh` remains accepted and produces the same full collection
+boundary. `--work-dir` selects the configured project independently of the
+caller's current directory. Help is offline, including `--help --json`; it
+does not authenticate, read task data or create an issue session/database.
+
 ## Task archive verification (#23/#88)
 
 On 2026-10-12, candidate source `b004896` was checked against the public
@@ -80,3 +92,13 @@ fixed JSON output and incomplete SQLite backup handling. These observations
 do not close the #18/#9 parent gates or the broader #24/#8 import and migration
 requirements. Complete action journal history still requires `--format journal`,
 and notes/boards are outside task-format export.
+
+The #89 follow-up checked default/all selection with the real CLI from another
+project's current directory. Of the same 196 task records, the default export
+retained all 77 non-deleted tasks, including 43 closed tasks; `--all` retained
+all 196. Default and refreshed JSON and Markdown agreed. Each JSON invocation
+used one full issue and one full comment collection; Markdown used one issue
+collection and no comments. These native checks disabled reusable caching,
+made GETs only and created no SQLite database. A separate ghstore regression
+checks that export bypasses an actual cached/incremental baseline, including
+physical deletions that cannot be discovered by incremental polling.

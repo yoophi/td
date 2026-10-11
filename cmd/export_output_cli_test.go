@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +21,11 @@ import (
 
 func runExportOutputCLI(t *testing.T, dir string, fail bool, args ...string) []byte {
 	t.Helper()
+	return runExportOutputCLIFrom(t, dir, dir, fail, args...)
+}
+
+func runExportOutputCLIFrom(t *testing.T, dir, cwd string, fail bool, args ...string) []byte {
+	t.Helper()
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -26,7 +34,7 @@ func runExportOutputCLI(t *testing.T, dir string, fail bool, args ...string) []b
 	defer cancel()
 	argv := append([]string{"-test.run=^TestGitHubSyncCLIHelperProcess$", "--", "--work-dir", dir, "export"}, args...)
 	child := exec.CommandContext(ctx, executable, argv...)
-	child.Dir = dir
+	child.Dir = cwd
 	var stdout, stderr bytes.Buffer
 	child.Stdout, child.Stderr = &stdout, &stderr
 	err = child.Run()
@@ -34,6 +42,126 @@ func runExportOutputCLI(t *testing.T, dir string, fail bool, args ...string) []b
 		t.Fatalf("%v: %v stdout=%s stderr=%s", args, err, stdout.String(), stderr.String())
 	}
 	return stdout.Bytes()
+}
+
+func TestExportCLIStoreSelectionWorkDirAndRefresh(t *testing.T) {
+	githubDir := githubScheduleTestDir(t)
+	calls := recordScheduleGHCalls(t)
+	t.Setenv("TD_GH_SYNC_HELPER", "1")
+	t.Setenv("TD_ANALYTICS", "false")
+	t.Setenv("TD_GH_CACHE", "off") // Cache freshness itself is checked in ghstore.
+	t.Setenv("TD_GH_CONTEXT_ROOT", t.TempDir())
+	t.Setenv("TD_FEATURE_SYNC_AUTOSYNC", "true")
+	sqliteDir, cwd := t.TempDir(), t.TempDir()
+	for _, dir := range []string{sqliteDir, cwd} {
+		database, err := db.Initialize(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 1; i <= 4; i++ {
+			issue := &models.Issue{Title: fmt.Sprintf("Schedule fixture %d", i), Status: models.StatusOpen}
+			if dir == cwd {
+				issue.Title = "Wrong current directory"
+			} else if i == 3 {
+				issue.Status = models.StatusClosed
+			}
+			if err := database.CreateIssue(issue); err != nil {
+				t.Fatal(err)
+			}
+			if dir == sqliteDir && i == 4 {
+				if err := database.DeleteIssue(issue.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if err := database.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	callerDB := filepath.Join(cwd, ".todos", "issues.db")
+	callerBefore, err := os.ReadFile(callerDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readCalls := func() []byte {
+		data, err := os.ReadFile(calls)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		return data
+	}
+	for _, mode := range []string{"false", "true"} {
+		t.Setenv("TD_FEATURE_SYNC_CLI", mode)
+		for _, all := range []bool{false, true} {
+			want := []string{"Schedule fixture 1", "Schedule fixture 2", "Schedule fixture 3"}
+			if all {
+				want = append(want, "Schedule fixture 4")
+			}
+			for _, format := range []string{"json", "md"} {
+				for _, dir := range []string{sqliteDir, githubDir} {
+					args := []string{"--format", format, "--refresh", "--json"}
+					if all {
+						args = append(args, "--all")
+					}
+					beforeCalls := readCalls()
+					out := runExportOutputCLIFrom(t, dir, cwd, false, args...)
+					if dir == sqliteDir && !bytes.Equal(beforeCalls, readCalls()) {
+						t.Fatal("SQLite export accessed GitHub")
+					}
+					if format == "json" {
+						var rows []exportedItem
+						if err := json.Unmarshal(out, &rows); err != nil {
+							t.Fatal(err)
+						}
+						got := []string{}
+						for _, row := range rows {
+							got = append(got, row.Issue.Title)
+						}
+						sort.Strings(got)
+						if !reflect.DeepEqual(got, want) {
+							t.Fatalf("mode=%s dir=%s all=%t: %v != %v", mode, dir, all, got, want)
+						}
+					} else {
+						var document struct{ Document string }
+						if err := json.Unmarshal(out, &document); err != nil {
+							t.Fatal(err)
+						}
+						if strings.Contains(document.Document, "Wrong current directory") || strings.Contains(document.Document, "Schedule fixture 5") {
+							t.Fatal("work-dir ignored or PR exported")
+						}
+						for _, title := range want {
+							if !strings.Contains(document.Document, title) {
+								t.Fatal("Markdown lost task", title)
+							}
+						}
+						if !all && strings.Contains(document.Document, "Schedule fixture 4") {
+							t.Fatal("deleted task exported without --all")
+						}
+					}
+				}
+			}
+		}
+	}
+	callerAfter, err := os.ReadFile(callerDB)
+	if err != nil || !bytes.Equal(callerBefore, callerAfter) {
+		t.Fatal("export changed the caller's unrelated database", err)
+	}
+	if _, err := os.Stat(filepath.Join(githubDir, ".todos", "issues.db")); !os.IsNotExist(err) {
+		t.Fatal("GitHub export opened SQLite", err)
+	}
+	data, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var args []string
+		if json.Unmarshal([]byte(line), &args) != nil {
+			t.Fatal("invalid call log")
+		}
+		if strings.Contains(strings.Join(args, " "), "--method") && !strings.Contains(strings.Join(args, " "), "--method GET") {
+			t.Fatal("export attempted remote write", args)
+		}
+	}
 }
 
 func TestExportCLIOutputAndOptionContracts(t *testing.T) {
