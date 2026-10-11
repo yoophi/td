@@ -18,7 +18,7 @@ func skipImplicitIssueAccess(cmd *cobra.Command) bool {
 		top = top.Parent()
 	}
 	switch top.Name() {
-	case "config", "feature", "workflow", "debug-stats", "version", "completion", "help", "init", "errors", "security":
+	case "config", "store", "feature", "workflow", "debug-stats", "version", "completion", "help", "init", "errors", "security":
 		return true
 	case "stats":
 		if cmd.Parent() == top {

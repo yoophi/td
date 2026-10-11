@@ -3,7 +3,34 @@
 Store configuration changes select a backend; they do not migrate data. #8
 requires a separate command with source/destination validation, preview, stable
 qualified ID mappings, checked writes and explicit partial-failure resume.
-This implementation is in progress and no transfer CLI is registered yet.
+This implementation is in progress. `td store transfer --dry-run` is registered
+in this feature branch; explicit execution is not yet available and returns an
+error before source or destination access.
+
+## CLI preview (#93, execution in progress)
+
+The source is the store configured for `--work-dir`. The destination must be
+explicit and use the other store; no configuration is changed. Examples:
+
+```bash
+# From a SQLite project to an existing Git checkout with a GitHub origin:
+td -w /path/to/sqlite-project store transfer --dry-run --to gh-issue \
+  --source-namespace my-sqlite-source --destination /path/to/github-project \
+  --remote origin --json
+
+# From a GitHub project to a SQLite destination (preview does not initialize it):
+td -w /path/to/github-project store transfer --dry-run --to sqlite \
+  --destination /path/to/sqlite-project --destination-namespace my-sqlite-target --json
+```
+
+JSON returns `dry_run`, `writes: 0`, store names, whether SQLite initialization
+would be needed and the full plan. Human output includes counts and handling
+disclosures. `--map qualified-source-key=existing-target-id` may be repeated;
+unknown keys, duplicate keys, wrong kinds and conflicting target bindings fail.
+`--max-bytes` sets the input capacity limit. Implicit issue-session discovery
+and autosync hooks are skipped because transfer owns its explicit I/O.
+`--execute` currently returns `unsupported_operation`; this is a feature-stage
+limitation, not completion of the execution task.
 
 ## Source collection (#90)
 

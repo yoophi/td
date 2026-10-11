@@ -2053,6 +2053,67 @@
       }
     },
     {
+      "command": "td store",
+      "owner": "#93",
+      "state": "pending",
+      "reason": "Explicit transfer execution and checkpoint/native acceptance remain incomplete.",
+      "evidence": [],
+      "flags": {
+        "help": "pending",
+        "json": "pending",
+        "refresh": "pending",
+        "work-dir": "pending"
+      }
+    },
+    {
+      "command": "td store transfer",
+      "owner": "#93",
+      "state": "partial",
+      "reason": "Read-only dry-run JSON/human contracts and invalid-mode guards are tested in both directions; actual execution is not yet available.",
+      "evidence": [
+        "TestStoreTransferInvalidModesAndBindingsDoNotInitialize",
+        "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+      ],
+      "flags": {
+        "destination": "partial",
+        "destination-namespace": "partial",
+        "dry-run": "partial",
+        "execute": "pending",
+        "help": "pending",
+        "json": "partial",
+        "map": "pending",
+        "max-bytes": "pending",
+        "refresh": "pending",
+        "remote": "partial",
+        "source-namespace": "partial",
+        "to": "partial",
+        "work-dir": "pending"
+      },
+      "flag_evidence": {
+        "dry-run": [
+          "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        ],
+        "to": [
+          "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        ],
+        "destination": [
+          "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        ],
+        "source-namespace": [
+          "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        ],
+        "destination-namespace": [
+          "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        ],
+        "remote": [
+          "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        ],
+        "json": [
+          "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH"
+        ]
+      }
+    },
+    {
       "command": "td sync",
       "owner": "#30",
       "state": "pending",

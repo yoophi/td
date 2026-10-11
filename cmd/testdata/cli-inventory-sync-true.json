@@ -4268,6 +4268,100 @@
     ]
   },
   {
+    "path": "td store",
+    "use": "store",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
+    "path": "td store transfer",
+    "use": "transfer",
+    "aliases": [],
+    "runnable": true,
+    "flags": [
+      {
+        "name": "destination",
+        "type": "string"
+      },
+      {
+        "name": "destination-namespace",
+        "type": "string"
+      },
+      {
+        "name": "dry-run",
+        "type": "bool"
+      },
+      {
+        "name": "execute",
+        "type": "bool"
+      },
+      {
+        "name": "help",
+        "type": "bool",
+        "shorthand": "h"
+      },
+      {
+        "name": "json",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "map",
+        "type": "stringArray"
+      },
+      {
+        "name": "max-bytes",
+        "type": "int64"
+      },
+      {
+        "name": "refresh",
+        "type": "bool",
+        "inherited": true
+      },
+      {
+        "name": "remote",
+        "type": "string"
+      },
+      {
+        "name": "source-namespace",
+        "type": "string"
+      },
+      {
+        "name": "to",
+        "type": "string"
+      },
+      {
+        "name": "work-dir",
+        "type": "string",
+        "shorthand": "w",
+        "inherited": true
+      }
+    ]
+  },
+  {
     "path": "td sync",
     "use": "sync",
     "aliases": [],
