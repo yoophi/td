@@ -81,6 +81,8 @@ func TestGitHubOfflineWorkflowCLIContracts(t *testing.T) {
 			{[]string{"--mermaid"}, "%% " + workflowReviewPolicyNote, false, false},
 			{[]string{"--mermaid", "--json"}, `"review_policy":`, true, false},
 			{[]string{"--dot", "--json"}, `"format":"dot"`, true, false},
+			{[]string{"--dot"}, "digraph", false, false},
+			{[]string{"--refresh", "--json"}, `"project_policy_resolved":false`, true, false},
 			{[]string{"--mermaid", "--dot", "--json"}, `"error":`, true, true},
 			{[]string{"unused", "--json"}, `"error":`, true, true},
 			{[]string{"--help"}, "review_policy_mode", false, false},

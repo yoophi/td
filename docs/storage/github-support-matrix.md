@@ -19,7 +19,9 @@ This is an incomplete audit, not a completed support or acceptance report.
 Flag classifications are separate from command classifications. A command with
 passing fixtures does not automatically prove all its flags, combinations,
 aliases and global options. These flags remain pending until their actual
-contract is checked. Test names in the matrix are evidence pointers, not a
+contract is checked. `flag_evidence` ties each partially audited flag to named
+tests; the checker rejects partial flags without evidence and stale flag/test
+references. Test names in the matrix are evidence pointers, not a
 claim that the tests passed in every environment. Consult stage test logs for
 the result and run the tests against the current source.
 
@@ -29,6 +31,23 @@ nonexistent tests. `TestCLIInventoryMatchesCapturedSurface` separately compares
 the inventory with the real Cobra tree in each feature mode. Changing the tree
 requires both the inventory and the responsibility audit to be reviewed; no
 automatic supported classification is generated from registration.
+
+## Offline option audit: #31
+
+`workflow` has separate evidence for human, JSON, Mermaid and DOT output,
+help, explicit work-directory selection, and `--refresh` without issue access.
+The same CLI checks run with sync features enabled and disabled, autosync and
+analytics enabled, and a GitHub executable that fails on any call. They reject
+conflicting diagram flags and positional arguments and assert that no SQLite
+database or issue session is created. Review-policy documentation is checked
+against the shared eligibility policy. These are selected contracts, not proof
+of every global flag combination or native task workflow behavior.
+
+The query `--fields`, `--examples` and `--explain` helpers have individual
+evidence for valid JSON and error paths, both sync modes, no GitHub calls and
+no SQLite database. Documented fields/examples are parsed and validated against
+TDQ. Execution options such as output, scan limits and sorting remain separate
+audits; their pending classification is unchanged by helper coverage.
 
 ## Action journal audit: #9 and #65
 

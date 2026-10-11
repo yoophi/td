@@ -1445,9 +1445,9 @@
         "TestGitHubQueryCLIFormatsLimitsDatesAndFailures"
       ],
       "flags": {
-        "examples": "pending",
-        "explain": "pending",
-        "fields": "pending",
+        "examples": "partial",
+        "explain": "partial",
+        "fields": "partial",
         "help": "pending",
         "json": "pending",
         "limit": "pending",
@@ -1456,6 +1456,17 @@
         "refresh": "pending",
         "sort": "pending",
         "work-dir": "pending"
+      },
+      "flag_evidence": {
+        "examples": [
+          "TestOfflineQueryHelperCLIJSONAndNoNetwork"
+        ],
+        "fields": [
+          "TestOfflineQueryHelperCLIJSONAndNoNetwork"
+        ],
+        "explain": [
+          "TestOfflineQueryHelperCLIJSONAndNoNetwork"
+        ]
       }
     },
     {
@@ -2321,17 +2332,38 @@
       "command": "td workflow",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Human, JSON, Mermaid, DOT, conflicting format and positional argument contracts are tested offline in both sync modes; selected global flag contracts are recorded separately.",
       "evidence": [
-        "TestGitHubOfflineWorkflowCLIContracts"
+        "TestGitHubOfflineWorkflowCLIContracts",
+        "TestWorkflowDocumentedReviewPoliciesMatchEligibility"
       ],
       "flags": {
-        "dot": "pending",
-        "help": "pending",
-        "json": "pending",
-        "mermaid": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "dot": "partial",
+        "help": "partial",
+        "json": "partial",
+        "mermaid": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "dot": [
+          "TestGitHubOfflineWorkflowCLIContracts"
+        ],
+        "help": [
+          "TestGitHubOfflineWorkflowCLIContracts"
+        ],
+        "json": [
+          "TestGitHubOfflineWorkflowCLIContracts"
+        ],
+        "mermaid": [
+          "TestGitHubOfflineWorkflowCLIContracts"
+        ],
+        "refresh": [
+          "TestGitHubOfflineWorkflowCLIContracts"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineWorkflowCLIContracts"
+        ]
       }
     },
     {

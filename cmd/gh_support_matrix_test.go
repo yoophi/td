@@ -18,12 +18,13 @@ func TestGitHubSupportMatrixCoversInventoryAndEvidence(t *testing.T) {
 	var matrix struct {
 		SchemaVersion int `json:"schema_version"`
 		Commands      []struct {
-			Command  string            `json:"command"`
-			Owner    string            `json:"owner"`
-			State    string            `json:"state"`
-			Reason   string            `json:"reason"`
-			Evidence []string          `json:"evidence"`
-			Flags    map[string]string `json:"flags"`
+			Command      string              `json:"command"`
+			Owner        string              `json:"owner"`
+			State        string              `json:"state"`
+			Reason       string              `json:"reason"`
+			Evidence     []string            `json:"evidence"`
+			Flags        map[string]string   `json:"flags"`
+			FlagEvidence map[string][]string `json:"flag_evidence"`
 		} `json:"commands"`
 	}
 	data, err := os.ReadFile("../docs/storage/github-support-matrix.json")
@@ -74,8 +75,21 @@ func TestGitHubSupportMatrixCoversInventoryAndEvidence(t *testing.T) {
 			t.Fatalf("new exclusion needs explicit scope review: %s", row.Command)
 		}
 		for flag, state := range row.Flags {
-			if !allowed[state] || state == "partial" {
+			if !allowed[state] {
 				t.Fatalf("invalid flag audit %s --%s: %s", row.Command, flag, state)
+			}
+			if state == "partial" && len(row.FlagEvidence[flag]) == 0 {
+				t.Fatalf("flag lacks evidence %s --%s", row.Command, flag)
+			}
+		}
+		for flag, evidence := range row.FlagEvidence {
+			if _, exists := row.Flags[flag]; !exists || len(evidence) == 0 {
+				t.Fatalf("stale or empty flag evidence %s --%s", row.Command, flag)
+			}
+			for _, name := range evidence {
+				if !tests[name] {
+					t.Fatalf("%s --%s references missing test %s", row.Command, flag, name)
+				}
 			}
 		}
 	}
