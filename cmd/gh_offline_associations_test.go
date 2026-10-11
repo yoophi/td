@@ -90,6 +90,7 @@ func TestGitHubOfflineAssociationJSONLifecycle(t *testing.T) {
 		} {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			args := append([]string{"-test.run=^TestOfflineAssociationsHelperProcess$", "--", "--work-dir", dir, "--json"}, tc.args...)
+			args = append(args, "--refresh")
 			child := exec.CommandContext(ctx, executable, args...)
 			var stdout, stderr bytes.Buffer
 			child.Stdout = &stdout

@@ -74,6 +74,7 @@ func TestGitHubOfflineConfigJSONContractsAndSQLiteWrites(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		argv := append([]string{"-test.run=^TestOfflineConfigHelperProcess$", "--", "--work-dir", dir, "--json", "config"}, args...)
+		argv = append(argv, "--refresh")
 		child := exec.CommandContext(ctx, executable, argv...)
 		child.Dir = dir
 		var stdout, stderr bytes.Buffer

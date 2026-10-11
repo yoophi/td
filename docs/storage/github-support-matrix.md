@@ -49,6 +49,18 @@ no SQLite database. Documented fields/examples are parsed and validated against
 TDQ. Execution options such as output, scan limits and sorting remain separate
 audits; their pending classification is unchanged by helper coverage.
 
+Config get/list/set, feature get/list/set/unset, and directory
+associate/associations/dissociate now carry separate JSON, work-dir and refresh
+evidence. The subprocess tests run both sync modes and reject every accidental
+GitHub invocation, including with autosync enabled. They assert no issue SQLite
+database; config and feature checks also assert no issue session context.
+Association tests inject only a temporary local settings backend and exercise
+the `assoc` alias, empty results, stable ordering and failures. Feature tests
+check project persistence, environment precedence, review policy conflicts and
+unchanged store selection. Config tests reject GitHub writes to global SQLite
+sync settings and separately validate SQLite config persistence and invalid
+value rejection. Human output, help and untested remaining flags stay pending.
+
 ## Action journal audit: #9 and #65
 
 `last` and `undo --list` read current-session journals from bulk issue/comment

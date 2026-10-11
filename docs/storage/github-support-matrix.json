@@ -456,91 +456,157 @@
       "command": "td config associate",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineAssociationJSONLifecycle"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ],
+        "refresh": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ]
       }
     },
     {
       "command": "td config associations",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineAssociationJSONLifecycle"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ],
+        "refresh": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ]
       }
     },
     {
       "command": "td config dissociate",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineAssociationJSONLifecycle"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ],
+        "refresh": [
+          "TestGitHubOfflineAssociationJSONLifecycle"
+        ]
       }
     },
     {
       "command": "td config get",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ],
+        "refresh": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ]
       }
     },
     {
       "command": "td config list",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ],
+        "refresh": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ]
       }
     },
     {
       "command": "td config set",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
+        "json": "partial",
+        "refresh": "partial",
         "remote": "pending",
-        "work-dir": "pending"
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ],
+        "refresh": [
+          "TestGitHubOfflineConfigJSONContractsAndSQLiteWrites"
+        ]
       }
     },
     {
@@ -966,58 +1032,104 @@
       "command": "td feature get",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineFeatureJSONLifecycleAndSources"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ],
+        "refresh": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ]
       }
     },
     {
       "command": "td feature list",
       "owner": "#31",
-      "state": "pending",
-      "reason": "Store contract and every option combination still require evidence; inventory is discovery only.",
-      "evidence": [],
+      "state": "partial",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
+      "evidence": [
+        "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+      ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ],
+        "refresh": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ]
       }
     },
     {
       "command": "td feature set",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineFeatureJSONLifecycleAndSources"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ],
+        "refresh": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ]
       }
     },
     {
       "command": "td feature unset",
       "owner": "#31",
       "state": "partial",
-      "reason": "Referenced fixture tests cover selected contracts, not complete flag coverage or native acceptance.",
+      "reason": "Selected JSON, explicit work-dir and refresh contracts have offline CLI evidence; help, human output and remaining options require separate classification.",
       "evidence": [
         "TestGitHubOfflineFeatureJSONLifecycleAndSources"
       ],
       "flags": {
         "help": "pending",
-        "json": "pending",
-        "refresh": "pending",
-        "work-dir": "pending"
+        "json": "partial",
+        "refresh": "partial",
+        "work-dir": "partial"
+      },
+      "flag_evidence": {
+        "json": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ],
+        "work-dir": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ],
+        "refresh": [
+          "TestGitHubOfflineFeatureJSONLifecycleAndSources"
+        ]
       }
     },
     {

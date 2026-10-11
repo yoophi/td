@@ -38,6 +38,7 @@ func TestGitHubOfflineFeatureJSONLifecycleAndSources(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		argv := append([]string{"-test.run=^TestGitHubSyncCLIHelperProcess$", "--", "--work-dir", dir, "--json", "feature"}, args...)
+		argv = append(argv, "--refresh")
 		child := exec.CommandContext(ctx, executable, argv...)
 		child.Dir = dir
 		var stdout, stderr bytes.Buffer
