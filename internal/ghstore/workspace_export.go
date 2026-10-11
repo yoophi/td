@@ -2,8 +2,10 @@ package ghstore
 
 import (
 	"context"
-	"github.com/marcus/td/internal/transferlimit"
+	"fmt"
 	"time"
+
+	"github.com/marcus/td/internal/transferlimit"
 )
 
 // NativeExport is source evidence, never a destination write or active actor.
@@ -40,13 +42,14 @@ type NativeExportComment struct {
 // session registries are not collected. Sources are not atomic repository
 // snapshots and imported journal records must remain passive archives.
 type WorkspaceExport struct {
-	Repository string                 `json:"repository"`
-	ObservedAt time.Time              `json:"observed_at"`
-	Tasks      []ExportedIssue        `json:"tasks"`
-	Notes      []NoteRecord           `json:"notes"`
-	Boards     []BoardRecord          `json:"boards"`
-	Native     []NativeExport         `json:"native"`
-	Journal    *PortableJournalBundle `json:"journal"`
+	Archives   []WorkspaceArchiveEvidence `json:"archives,omitempty"`
+	Repository string                     `json:"repository"`
+	ObservedAt time.Time                  `json:"observed_at"`
+	Tasks      []ExportedIssue            `json:"tasks"`
+	Notes      []NoteRecord               `json:"notes"`
+	Boards     []BoardRecord              `json:"boards"`
+	Native     []NativeExport             `json:"native"`
+	Journal    *PortableJournalBundle     `json:"journal"`
 }
 
 func (c *Client) ExportWorkspace(ctx context.Context) (*WorkspaceExport, error) {
@@ -110,6 +113,24 @@ func (c *Client) ExportWorkspaceLimited(ctx context.Context, maxBytes int64) (*W
 			return nil, err
 		}
 		result.Native = append(result.Native, native)
+		if kind == "journal" {
+			collection, err := collectJournalParts(entry.Comments)
+			if err != nil {
+				return nil, err
+			}
+			for _, root := range entry.Comments {
+				archive, err := decodeWorkspaceArchive(root, c.repo, record.ID, collection, maxBytes)
+				if err != nil {
+					return nil, fmt.Errorf("decode passive workspace archive: %w", err)
+				}
+				if archive != nil {
+					if err := budget.Add(archive); err != nil {
+						return nil, err
+					}
+					result.Archives = append(result.Archives, *archive)
+				}
+			}
+		}
 		switch kind {
 		case "note":
 			note, err := noteRecord(&record)

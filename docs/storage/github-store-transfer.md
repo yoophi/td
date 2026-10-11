@@ -153,6 +153,36 @@ retry; no automatic retry or deletion of a published destination occurs.
 The SQLite CLI execution path uses these helpers. GitHub execution, journal
 integration and persistent checkpoint/resume are still required.
 
+## GitHub passive workspace archive (#93, entity execution in progress)
+
+GitHub workspace provenance now has a separate `td:workspace-archive:v1` root
+on the existing journal carrier. It reuses immutable journal-part encoding,
+native comment IDs/clocks/body hashes and complete carrier collections. This
+root is passive evidence, not an action intent, active review, executable undo
+record, or automatic adoption/creation authority. The transfer controller must
+validate the original envelope semantically before executing or resuming it.
+
+Pure planning checks input capacity, part count and final manifest comment size
+before publication. The current transport supports at most 128 base64 parts of
+48,000 characters. Oversized source capsules or mapping manifests fail explicitly;
+this implementation does not silently truncate or promise unlimited history.
+Publication requires the verified repository/journal carrier and native publisher.
+It verifies each POST response, then reads back the complete parts collection
+before publishing the root, and verifies the root from another full collection.
+There are no per-part GETs. Missing/changed/foreign/duplicate parts fail. Uncertain
+part/root responses stop with the original error and no automatic retry or entity
+write. Existing roots or partial uploads require inspection and explicit resume;
+the publisher does not silently replay them.
+
+Source export collects these capsules/mappings from its existing bulk observation,
+including original native comments, without N+1 queries. Collection failure returns
+no partial workspace. Nested archives remain subject to input capacity limits.
+The real `yoophi/td-sample` check published a 388,061-byte captured SQLite source
+in 11 parts and one root on `gh-127`, then read it back and recollected identical
+bytes/SHA. Task/note/board counts stayed 196/5/10. This proves passive archive
+publication only: GitHub entity execution, mapping/checkpoint finalization, writer
+audit and #94/#95 completion remain required. No source history became active.
+
 ## Source collection (#90)
 
 The GitHub collector `Client.ExportWorkspace` takes one fresh complete issue

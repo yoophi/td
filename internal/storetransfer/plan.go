@@ -305,6 +305,7 @@ func preservationReport(source, target *Source, plan *DataPlan) []Disclosure {
 		result = append(result, Disclosure{"deleted_position_rows", "passive_archive", deletedPositions, "GitHub board positions have no per-position tombstone field. Deleted SQLite position rows remain historical evidence and are not active membership."})
 	}
 	if source.GitHub != nil {
+		result = append(result, Disclosure{"previous_github_workspace_archives", "passive_archive", len(source.GitHub.Archives), "Previously retained source capsules and mappings remain passive evidence, never destination actors, executable journals or automatic adoption authority."})
 		result = append(result, Disclosure{"native_comment_evidence", "passive_archive", nativeComments, "Raw native comments include hidden journal transports; retain original bodies, IDs, authors and clocks as evidence, not replayable destination operations."}, Disclosure{"portable_journal_actions", "passive_archive", journalActions, "Retain collected journal phases including uncertainty; imported records confer no undo or approval authority."})
 	}
 	if source.GitHub != nil && target.Envelope.Store == "sqlite" {
