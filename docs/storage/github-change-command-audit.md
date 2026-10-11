@@ -262,3 +262,16 @@ Native acceptance completed the later command inverse (271.229 s), restoring
 the exact first-command native fields/identity/creation/author. The earlier
 command inverse remains in progress; neither full native acceptance nor #85
 completion is claimed yet.
+
+Final native #85 acceptance passed: the earlier field/comment command inverse
+succeeded (282.809 s), restoring both sample tasks' original native number,
+title/body/state/labels, creation clock and author. Both commands' inline
+comments are absent and no SQLite file exists. The two inverses each used
+135 API invocations/391 HTTP responses, including 14 writes and zero per-task
+comment-list calls; repeated complete verification cost remains #73.
+All sequential CLI, paired writer/recovery, cross-command review, full ghstore
+race and lint gates listed above passed. Production-code CI run 38153133506
+has passed lint/cross-build; its broad test job remains a #68 gate. Required
+dedicated update/activity sequential support remains #86, so neither #68 nor
+#9 is complete. Disposable sample tasks are being logically deleted while
+retaining native IDs and journal history.
