@@ -33,6 +33,25 @@ func (c *Client) updateWithRelations(ctx context.Context, ids []string, change C
 			return nil, err
 		}
 	}
+	plan, err := c.prepareRelationCommand(ctx, records, ids, change, relations, activity)
+	if err != nil {
+		return nil, err
+	}
+	return c.writeRelationCommand(ctx, plan)
+}
+
+// A prepared command owns the original observations and every complete effect
+// input. Separating preparation from execution lets creation bind an allocated
+// ID without refreshing away the external observations captured before POST.
+type relationCommandPlan struct {
+	root       ActionJournal
+	expected   map[string]ActionIssueState
+	records    map[string]Record
+	plans      []*issueUpdatePlan
+	activities []models.Activity
+}
+
+func (c *Client) prepareRelationCommand(ctx context.Context, records map[string]Record, ids []string, change Changes, relations RelationChanges, activity *models.Activity) (*relationCommandPlan, error) {
 	graph, err := planRelationUpdates(records, ids, relations)
 	if err != nil {
 		return nil, err
@@ -129,19 +148,25 @@ func (c *Client) updateWithRelations(ctx context.Context, ids []string, change C
 	for _, id := range watchIDs {
 		g.RelationUpdates.Watches = append(g.RelationUpdates.Watches, ActionRelatedObservation{ID: id, State: watches[id]})
 	}
+	root := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: membership[0], CarrierID: carrier, Action: "group", Phase: "prepared", Group: g}
+	if err := checkRelationCommandCapacity(root, sizing); err != nil {
+		return nil, fmt.Errorf("relationship update capacity preflight (no write attempted): %w", err)
+	}
+	return &relationCommandPlan{root: root, expected: expected, records: records, plans: plans, activities: activities}, nil
+}
+
+func (c *Client) writeRelationCommand(ctx context.Context, command *relationCommandPlan) ([]Record, error) {
+	root, expected, records := command.root, command.expected, command.records
+	g, plans, activities := root.Group, command.plans, command.activities
 	if err := c.verifyRelationGroupOriginal(ctx, g, expected); err != nil {
 		return nil, err
 	}
 	if g.pairedEffectCount() == 0 {
 		out := []Record{}
-		for _, id := range graph.Selected {
+		for _, id := range g.RelationUpdates.Selected {
 			out = append(out, records[id])
 		}
 		return out, nil
-	}
-	root := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: c.journal.SessionID, IssueID: membership[0], CarrierID: carrier, Action: "group", Phase: "prepared", Group: g}
-	if err := checkRelationGroupCapacity(root, sizing); err != nil {
-		return nil, fmt.Errorf("relationship update capacity preflight (no write attempted): %w", err)
 	}
 	if err := c.verifyPairedGroupEvents(ctx, &ActionJournalRecord{ActionJournal: root}); err != nil {
 		return nil, err
@@ -161,7 +186,7 @@ func (c *Client) updateWithRelations(ctx context.Context, ids []string, change C
 	completed := []Record{}
 	completedSources := []string{}
 	for _, i := range g.RelationUpdates.Order {
-		r := records[membership[i]]
+		r := records[g.Members[i].IssueID]
 		plan := plans[i]
 		if plan != nil {
 			if err := c.bindRelationPlan(ctx, plan); err != nil {
@@ -179,7 +204,7 @@ func (c *Client) updateWithRelations(ctx context.Context, ids []string, change C
 				return completed, fmt.Errorf("comment on %s failed in relationship group %s; earlier changes remain, inspect and reconcile without replay: %w", r.ID, written.ID, err)
 			}
 		}
-		if slices.Contains(graph.Selected, r.ID) {
+		if slices.Contains(g.RelationUpdates.Selected, r.ID) {
 			completed = append(completed, r)
 		}
 	}
@@ -187,7 +212,9 @@ func (c *Client) updateWithRelations(ctx context.Context, ids []string, change C
 		return completed, err
 	}
 	// Output follows selection order even when safe graph order differs.
-	slices.SortFunc(completed, func(a, b Record) int { return slices.Index(graph.Selected, a.ID) - slices.Index(graph.Selected, b.ID) })
+	slices.SortFunc(completed, func(a, b Record) int {
+		return slices.Index(g.RelationUpdates.Selected, a.ID) - slices.Index(g.RelationUpdates.Selected, b.ID)
+	})
 	return completed, nil
 }
 
@@ -302,4 +329,11 @@ func (c *Client) bindRelationPlan(ctx context.Context, plan *issueUpdatePlan) er
 		return err
 	}
 	return bind(plan.change.journalRelated)
+}
+
+func checkRelationCommandCapacity(root ActionJournal, sizing map[string]ActionIssueState) error {
+	if root.Group.pairedEffectCount() == 0 {
+		return nil
+	}
+	return checkRelationGroupCapacity(root, sizing)
 }

@@ -2,6 +2,7 @@ package ghstore
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 
@@ -13,10 +14,12 @@ import (
 // and watches. The executor must still journal the intent and recheck these
 // observations before each write; preparing a plan grants no write authority.
 type creationCommandPlan struct {
-	create  *issueCreatePlan
-	graph   *creationRelationGraph
-	records map[string]Record
-	watches []ActionRelatedObservation
+	create              *issueCreatePlan
+	graph               *creationRelationGraph
+	records             map[string]Record
+	watches             []ActionRelatedObservation
+	relationOperationID string
+	events              map[string][]nativeStateEvent
 }
 
 func (c *Client) prepareRelatedCreation(ctx context.Context, issue *models.Issue, change RelationChanges, operationID string) (*creationCommandPlan, error) {
@@ -43,7 +46,7 @@ func (c *Client) prepareRelatedCreation(ctx context.Context, issue *models.Issue
 	if err != nil {
 		return nil, err
 	}
-	p := &creationCommandPlan{records: map[string]Record{}, watches: []ActionRelatedObservation{}}
+	p := &creationCommandPlan{records: map[string]Record{}, watches: []ActionRelatedObservation{}, relationOperationID: "td-op-" + rand.Text(), events: map[string][]nativeStateEvent{}}
 	for _, record := range snapshot.Issues(true) {
 		p.records[record.ID] = record
 	}
@@ -69,6 +72,22 @@ func (c *Client) prepareRelatedCreation(ctx context.Context, issue *models.Issue
 			return nil, err
 		}
 		p.watches = append(p.watches, ActionRelatedObservation{ID: id, State: state})
+	}
+	// Relationship edits supersede review authority. Capture any required
+	// native event evidence before creation, not after the new task exists.
+	for _, id := range p.graph.Blocks {
+		r := p.records[id]
+		state, err := actionIssueState(&r)
+		if err != nil {
+			return nil, err
+		}
+		if updateIntentNeedsEvents(state, state) {
+			events, err := c.readStateEvents(withReviewCost(ctx), id)
+			if err != nil {
+				return nil, err
+			}
+			p.events[id] = events
+		}
 	}
 	return p, nil
 }
