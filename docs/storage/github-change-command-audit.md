@@ -1,0 +1,197 @@
+# Change command and option audit (#68)
+
+Scope: main `c609f64`, following #65/#67/#66/#83, on 2026-10-11,
+plus the scope-message corrections made during this audit.
+This audit covers GitHub task, activity, board and note history/undo for #9.
+The general command support audit remains #31; GUI interaction acceptance remains
+#55. A command having a route does not prove every combination of options works.
+
+## Captured surface
+
+The table records every runnable canonical command in these families from
+`cmd/testdata/cli-inventory-sync-true.json`. Aliases invoke the same Cobra handlers.
+Shared flags `--help`, `--json`, `--refresh`, `--work-dir` are omitted: they affect
+help/output/read freshness/project scope, rather than the target payload.
+Inventory is an enumeration; behavioral evidence appears below.
+
+| Command | Command options | Aliases |
+| --- | --- | --- |
+| `td approve` | `--all`, `--comment`, `--decision`, `--message`, `--note`, `--notes`, `--reason`, `--record-only`, `--reviewed-by`, `--self-review` | none |
+| `td block` | `--reason` | none |
+| `td board create` | `--query` | none |
+| `td board delete` | none | none |
+| `td board edit` | `--name`, `--query`, `--view-mode` | none |
+| `td board list` | none | none |
+| `td board move` | none | none |
+| `td board show` | `--status` | none |
+| `td board unposition` | none | none |
+| `td close` | `--admin`, `--comment`, `--message`, `--note`, `--notes`, `--reason`, `--self-close-exception` | `complete`, `done` |
+| `td comment` | none | none |
+| `td comments` | none | none |
+| `td comments add` | none | none |
+| `td config sync-priority-labels` | `--apply`, `--id` | none |
+| `td config sync-state-labels` | none | none |
+| `td create` | `--acceptance`, `--acceptance-file`, `--blocks`, `--body`, `--defer`, `--depends-on`, `--desc`, `--description`, `--description-file`, `--due`, `--epic`, `--label`, `--labels`, `--minor`, `--notes`, `--parent`, `--points`, `--priority`, `--tag`, `--tags`, `--title`, `--type` | `add`, `new` |
+| `td defer` | `--clear` | none |
+| `td delete` | `--force`, `--reason`, `--yes` | none |
+| `td dep` | `--blocking` | none |
+| `td dep add` | `--depends-on` | none |
+| `td dep rm` | none | `remove` |
+| `td due` | `--clear` | none |
+| `td export` | `--all`, `--format`, `--output`, `--render-markdown` | none |
+| `td handoff` | `--decision`, `--done`, `--message`, `--note`, `--remaining`, `--uncertain` | none |
+| `td import` | `--dry-run`, `--force`, `--format`, `--mapping`, `--source` | none |
+| `td last` | `--n` | none |
+| `td link` | `--depends-on`, `--recursive`, `--role` | none |
+| `td log` | `--blocker`, `--decision`, `--hypothesis`, `--issue`, `--result`, `--task`, `--tried`, `--type` | none |
+| `td note add` | `--content` | none |
+| `td note archive` | none | none |
+| `td note delete` | none | none |
+| `td note edit` | `--content`, `--title` | none |
+| `td note list` | `--all`, `--archived`, `--deleted`, `--limit`, `--output`, `--pinned`, `--search` | `ls` |
+| `td note pin` | none | none |
+| `td note restore` | none | none |
+| `td note show` | `--include-deleted` | none |
+| `td note unarchive` | none | none |
+| `td note unpin` | none | none |
+| `td reject` | `--comment`, `--message`, `--note`, `--notes`, `--reason` | none |
+| `td reopen` | `--reason` | none |
+| `td restore` | `--reason` | none |
+| `td review` | `--comment`, `--message`, `--minor`, `--note`, `--notes`, `--reason` | `finish`, `submit` |
+| `td start` | `--force`, `--reason` | `begin` |
+| `td unblock` | `--reason` | none |
+| `td undo` | `--apply`, `--list`, `--reconcile` | none |
+| `td unlink` | none | none |
+| `td unstart` | `--force`, `--reason`, `--session`, `--stale` | `stop` |
+| `td update` | `--acceptance`, `--acceptance-file`, `--append`, `--blocks`, `--body`, `--comment`, `--defer`, `--depends-on`, `--desc`, `--description`, `--description-file`, `--due`, `--labels`, `--note`, `--parent`, `--points`, `--priority`, `--sprint`, `--status`, `--title`, `--type` | `edit` |
+| `td ws current` | none | none |
+| `td ws end` | none | none |
+| `td ws handoff` | `--continue`, `--decision`, `--done`, `--remaining`, `--review`, `--uncertain` | none |
+| `td ws list` | none | none |
+| `td ws log` | `--blocker`, `--decision`, `--hypothesis`, `--only`, `--result`, `--tried` | none |
+| `td ws show` | `--full` | none |
+| `td ws start` | none | none |
+| `td ws tag` | `--no-start` | none |
+| `td ws untag` | none | none |
+
+## Dispatch and behavioral evidence
+
+The [compound writer audit](github-writer-audit.md) and
+[protocol matrix](github-batch-writers.md) identify the actual production routes,
+not just CLI registrations. The following option groups were additionally
+compared with their handlers at this revision:
+
+- `gh_issue.go` accepts the captured create/update inputs. Rich text/file aliases
+  share input parsing; date/point/priority/type validation precedes execution.
+  Scalar-only, comment-only, relation and workflow combinations select their
+  complete command protocols. Tests: `TestGitHubMixedUpdatePreflightsAllInputs`,
+  `TestGitHubMixedUpdatePreservesValidCombinedEffects`,
+  `TestGitHubCreateUpdateRelationsReplacePreflightAndPartialFailures`, and the
+  `TestGitHubJournalCLIUpdate*` / `TestGitHubJournalCLICreate*` suites.
+- `gh_transitions.go` accepts the captured transition options, including reason
+  aliases, `--all`, claim selection, review attribution/record-only and admin
+  exceptions. These remain subject to the shared review policy; accepting a flag
+  does not grant approval authority. Tests: `TestGitHubTransitionRoutingAndFocus`,
+  `TestGitHubJournalWorkflowApprovalPreservesReviewOptions`, grouped transitions,
+  native closure, claim sweep and workflow recovery CLI tests.
+- `gh_delete.go` accepts reason/force/yes and validates every target before
+  planned deletion/restoration. Tests: `TestGitHubJournalCLIPlannedRejectDeleteRestore`
+  and `TestGitHubJournalCLIPlannedCommandsValidateAllTargetsBeforeWrites`.
+- `gh_relationships.go`, `gh_files.go` and `gh_schedule.go` preserve the captured
+  graph/file/date options. `link --depends-on` selects dependency linking and
+  rejects file-role/recursive/pattern combinations. Tests:
+  `TestGitHubRelationshipCommandsGraphAndBatchPreflight`,
+  `TestGitHubFilesGlobRolesStatusAndPartialCommentFailure`,
+  `TestGitHubScheduleCommandsFlagsAndPartialFailure`, dependency batch and
+  update/activity whole-command tests.
+- `gh_activity.go` explicitly accepts log target/type flags and handoff sections
+  plus message aliases. Native comments and structured log/handoff entries remain
+  distinct. Tests: `TestGitHubActivityLogTargetsAndTypes`,
+  `TestGitHubCommentsSeparateNativeAndStructuredHistory`,
+  `TestGitHubHandoffInputAndSnapshot`.
+- `gh_ws.go` and `gh_ws_activity.go` separate local membership/focus/end state
+  from remote tagged-task starts/logs/handoff/review. `--no-start` is local only.
+  Tests: `TestGitHubWorkSessionCLIStartTagEndAndIsolation`,
+  `TestGitHubJournalCLIClaimSweepAndWorkSessionGroups`,
+  `TestGitHubJournalCLIWorkSessionActivityGroup`,
+  `TestGitHubJournalCLIHandoffReviewWholeCommand`.
+- `gh_boards.go` journals shared board create/edit/delete/order changes. `note.go`
+  opens `pkg/notes` using the configured store; its GitHub client verifies the
+  current actor and enables tracking. Note title/content/delete/restore/pin/archive
+  changes use observed native carrier updates. Tests:
+  `TestGitHubBoardInvalidDraftsBeforeNetwork`,
+  `TestGitHubNoteAllCommandsFiltersAndIsolation`,
+  `TestGitHubNoteEditorConflictAndRemoteChange`, entity update/undo and builtin
+  initial-settings tests. Monitor view/last-visited settings remain local.
+- Label repair uses tracked group updates. State metadata remains authoritative;
+  priority repair has explicit preview/apply/ID scope. Tests:
+  `TestGitHubJournalCLILabelRepairGroup`,
+  `TestGitHubPriorityLabelSyncCLIPreviewApplyAndRepeat`.
+- Task import uses its guarded creation/update/relationship executor, including
+  force/resume; journal import is a separate passive archive protocol. Dry-run
+  does not write. Journal mapping is accepted only for journal import, and
+  force/source are rejected for that format. See [import command acceptance](github-import-command-journal.md)
+  and [portable journal acceptance](github-portable-journal.md).
+- `gh_last.go` uses complete raw `ActionHistory`, collapsing owned effects only
+  for CLI presentation. `undo --list` reads; `--reconcile` observes outcomes and
+  `--apply` permits receipt publication without replaying uncertain target writes.
+  Tests cover latest-action selection, invalid option combinations, current
+  session/author fences, native target conflicts and missing/changed receipts.
+
+HTTP/monitor production factories use the same tracked client with their actual
+scoped actor. Their package-level race regression checks production creation,
+edit, workflow/cascade, comments, dependencies, deletion, board/note mutations,
+uncertain outcomes and retired sessions. It does not certify physical GUI drag
+acceptance or add HTTP/monitor undo controls.
+
+## Explicit exclusions and alternatives
+
+GitHub's documented [comment API](https://docs.github.com/en/rest/issues/comments)
+allows creation with body text, body updates and deletion; it offers no parameters
+to restore a deleted comment's original native ID, author or timestamps. td keeps
+original identity/body/clocks in the journal and reports exact restoration as
+unsupported. Reposting text creates a new comment with new native identity.
+
+The documented [issue event API](https://docs.github.com/en/rest/issues/events)
+provides list/get operations, without an event-deletion endpoint. Compensation
+may restore supported current fields but cannot erase native event history. td
+retains audit provenance rather than claiming a pristine historical rollback.
+
+Creation undo uses the documented logical-delete alternative; it cannot safely
+unallocate the original native issue number. Legacy untracked actions lack
+verified before-state and cannot be retroactively treated as executable receipts.
+Portable archive restoration preserves source evidence and bindings but does not
+make source receipts executable against destination native objects.
+
+Device-local session/focus/worksession membership and preferences, repository
+configuration, and GitHub repository/collaborator administration are outside the
+remote task journal undo contract. General support of those commands remains in
+their own task contracts. SQLite schema migration remains SQLite-specific.
+
+GitHub writes are not atomic multi-object transactions. Conflicts, permissions,
+capacity and uncertain outcomes remain explicit errors with actual operation
+identity/partial effects. No automatic uncertain mutation replay is authorized.
+
+## Current validation
+
+The full `internal/serve` and `pkg/monitor` race suites passed at c609f64
+(255.881 s and 174.127 s). Focused ghstore history/undo race regression passed (23.675 s), and final CLI
+history/undo/options race regression passed (60.146 s). Broad command writer
+race regression and exact-commit Go CI are still running.
+
+Native acceptance found a concrete remaining defect: two disposable tasks
+`gh-208` and `gh-209` were started together, then updated together with fields
+and inline comments. Update undo succeeded (269.412 s), restoring the exact
+native issue number/title/body/state/labels/creation clock/author observed after
+start. The next undo, targeting the earlier start group, failed with a conflict
+on `gh-208` despite that exact restored content. It made zero target writes.
+The basic group inverse currently rejects causal revision bridging, so the
+verified inverse receipt is not sufficient to undo the preceding group.
+This is an implementable support gap, not a GitHub API exclusion. Original
+observations and journal receipts remain intact for the mandatory bug
+fix [#84](https://github.com/yoophi/td/issues/84). No uncertain write was retried, and the fixtures remain logically visible
+for diagnosis rather than being silently cleaned up.
+
+This record does not declare #68 or #9 complete. Sequential compound inverses
+must pass before their final review; exact native event/identity restoration
+continues to be the separate API exclusion described above.

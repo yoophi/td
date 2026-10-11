@@ -176,7 +176,7 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 	}
 	// Keep the established array contract even for an empty result. The scope
 	// note goes to stderr so an empty array cannot imply lossless legacy history.
-	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. Journaling across all writers and workflow/multi-target undo are not fully integrated yet.")
+	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. Portable archives preserve source history without becoming executable destination receipts.")
 	if jsonMode(cmd) {
 		return true, json.NewEncoder(cmd.OutOrStdout()).Encode(rows)
 	}
@@ -199,7 +199,7 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 }
 
 func executeGitHubUndo(cmd *cobra.Command, client *ghstore.Client, actions []ghstore.ActionJournalRecord, sessionID string) error {
-	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. Workflow/multi-target undo integration remains pending.")
+	cmd.PrintErrln("History scope: tracked td action journals for this session; pre-journal/native changes are not reconstructed. Undo requires verified current-session receipts; native identity/event history cannot be erased or recreated exactly.")
 	var selected *ghstore.ActionJournalRecord
 	for i := range actions {
 		if actions[i].Phase != "undone" {

@@ -44,7 +44,9 @@ multi-request transaction, and this audit does not add an undo UI/HTTP endpoint.
 
 ## Recovery, inverse and exclusions
 
-`Snapshot.ActionHistory` collapses owned effects into the original command.
+`Snapshot.ActionHistory` returns the complete uncollapsed source records.
+The CLI applies `CollapseActionGroups` to present owned effects as the original
+command; portable history keeps the complete records and validates their links.
 `ReconcileAction` observes uncertain outcomes and may publish receipts; it does
 not repeat target mutations. `UndoAction` dispatches the command-specific inverse
 with fresh task, original receipt, native activity/event and graph checks.

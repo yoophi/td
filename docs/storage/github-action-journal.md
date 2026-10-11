@@ -12,6 +12,8 @@ The stages below include historical implementation boundaries; current
 CLI/HTTP/monitor dispatch and acceptance are summarized in the
 [writer audit](github-writer-audit.md) and
 [native import acceptance](github-import-command-journal.md#native-acceptance-78).
+The [change command/option audit](github-change-command-audit.md) enumerates the
+current #9 command surface and separates API exclusions from remaining validation.
 
 This work belongs to #9. The codec, bulk reader, inverse planner and an opt-in
 issue-update write protocol are present. `last` and `undo --list` have GitHub
@@ -24,9 +26,14 @@ Tracked activity creation now records v2 receipts. HTTP and monitor client
 factories now enable the same issue/activity protocols with their actual scoped
 actors. Raw comment deletion now preserves v4 original comment snapshots;
 single-target linked-file and relation undo also restore verified original review
-state. Single-target native close/reopen changes have a guarded compensation executor. Coordinated workflow and multi-target undo remain pending.
-`td undo` executes supported scalar, linked-file, single-source relation and own comment-creation inverses. This document is
-an implementation boundary, not an acceptance or completion declaration.
+state. Native close/reopen changes use guarded compensation. Coordinated
+workflow/cascade, multi-target update/transition/activity, creation-with-relations
+and import commands now have whole-command inverse and receipt-only recovery
+protocols described in the writer matrix. Later sections retain the earlier
+milestones; their former pending lists are not the current support contract.
+`td undo` selects the verified current-session command and executes its supported
+inverse, preserving the explicit native identity/history exclusions. Final #9
+acceptance remains subject to the current change command/option audit.
 
 An issue journal is a versioned `td:action:v1` block on a repository carrier's GitHub
 comment. New tracked updates use a dedicated `entity_kind=journal` issue, excluded
@@ -71,8 +78,9 @@ undone fields plus operation, phase, carrier, GitHub author/URL and explicit
 history/data scope. Before/after data is native issue state JSON, not a SQLite
 Issue snapshot; `data_format=github-native-issue-state-v1` identifies it.
 Prepared results have no verified after snapshot. A scope note on stderr
-explains that legacy/native changes are not reconstructed and coverage across
-all writers and workflow/multi-target undo is incomplete. Empty history must not imply that no
+explains that legacy/native changes are not reconstructed and portable archives
+do not become executable destination receipts. Undo also identifies the native
+identity/event-history exclusion. Empty history must not imply that no
 older actions occurred. Actual undo selects the newest current-session action
 that is not already undone from a fresh bulk observation. A prepared or
 undo-prepared action stops execution with a conflict error; it is never skipped
