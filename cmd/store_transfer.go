@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -20,7 +19,7 @@ func newStoreTransferCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "transfer",
 		Short: "Transfer explicitly between SQLite and GitHub",
-		Long:  "Transfer is separate from store selection. Choose --dry-run to inspect mappings without writes, or --execute for a checked transfer. GitHub execution requires a new --checkpoint file; task adoption and resume are still in development.",
+		Long:  "Transfer is separate from store selection. Choose --dry-run to inspect mappings without writes, or --execute for a checked transfer. GitHub execution requires a new --checkpoint file and preserves explicitly adopted tasks unchanged; checkpoint resume is still in development.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if dryRun == execute {
@@ -83,9 +82,6 @@ func newStoreTransferCommand() *cobra.Command {
 				if targetStore == config.StoreGitHub {
 					result, err := storetransfer.ExecuteGitHubDestination(cmd.Context(), source.Source, target, bindings, checkpointPath, maxBytes)
 					if err != nil {
-						if errors.Is(err, storetransfer.ErrGitHubTaskAdoption) {
-							return withErrorCode("unsupported_operation", err)
-						}
 						return err
 					}
 					if jsonMode(cmd) {
@@ -162,7 +158,7 @@ func newStoreTransferCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&mappings, "map", nil, "Explicit qualified-source-key=existing-target-id binding; repeatable")
 	cmd.Flags().Int64Var(&maxBytes, "max-bytes", 0, "Serialized input limit in bytes (0 uses 64 MiB)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Inspect a transfer without source or destination writes")
-	cmd.Flags().BoolVar(&execute, "execute", false, "Execute a checked transfer (GitHub task adoption/resume are in development)")
+	cmd.Flags().BoolVar(&execute, "execute", false, "Execute a checked transfer (checkpoint resume is in development)")
 	cmd.Flags().StringVar(&checkpointPath, "checkpoint", "", "New local checkpoint file required before GitHub execution writes")
 	return cmd
 }

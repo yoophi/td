@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestGitHubExecutionTaskAdoptionRejectsBeforeAnyAccessOrCheckpoint(t *testing.T) {
+func TestGitHubExecutionTaskAdoptionRequiresGitHubAccessBeforeCheckpoint(t *testing.T) {
 	source, _ := githubEntitySourceFixture(t)
 	targetSource := githubTaskInputFixture(t)
 	target := gitHubPrepareTarget(t, targetSource.GitHub)
@@ -23,13 +23,13 @@ func TestGitHubExecutionTaskAdoptionRejectsBeforeAnyAccessOrCheckpoint(t *testin
 		}
 	}
 	path := filepath.Join(t.TempDir(), "checkpoint.json")
-	t.Setenv("PATH", t.TempDir()) // gh/git unavailable: rejection must be pure.
+	t.Setenv("PATH", t.TempDir()) // Valid adoption still requires gh/git access.
 	result, err := ExecuteGitHubDestination(context.Background(), source, target, bindings, path, 0)
-	if !errors.Is(err, ErrGitHubTaskAdoption) || result != nil {
+	if err == nil || result != nil {
 		t.Fatal(result, err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatal("unsupported adoption created checkpoint", err)
+		t.Fatal("inaccessible destination created checkpoint", err)
 	}
 }
 

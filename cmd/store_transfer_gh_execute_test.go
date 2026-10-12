@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"os"
@@ -16,6 +17,15 @@ import (
 )
 
 func TestStoreTransferExecuteGitHubWholeWorkspaceAndNoDuplicateReplay(t *testing.T) {
+	for _, adopt := range []bool{false, true} {
+		t.Run(map[bool]string{false: "new_tasks", true: "adopted_parent"}[adopt], func(t *testing.T) {
+			testStoreTransferExecuteGitHubWholeWorkspace(t, adopt)
+		})
+	}
+}
+
+func testStoreTransferExecuteGitHubWholeWorkspace(t *testing.T, adopt bool) {
+	t.Helper()
 	target, _, run := journalCLIWithTimeout(t, 2*time.Minute)
 	useNativeCommentOrderFixture(t)
 	useHandoffReviewFixture(t)
@@ -53,10 +63,40 @@ func TestStoreTransferExecuteGitHubWholeWorkspaceAndNoDuplicateReplay(t *testing
 	}
 	checkpoint := filepath.Join(t.TempDir(), "checkpoint.json")
 	args := []string{"--work-dir", source, "store", "transfer", "--execute", "--to", "gh-issue", "--destination", target, "--remote", "origin", "--source-namespace", "workspace-execute-fixture", "--checkpoint", checkpoint, "--json"}
+	var retainedBefore json.RawMessage
+	if adopt {
+		if out, stderr, err := run("create", "Unrelated fixture seed", "--minor", "--json"); err != nil {
+			t.Fatal("initial destination observation", out, stderr, err)
+		}
+		collected, err := storetransfer.Collect(context.Background(), source, "workspace-execute-fixture", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, identity := range collected.Preview.Identities {
+			if identity.Kind == "task" && identity.ID == parent.ID {
+				args = append(args, "--map", identity.Key+"=gh-2")
+			}
+		}
+		var native struct{ Issues map[string]json.RawMessage }
+		if err := json.Unmarshal(relationFixtureBytes(t, "TD_SCHEDULE_STATE"), &native); err != nil {
+			t.Fatal(err)
+		}
+		retainedBefore = native.Issues["2"]
+	}
 	out, stderr, err := run(args...)
 	var result storetransfer.GitHubTransferResult
-	if err != nil || json.Unmarshal([]byte(out), &result) != nil || !result.Completed || result.TaskImport == nil || result.TaskImport.Completed != 2 || result.Notes != 1 || result.Boards != 1 || result.SourceArchiveID == 0 || result.CompletionArchiveID == 0 || len(result.Mappings) != 5 {
+	expectedCompleted := 2
+	if adopt {
+		expectedCompleted = 1
+	}
+	if err != nil || json.Unmarshal([]byte(out), &result) != nil || !result.Completed || result.TaskImport == nil || result.TaskImport.Completed != expectedCompleted || result.Notes != 1 || result.Boards != 1 || result.SourceArchiveID == 0 || result.CompletionArchiveID == 0 || len(result.Mappings) != 5 {
 		t.Fatal("workspace execution failed", out, stderr, err)
+	}
+	if adopt {
+		var native struct{ Issues map[string]json.RawMessage }
+		if err := json.Unmarshal(relationFixtureBytes(t, "TD_SCHEDULE_STATE"), &native); err != nil || !bytes.Equal(retainedBefore, native.Issues["2"]) || result.TaskImport.Skipped != 1 {
+			t.Fatal("workspace execution changed adopted destination", err)
+		}
 	}
 	data, err := os.ReadFile(checkpoint)
 	if err != nil {

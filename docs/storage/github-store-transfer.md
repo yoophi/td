@@ -5,8 +5,9 @@ requires a separate command with source/destination validation, preview, stable
 qualified ID mappings, checked writes and explicit partial-failure resume.
 This implementation is in progress. This feature branch supports bidirectional
 `td store transfer --dry-run` and explicit execution in both directions. GitHub
-execution supports new task mappings and note/board reuse; existing task adoption
-and explicit checkpoint resume remain incomplete. #93/#94/#95 stay open.
+execution supports new task mappings and explicit unchanged task/note/board
+reuse. Explicit checkpoint resume remains incomplete. #93 is under final
+implementation validation; #94/#95 stay open.
 
 ## CLI preview (#93, execution in progress)
 
@@ -36,7 +37,8 @@ the source SHA256, namespace, ID mappings, inserted entity counts and passive
 preservation policies. Human output reports those counts and the capsule SHA.
 An output failure after commit explicitly identifies the committed outcome;
 it does not roll back data or suggest blind retry. GitHub destination execution
-still returns `unsupported_operation`; #93 is not complete.
+requires a new checkpoint and performs individually checked writes; it is not
+an atomic GitHub transaction. Checkpoint resume remains #94.
 
 ```bash
 td -w /path/to/github-project store transfer --execute --to sqlite \
@@ -535,9 +537,10 @@ Prepared commands with adoption use logical journal v35 and archive transport
 v36. Ordinary imports retain v33/v34. The version split prevents old logical
 contracts from accepting a no-overwrite destination decision as a regular import.
 Both inline and archived prepared command readers retain the original native
-before-state and reject a downgraded contract. Execution remains guarded before
-API access until ownership, forward completion and inverse/resume rules handle
-adopted members. No v35/v36 native action has been published; older readers must
+before-state and reject a downgraded contract. At the initial contract stage,
+execution was guarded before API access pending ownership, forward completion
+and inverse rules. The public integration below replaces that guard with the
+independent tracked-command requirement. No v35/v36 native action has been published; older readers must
 be upgraded before those formats are used remotely. This does not close #93.
 
 The private importer execution stage now skips every adopted member's source
@@ -548,9 +551,9 @@ edges that would mutate an adopted owner are rejected. The original complete
 issue/comment observation is checked again after allocation/detach and before
 completion, so replan cannot replace it with a newer adoption basis. Production
 fixtures confirm unchanged retained issue bytes/comments and new mapped
-dependencies, and reject a retained edit after allocation. Public import/store
-execution remains guarded until tracked forward/ownership/inverse validation is
-connected. No new adoption action has been published natively.
+dependencies, and reject a retained edit after allocation. This private stage
+preceded the public tracked completion/inverse and mapping integration below.
+No new adoption action has been published natively.
 
 Tracked completion now accepts an adopted member only while its original
 destination ID, native fields/clocks, comments and state events remain unchanged.
@@ -568,5 +571,33 @@ Workspace task input preparation also carries each explicit adopted task
 assignment through the qualified transfer key to its stable importer key and
 `adopt_target_id`. Fresh input copies retain those bindings without changing the
 original source envelope checksum or adding a destination decision to the passive
-source capsule. The public execution guard remains in place until verified task
-mapping integration is complete.
+source capsule.
+
+### Public tracked adoption and verified mapping integration
+
+Public import now accepts explicit adoption only in an independent tracked
+command. An all-adopted import records the original bindings and native
+observations without modifying those tasks. Repeating an unchanged completed
+command reuses its completion without a second task or journal write. Undo has
+no target steps for retained members; a mixed command compensates only its own
+new allocations/overwrites.
+
+`CompletedImportMappings` requires the original applied native command, exact
+frozen input, original session and current GitHub author before accepting an
+adopted ID. Current issue fields, clocks and comments must match its retained
+completion observation. It uses the existing bulk issue/comment observation and
+one actor lookup, with no per-adopted-task API requests. Imported members still
+require their verified source/history receipts. The workspace executor also
+compares retained entities to its original checkpoint observation before creating
+auxiliary entities and at final completion. Concurrent changes stop with explicit
+partial-outcome errors; these checks do not provide server-side compare-and-swap.
+
+SQLite's ordinary JSON import rejects `adopt_target_id` before any task row is
+written, including dry-run/force modes. It must not silently reinterpret a
+GitHub destination decision as a new SQLite task.
+
+Production CLI fixtures exercise mixed and all-adopted import completion,
+unchanged repeat and undo, plus whole-workspace transfer with an explicitly
+adopted parent and a new child/note/board. Real GitHub destination completion and
+checkpoint resume remain acceptance work in #94/#95; no native v35/v36 publication
+is claimed here. Older readers must be upgraded before reading these actions.

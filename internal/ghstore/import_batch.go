@@ -23,7 +23,7 @@ type ImportResult struct {
 type importBatchResult = ImportResult
 
 func (c *Client) Import(ctx context.Context, items []ImportItem, force bool) (*ImportResult, error) {
-	if err := requireExecutableImportContract(items); err != nil {
+	if err := c.requireExecutableImportContract(items); err != nil {
 		return nil, err
 	}
 	if err := RequireImportSourceNamespaces(items); err != nil {

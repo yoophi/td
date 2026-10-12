@@ -151,7 +151,8 @@ func (a ActionJournal) validateImportCommand() error {
 		if !slices.Contains([]string{"create", "overwrite", "resume", "resume_history", "skip", "adopt"}, member.Action) {
 			return fmt.Errorf("unknown import destination decision")
 		}
-		changes = changes || member.Action != "skip" && member.Action != "adopt"
+		// An explicit adoption records a binding without mutating its task.
+		changes = changes || member.Action != "skip"
 		if member.Action == "create" {
 			if member.TargetID != "" || member.Before != nil {
 				return fmt.Errorf("unallocated import source cannot invent a destination observation")

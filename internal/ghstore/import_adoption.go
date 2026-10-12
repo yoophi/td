@@ -5,13 +5,12 @@ import (
 	"reflect"
 )
 
-// Adoption planning is a distinct no-overwrite decision. Execution remains
-// blocked before API access until native command ownership, completion and
-// inverse contracts all pin the original binding and retained observation.
-func requireExecutableImportContract(items []ImportItem) error {
+// Adoption is a no-overwrite decision whose retained observation must belong
+// to a tracked whole command, including its completion and inverse.
+func (c *Client) requireExecutableImportContract(items []ImportItem) error {
 	for _, item := range items {
-		if item.AdoptTargetID != "" {
-			return fmt.Errorf("task adoption execution requires its versioned command/receipt contract; no API call or write attempted")
+		if item.AdoptTargetID != "" && (c == nil || c.journal == nil || c.journal.Group != nil) {
+			return fmt.Errorf("task adoption execution requires an independent tracked command; no API call or write attempted")
 		}
 	}
 	return nil

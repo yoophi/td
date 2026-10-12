@@ -18,7 +18,14 @@ stops with the original checkpoint/operation and native cause; no target write
 is automatically retried. `TestStoreTransferExecuteGitHubWholeWorkspaceAndNoDuplicateReplay`
 checks the real command dispatch and unchanged SQL bytes. Native evidence is
 currently partial allocation/listing-lag failure, not completed workspace proof.
-Existing task adoption and explicit checkpoint reconciliation remain unfinished.
+Explicit task adoption uses the native versioned whole-import command and pins
+the retained destination observation. Completion and inverse preserve adopted
+task fields/history; all-adopted imports journal only their bindings. Verified
+mapping observations use bulk collections plus one original-actor check, and
+workspace execution rechecks retained entities before auxiliary writes and final
+completion. CLI import/repeat/undo and whole-workspace adoption fixtures cover
+the public paths. Explicit checkpoint reconciliation and final native/integration
+acceptance remain unfinished (#94/#95).
 
 This is the release-preparation audit of #65 at `95141ed`, after native import
 acceptance #78. It checks the existing compound task writers and their real

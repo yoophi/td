@@ -130,15 +130,15 @@ func TestImportAdoptionRejectsRetainedEditAfterAllocation(t *testing.T) {
 	}
 }
 
-func TestImportAdoptionTrackedCompletionAndInverseKeepRetainedTaskUntouched(t *testing.T) {
+func newWritableOwnedAdoptionFixture(t *testing.T, all ...bool) *ownedImportFixture {
+	t.Helper()
 	f := newOwnedImportFixture(t, false, func(f *ownedImportFixture) {
 		f.items[0].AdoptTargetID = "gh-1"
 		f.items[1].Issue.ParentID = f.items[0].Issue.ID
+		if len(all) > 0 && all[0] {
+			f.items[1].AdoptTargetID = "gh-2"
+		}
 	})
-	before, err := json.Marshal(f.native[1])
-	if err != nil {
-		t.Fatal(err)
-	}
 	base := f.client.run
 	f.client.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
 		if args[4] == "GET" && strings.Contains(args[5], "/events?") {
@@ -170,6 +170,15 @@ func TestImportAdoptionTrackedCompletionAndInverseKeepRetainedTaskUntouched(t *t
 			return data, err
 		}
 		return base(ctx, dir, payload, args...)
+	}
+	return f
+}
+
+func TestImportAdoptionTrackedCompletionAndInverseKeepRetainedTaskUntouched(t *testing.T) {
+	f := newWritableOwnedAdoptionFixture(t)
+	before, err := json.Marshal(f.native[1])
+	if err != nil {
+		t.Fatal(err)
 	}
 	if result, err := f.client.executeImport(f.ctx, f.items, false); err != nil || result.Completed != 1 || result.Skipped != 1 {
 		t.Fatal(result, err)

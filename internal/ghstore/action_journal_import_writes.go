@@ -41,8 +41,25 @@ func (c *Client) importCommand(ctx context.Context, input []ImportItem, force bo
 	resumed := root != nil
 	if root == nil {
 		changes := false
+		adoptions := false
 		for _, row := range plan.Rows {
 			changes = changes || row.Action != "skip" && row.Action != "adopt"
+			adoptions = adoptions || row.Action == "adopt"
+		}
+		if !changes && adoptions {
+			completed, err := findCompletedAdoptionCommand(plan.snapshot, items, session, actor.Login)
+			if err != nil {
+				return nil, err
+			}
+			if completed != nil {
+				if err := c.verifyCompletedImport(ctx, completed, plan.snapshot); err != nil {
+					return nil, err
+				}
+				plan.DryRun = false
+				return &ImportResult{Plan: plan, Skipped: len(plan.Rows)}, nil
+			}
+			// Journal the original binding even when every task is retained.
+			changes = true
 		}
 		if !changes {
 			plan.DryRun = false

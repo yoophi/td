@@ -809,6 +809,11 @@ func importJSON(database *db.DB, data []byte, dryRun, force bool) (int, error) {
 	if err := json.Unmarshal(data, &items); err != nil {
 		return 0, fmt.Errorf("failed to parse JSON: %v", err)
 	}
+	for _, item := range items {
+		if item.AdoptTargetID != "" {
+			return 0, fmt.Errorf("adopt_target_id requires tracked gh-issue import; no SQLite task write attempted")
+		}
+	}
 
 	imported := 0
 	importedIDs := make(map[string]string) // id -> parent_id

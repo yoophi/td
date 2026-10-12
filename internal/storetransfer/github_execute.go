@@ -3,7 +3,6 @@ package storetransfer
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,8 +11,6 @@ import (
 	"github.com/marcus/td/internal/ghcontext"
 	"github.com/marcus/td/internal/ghstore"
 )
-
-var ErrGitHubTaskAdoption = errors.New("GitHub task adoption requires a checked importer source-key contract; no write attempted")
 
 // GitHubTransferResult reports individually confirmed stages. GitHub is not a
 // transaction; an error may leave native intents/entities and the source archive.
@@ -59,10 +56,9 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 	if err != nil {
 		return nil, err
 	}
-	for _, row := range prepared.identities.Assignments {
-		if row.Kind == "task" && row.Action == "adopt" {
-			return nil, ErrGitHubTaskAdoption
-		}
+	input, err := prepared.TaskInputs()
+	if err != nil {
+		return nil, err
 	}
 	spec := target.Spec
 	frozenSource, err := Read(bytes.NewReader(prepared.OriginalArchive()), maxBytes)
@@ -145,10 +141,6 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 		return fail("source archive", err)
 	}
 	result.SourceArchiveID = archive.ID
-	input, err := prepared.TaskInputs()
-	if err != nil {
-		return fail("task inputs", err)
-	}
 	if len(input.Items) > 0 {
 		result.TaskImport, err = client.Import(ctx, input.Items, false)
 		if err != nil {
@@ -165,6 +157,13 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 	}
 	for key, id := range taskIDs {
 		result.Mappings[key] = id
+	}
+	retained, err := client.ExportWorkspaceLimited(ctx, maxBytes)
+	if err != nil {
+		return fail("retained destination observation", err)
+	}
+	if err := prepared.checkRetainedNative(retained, false); err != nil {
+		return fail("retained destination baseline", err)
 	}
 	entities, err := BuildGitHubEntityInputs(prepared.source, taskIDs, prepared.reused)
 	if err != nil {
