@@ -107,10 +107,10 @@ func (a ActionJournal) validateImportForward() error {
 		if err := updateEventProof(eventProbe, target.Events); err != nil {
 			return err
 		}
-		if row.Action != "skip" {
+		if row.Action != "skip" && row.Action != "adopt" {
 			return fmt.Errorf("import result contains an unfinished source: %s", row.SourceKey)
 		}
-		if member.Action == "skip" {
+		if member.Action == "skip" || member.Action == "adopt" {
 			before, err := importTargetBasis(member.Before.Issue)
 			if err != nil || row.basis != before || !reflect.DeepEqual(member.Before.Comments, a.ImportForward.Targets[n].Comments) || !reflect.DeepEqual(member.Before.Events, a.ImportForward.Targets[n].Events) {
 				return fmt.Errorf("import changed an originally skipped destination")

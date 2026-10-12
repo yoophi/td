@@ -38,7 +38,7 @@ func (c *Client) reconcileImportCommand(ctx context.Context, root *ActionJournal
 		return nil, err
 	}
 	for _, row := range plan.Rows {
-		result.Partial = result.Partial || row.Action != "skip"
+		result.Partial = result.Partial || row.Action != "skip" && row.Action != "adopt"
 	}
 	if result.Partial {
 		return result, nil

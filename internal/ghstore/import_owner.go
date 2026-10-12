@@ -250,6 +250,16 @@ func validateImportExecutionRows(scope *importExecutionScope, plan *ImportPlan) 
 				return &ConflictError{ID: row.TargetID}
 			}
 		}
+		if original.Action == "adopt" {
+			if row.Action != "adopt" || row.TargetID != original.TargetID || original.Before == nil {
+				return fmt.Errorf("original task adoption decision changed")
+			}
+			for _, entry := range plan.snapshot.entries {
+				if fmt.Sprintf("gh-%d", entry.Issue.Number) == row.TargetID && !reflect.DeepEqual(entry.Comments, original.Before.Comments) {
+					return &ConflictError{ID: row.TargetID}
+				}
+			}
+		}
 		if original.Action != "skip" && row.Action == "skip" && (row.Owner == nil || *row.Owner != scope.owner) {
 			return fmt.Errorf("import completion belongs to another execution")
 		}

@@ -76,7 +76,7 @@ func importInputNative(native apiIssue, input ActionUpdateInput) apiIssue {
 func importCompensationInput(a ActionJournal, n int, undo string, at time.Time) (ActionUpdateInput, error) {
 	member, forward := a.ImportCommand.Members[n], a.ImportForward.Targets[n]
 	native := forward.Issue
-	if member.Action == "skip" {
+	if member.Action == "skip" || member.Action == "adopt" {
 		return importNativeInput(native)
 	}
 	if member.Before != nil {
@@ -181,7 +181,7 @@ func planImportInverse(a ActionJournal, snapshot *Snapshot, undo string, at time
 		slices.Sort(dependencies)
 		relations[member.SourceKey] = importRelations{parent: projected.ParentID, dependencies: dependencies}
 		action := "overwrite"
-		if member.Action == "skip" {
+		if member.Action == "skip" || member.Action == "adopt" {
 			action = "skip"
 		}
 		plan.Rows = append(plan.Rows, ImportPlanRow{SourceKey: member.SourceKey, TargetID: current.ID, Action: action})

@@ -551,3 +551,15 @@ fixtures confirm unchanged retained issue bytes/comments and new mapped
 dependencies, and reject a retained edit after allocation. Public import/store
 execution remains guarded until tracked forward/ownership/inverse validation is
 connected. No new adoption action has been published natively.
+
+Tracked completion now accepts an adopted member only while its original
+destination ID, native fields/clocks, comments and state events remain unchanged.
+It does not require or manufacture a source-owned completion receipt for that
+retained task. Reconciliation treats adoption as a completed no-write decision.
+The inverse planner excludes adopted members from detach/restore/delete steps;
+the original completion observation remains a conflict fence during undo.
+The production executor fixture publishes the actual tracked completion and runs
+the entire inverse, confirming that the adopted task remains byte-for-byte
+unchanged while the new allocation is logically deleted. This is fixture
+evidence, not a live GitHub adoption claim. Public adoption and verified workspace
+mapping integration remain required before #93 can close.

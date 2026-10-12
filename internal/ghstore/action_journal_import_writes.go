@@ -42,7 +42,7 @@ func (c *Client) importCommand(ctx context.Context, input []ImportItem, force bo
 	if root == nil {
 		changes := false
 		for _, row := range plan.Rows {
-			changes = changes || row.Action != "skip"
+			changes = changes || row.Action != "skip" && row.Action != "adopt"
 		}
 		if !changes {
 			plan.DryRun = false
@@ -161,7 +161,7 @@ func (c *Client) observeImportCompletion(ctx context.Context, root *ActionJourna
 		return nil, err
 	}
 	for _, row := range plan.Rows {
-		if row.Action != "skip" {
+		if row.Action != "skip" && row.Action != "adopt" {
 			return nil, fmt.Errorf("import %s has unfinished source %s; observation does not replay missing effects", root.ID, row.SourceKey)
 		}
 	}
