@@ -379,6 +379,8 @@ type TickMsg time.Time
 
 // RefreshDataMsg carries refreshed data
 type RefreshDataMsg struct {
+	RetryAt          time.Time
+	RetrySource      string
 	FullReconciledAt time.Time
 	ObservationMode  string
 	Skipped          bool
@@ -395,6 +397,9 @@ type RefreshDataMsg struct {
 	HasIssues        bool // any non-deleted issue exists in the project DB
 	Timestamp        time.Time
 }
+
+// GitHubRetryMsg wakes a rate-limited read without starting another poll chain.
+type GitHubRetryMsg struct{ Generation uint64 }
 
 // IssueDetailsMsg carries fetched issue details for the modal
 type IssueDetailsMsg struct {

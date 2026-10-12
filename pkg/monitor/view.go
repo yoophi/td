@@ -2491,6 +2491,13 @@ func (m Model) renderFooter() string {
 	if m.DataSource != nil && m.GitHubObservationMode != "" {
 		refreshText += fmt.Sprintf(" (%s; full %s)", m.GitHubObservationMode, formatLocalTime(m.LastFullReconciliation, "15:04:05"))
 	}
+	if m.DataSource != nil && !m.GitHubRetryAt.IsZero() {
+		refreshText = fmt.Sprintf("Next refresh: %s (%s)", formatLocalTime(m.GitHubRetryAt, "2006-01-02 15:04:05 MST"), m.GitHubRetrySource)
+		// Keep the scheduled time readable on small terminals.
+		if ansi.StringWidth(refreshText)+1 > m.Width {
+			refreshText = fmt.Sprintf("Next: %s (%s)", formatLocalTime(m.GitHubRetryAt, "15:04:05"), m.GitHubRetrySource)
+		}
+	}
 	if source, ok := m.DataSource.(interface{ IsRefreshing() bool }); ok && source.IsRefreshing() {
 		refreshText = "GitHub loading (Ctrl+C: cancel)"
 	}

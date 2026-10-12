@@ -4,6 +4,10 @@ All notable changes to td are documented in this file.
 
 ## [Unreleased]
 
+- Monitor displays the next rate-limit refresh time in the local timezone,
+  including its `Retry-After` / `X-RateLimit-Reset` source, and resumes one read
+  at that deadline without duplicate retry timers or replaying writes.
+
 ## [v0.67.0] - 2026-10-11
 
 ### GitHub Issues storage

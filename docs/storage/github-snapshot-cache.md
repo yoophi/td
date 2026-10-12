@@ -295,3 +295,19 @@ passed. The native cache-disabled server used simulated gh responses with
 controlled latency; it made no real GitHub write and was stopped. Prior real
 GitHub incremental smoke evidence is recorded above. This closes #50's scope,
 not the remaining command parity, import, GUI or other project tasks.
+
+### Monitor rate-limit footer (#100)
+
+During a rate-limit cooldown, the monitor footer displays the scheduled read
+refresh time in the process's local timezone and the deadline source:
+`retry-after` or `x-ratelimit-reset`. Narrow terminals use a shorter clock display.
+The error's original diagnostic remains on its own footer row, and the last
+successful dashboard stays visible. Missing or expired usable deadlines are
+explicitly shown as a one-minute fallback instead of claiming a server reset.
+
+A dedicated deadline timer resumes one dashboard read; it does not create a
+second periodic poll chain or retry writes. Repeated cooldown responses retain
+the same timer. A new deadline supersedes the previous timer, and successful
+refresh clears the scheduled-time display. Refresh and retry messages remain
+active while forms are open, without changing the draft. Existing shared
+repository/credential cooldown checks still gate every actual GitHub request.

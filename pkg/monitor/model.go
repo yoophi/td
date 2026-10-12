@@ -263,7 +263,10 @@ type Model struct {
 	syncRuntime  *syncRuntime
 
 	// Configuration
-	RefreshInterval time.Duration
+	RefreshInterval       time.Duration
+	GitHubRetryAt         time.Time
+	GitHubRetrySource     string
+	gitHubRetryGeneration uint64
 
 	// Keymap registry for keyboard shortcuts
 	Keymap *keymap.Registry
@@ -743,6 +746,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// alive. Without this, opening a form (or other overlay that intercepts all
 	// messages) would swallow the TickMsg, preventing scheduleTick() from being
 	// called, permanently breaking the periodic refresh cycle.
+	if refresh, ok := msg.(RefreshDataMsg); ok {
+		return m.applyRefreshData(refresh)
+	}
+	if retry, ok := msg.(GitHubRetryMsg); ok {
+		if retry.Generation != m.gitHubRetryGeneration || m.GitHubRetryAt.IsZero() {
+			return m, nil
+		}
+		m.GitHubRetryAt = time.Time{}
+		m.GitHubRetrySource = ""
+		return m, m.fetchData()
+	}
 	if _, ok := msg.(TickMsg); ok {
 		cmds := []tea.Cmd{m.fetchData(), m.scheduleTick()}
 		if m.TaskListMode == TaskListModeBoard && m.BoardMode.Board != nil {
@@ -907,42 +921,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.StatusMessage = "Monitor preferences: " + msg.Error.Error()
 			m.StatusIsError = true
 		}
-		return m, nil
-	case RefreshDataMsg:
-		if msg.Skipped {
-			return m, nil
-		}
-		if f := msg.remoteFilter; f != nil && (f.search != m.SearchQuery || f.includeClosed != m.IncludeClosed || f.sort != m.SortMode) {
-			// Never overwrite a newer filter with an earlier request's rows.
-			return m, m.fetchData()
-		}
-		if msg.Error != nil {
-			m.StatusMessage = "Error refreshing monitor: " + msg.Error.Error()
-			m.StatusIsError = true
-			return m, nil
-		}
-		if m.DataSource != nil && strings.HasPrefix(m.StatusMessage, "Error refreshing monitor:") {
-			m.StatusMessage = "GitHub refreshed"
-			m.StatusIsError = false
-		}
-		m.IssueTransitions = msg.Transitions
-		m.FocusedIssue = msg.FocusedIssue
-		m.InProgress = msg.InProgress
-		m.Activity = msg.Activity
-		m.TaskList = msg.TaskList
-		m.RecentHandoffs = msg.RecentHandoffs
-		m.ActiveSessions = msg.ActiveSessions
-		m.HasIssues = msg.HasIssues
-		m.LastRefresh = msg.Timestamp
-		m.LastFullReconciliation = msg.FullReconciledAt
-		m.GitHubObservationMode = msg.ObservationMode
-
-		// Build flattened rows for selection
-		m.buildCurrentWorkRows()
-		m.buildTaskListRows()
-
-		// Restore cursor positions from saved issue IDs
-		m.restoreCursors()
 		return m, nil
 
 	case IssueDetailsMsg:
@@ -1400,6 +1378,13 @@ func (m Model) View() tea.View {
 	return view
 }
 
+func (m *Model) clearGitHubRetry() {
+	if !m.GitHubRetryAt.IsZero() {
+		m.gitHubRetryGeneration++
+	}
+	m.GitHubRetryAt, m.GitHubRetrySource = time.Time{}, ""
+}
+
 // scheduleTick returns a command that sends a TickMsg after the refresh interval
 func (m Model) scheduleTick() tea.Cmd {
 	return tea.Tick(m.RefreshInterval, func(t time.Time) tea.Msg {
@@ -1756,4 +1741,54 @@ func (m Model) swimlaneMaxScroll(contentHeight int) int {
 		}
 	}
 	return 0
+}
+
+// Dashboard refreshes must update rate-limit feedback even while a form owns input.
+func (m Model) applyRefreshData(msg RefreshDataMsg) (tea.Model, tea.Cmd) {
+	if msg.Skipped {
+		return m, nil
+	}
+	if f := msg.remoteFilter; f != nil && (f.search != m.SearchQuery || f.includeClosed != m.IncludeClosed || f.sort != m.SortMode) {
+		// Never overwrite a newer filter with an earlier request's rows.
+		return m, m.fetchData()
+	}
+	if msg.Error != nil {
+		m.StatusMessage = "Error refreshing monitor: " + msg.Error.Error()
+		m.StatusIsError = true
+		if m.DataSource != nil && !msg.RetryAt.IsZero() {
+			if !m.GitHubRetryAt.Equal(msg.RetryAt) {
+				m.GitHubRetryAt, m.GitHubRetrySource = msg.RetryAt, msg.RetrySource
+				m.gitHubRetryGeneration++
+				generation := m.gitHubRetryGeneration
+				return m, tea.Tick(max(time.Duration(0), time.Until(msg.RetryAt)), func(time.Time) tea.Msg { return GitHubRetryMsg{Generation: generation} })
+			}
+		} else {
+			m.clearGitHubRetry()
+		}
+		return m, nil
+	}
+	m.clearGitHubRetry()
+	if m.DataSource != nil && strings.HasPrefix(m.StatusMessage, "Error refreshing monitor:") {
+		m.StatusMessage = "GitHub refreshed"
+		m.StatusIsError = false
+	}
+	m.IssueTransitions = msg.Transitions
+	m.FocusedIssue = msg.FocusedIssue
+	m.InProgress = msg.InProgress
+	m.Activity = msg.Activity
+	m.TaskList = msg.TaskList
+	m.RecentHandoffs = msg.RecentHandoffs
+	m.ActiveSessions = msg.ActiveSessions
+	m.HasIssues = msg.HasIssues
+	m.LastRefresh = msg.Timestamp
+	m.LastFullReconciliation = msg.FullReconciledAt
+	m.GitHubObservationMode = msg.ObservationMode
+
+	// Build flattened rows for selection
+	m.buildCurrentWorkRows()
+	m.buildTaskListRows()
+
+	// Restore cursor positions from saved issue IDs
+	m.restoreCursors()
+	return m, nil
 }

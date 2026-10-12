@@ -38,6 +38,7 @@ type GitHubDataSource struct {
 	focus          func(context.Context) (*string, error)
 	rateLimit      error
 	retryAt        time.Time
+	retrySource    string
 }
 
 func NewGitHubDataSource(ctx context.Context, baseDir string, selected models.GitHubStoreConfig, actor, branch string, focus func(context.Context) (*string, error)) *GitHubDataSource {
@@ -72,9 +73,15 @@ func (s *GitHubDataSource) Fetch(search string, includeClosed bool, sort SortMod
 		if errors.As(err, &limit) {
 			s.rateLimit = err
 			s.retryAt = limit.RetryAt
-			if s.retryAt.IsZero() {
+			s.retrySource = limit.WaitSource
+			if !s.retryAt.After(time.Now()) {
 				s.retryAt = time.Now().Add(limit.MinimumWait())
+				if s.retrySource != "" {
+					s.retrySource += "; "
+				}
+				s.retrySource += "fallback 1m"
 			}
+			return RefreshDataMsg{Error: err, RetryAt: s.retryAt, RetrySource: s.retrySource}
 		}
 		return RefreshDataMsg{Error: err}
 	}
@@ -84,7 +91,7 @@ func (s *GitHubDataSource) Fetch(search string, includeClosed bool, sort SortMod
 	// Preserve the original diagnostic while suppressing repeated sweeps until
 	// the observed reset deadline. This never retries a write or clears data.
 	if s.rateLimit != nil && time.Now().Before(s.retryAt) {
-		return RefreshDataMsg{Error: s.rateLimit}
+		return RefreshDataMsg{Error: s.rateLimit, RetryAt: s.retryAt, RetrySource: s.retrySource}
 	}
 	if s.actor == "" || s.focus == nil {
 		return fail(fmt.Errorf("GitHub monitor requires actual session and focus reader"))
