@@ -82,10 +82,18 @@ func (c *Client) CreateBoardWithOptions(ctx context.Context, name, expression, a
 	if err := probe.validate(); err != nil {
 		return nil, &WorkflowInputError{Reason: err.Error()}
 	}
+	if err := c.validateBoardPositionTargets(ctx, positions); err != nil {
+		return nil, err
+	}
+
+	return c.createBoardConfigured(ctx, name, expression, actor, false, &boardConfigMutation{reason: "Transferred initial settings", apply: func(d *BoardDetails) error { d.ViewMode = mode; d.Positions = slices.Clone(positions); return nil }}, operation)
+}
+
+func (c *Client) validateBoardPositionTargets(ctx context.Context, positions []BoardPosition) error {
 	if len(positions) > 0 {
 		snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), false)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		tasks := map[string]bool{}
 		for _, r := range snapshot.records {
@@ -95,11 +103,11 @@ func (c *Client) CreateBoardWithOptions(ctx context.Context, name, expression, a
 		}
 		for _, p := range positions {
 			if !tasks[p.IssueID] {
-				return nil, &WorkflowInputError{Reason: fmt.Sprintf("board position target %s is not a task in this repository", p.IssueID)}
+				return &WorkflowInputError{Reason: fmt.Sprintf("board position target %s is not a task in this repository", p.IssueID)}
 			}
 		}
 	}
-	return c.createBoardConfigured(ctx, name, expression, actor, false, &boardConfigMutation{reason: "Transferred initial settings", apply: func(d *BoardDetails) error { d.ViewMode = mode; d.Positions = slices.Clone(positions); return nil }}, operation)
+	return nil
 }
 
 func (c *Client) createBoard(ctx context.Context, name, expression, actor string, builtin bool) (*BoardRecord, error) {
@@ -283,6 +291,12 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 	}
 	now := time.Now().UTC()
 	operation := "td-board-op-" + rand.Text()
+	if mutation != nil && mutation.operation != "" {
+		operation, err = c.entityCreationOperation(mutation.operation, "td-board-op-", actor)
+		if err != nil {
+			return nil, err
+		}
+	}
 	action := "update"
 	if mutation != nil {
 		action = mutation.action
@@ -311,7 +325,11 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 	if changes.Name != nil {
 		payload["title"] = name
 	}
-	journal, err := c.prepareEntityJournal(ctx, &original, actor, payload)
+	explicitOperation := ""
+	if mutation != nil {
+		explicitOperation = mutation.operation
+	}
+	journal, err := c.prepareEntityJournalWithOperation(ctx, &original, actor, payload, explicitOperation)
 	if err != nil {
 		return nil, err
 	}

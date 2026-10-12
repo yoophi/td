@@ -1,5 +1,14 @@
 # Compound task writer audit (#79)
 
+Feature-worktree addition for #93: `ApplyBuiltinBoardTransferObserved` uses the
+existing configured create/entity update journal, one native carrier mutation
+for all selected positions, pure slot/member preflight, and a checkpoint-pinned
+operation for explicit writes. A virtual builtin uses the existing initial-create
+path; an existing builtin keeps its configuration and records one position delta.
+`TestBuiltinTransfer*` covers the complete input, retained settings, conflicts,
+replay and partial outcomes. This addition is not evidence of transfer CLI
+activation, whole-workspace compensation/resume, or the full #31/#68 audit.
+
 This is the release-preparation audit of #65 at `95141ed`, after native import
 acceptance #78. It checks the existing compound task writers and their real
 CLI/HTTP/monitor entry points. The complete command/flag contract audit remains

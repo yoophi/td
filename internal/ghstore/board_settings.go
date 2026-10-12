@@ -9,9 +9,10 @@ import (
 )
 
 type boardConfigMutation struct {
-	action string
-	reason string
-	apply  func(*BoardDetails) error
+	operation string
+	action    string
+	reason    string
+	apply     func(*BoardDetails) error
 }
 
 // UpdateBoardConfigObserved saves an explicit CLI configuration edit in one

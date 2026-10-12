@@ -464,3 +464,22 @@ the original deletion clock and checkpoint bytes remained intact. The note was
 created archived/deleted and the test board was logically deleted after validation.
 This verifies configured auxiliary creation and replay refusal, not task import,
 the workspace execution CLI or resumable whole-workspace completion.
+
+`ApplyBuiltinBoardTransferObserved` handles the All Issues board through the
+existing entity journal. A virtual board receives the initial view mode and all
+positions in one creation payload. An existing board keeps its destination name,
+query and view mode; conflict-free source positions are appended in one PATCH.
+Original source configuration stays in the passive capsule and preview explicitly
+reports the existing configuration as reused. Conflicting memberships or sort
+slots fail pure workspace preparation before entity writes. Position clocks are
+portable metadata; native authors and clocks are not copied.
+
+An explicit checkpoint operation also pins the builtin PATCH journal and body.
+Target history or a previous journal with that operation blocks replay, including
+when a fresh observation is supplied. A denied/uncertain PATCH or failed receipt
+retains the original prepared journal and error; no automatic write retry occurs.
+Tests cover virtual creation, existing configuration retention, slot/member
+conflicts, stale/fresh replay and permission/response/receipt failures. These are
+production-client fixtures; no new native whole-workspace execution or builtin
+resume is claimed. Existing-task adoption still needs an importer source-key
+contract before the GitHub execution CLI can expose that route safely.

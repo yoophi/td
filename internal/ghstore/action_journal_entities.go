@@ -76,6 +76,15 @@ func (c *Client) readJournalTarget(ctx context.Context, id string) (*Record, err
 }
 
 func (c *Client) prepareEntityJournal(ctx context.Context, before *Record, actor string, payload map[string]any) (*ActionJournalRecord, error) {
+	return c.prepareEntityJournalWithOperation(ctx, before, actor, payload, "")
+}
+
+func (c *Client) prepareEntityJournalWithOperation(ctx context.Context, before *Record, actor string, payload map[string]any, operation string) (*ActionJournalRecord, error) {
+	if operation != "" {
+		if _, err := c.entityCreationOperation(operation, "", actor); err != nil {
+			return nil, err
+		}
+	}
 	if c.journal == nil {
 		return nil, nil
 	}
@@ -91,6 +100,27 @@ func (c *Client) prepareEntityJournal(ctx context.Context, before *Record, actor
 		return nil, err
 	}
 	intent := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: actor, IssueID: before.ID, CarrierID: c.journal.Carrier.ID, Action: before.meta.EntityKind, Phase: "prepared", Before: &state, UpdateIntent: input}
+	if operation != "" {
+		intent.OperationID = operation
+		body, ok := payload["body"].(string)
+		_, meta, _, err := decodeBody(body)
+		if !ok || err != nil || meta.OperationID != operation {
+			return nil, fmt.Errorf("explicit entity journal identity differs from its planned payload; no write attempted")
+		}
+		snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
+		if err != nil {
+			return nil, err
+		}
+		history, err := snapshot.ActionHistory("")
+		if err != nil {
+			return nil, err
+		}
+		for _, previous := range history {
+			if previous.OperationID == operation {
+				return nil, fmt.Errorf("entity operation %s already has a %s journal (%s); inspect and reconcile before retry; no target PATCH attempted", operation, previous.Phase, previous.ID)
+			}
+		}
+	}
 	if err := intent.validate(); err != nil {
 		return nil, err
 	}

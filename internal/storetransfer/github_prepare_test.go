@@ -102,3 +102,48 @@ func TestPrepareGitHubWorkspaceCapacityAndUnknownMappingsReturnNoPreparation(t *
 		t.Fatal("unknown mapping accepted")
 	}
 }
+
+func TestPrepareGitHubBuiltinPositionsConflictBeforePreparationAndDisclosesReuse(t *testing.T) {
+	source, _ := githubEntitySourceFixture(t)
+	board := &source.SQLite.Boards[0]
+	board.Board.ID = "bd-all-issues"
+	board.Board.Name = "All Issues"
+	board.Board.IsBuiltin = true
+	board.Board.Query = ""
+	for i := range board.Positions {
+		board.Positions[i].BoardID = "bd-all-issues"
+	}
+	source, err := NewSQLite("original", source.SQLite, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := githubTaskInputFixture(t).GitHub
+	stamp := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+	data.Boards = []ghstore.BoardRecord{{Board: models.Board{ID: "bd-all-issues", Name: "All Issues", IsBuiltin: true, ViewMode: "swimlanes"}, Number: 3, Details: ghstore.BoardDetails{Version: 1, Builtin: true, ViewMode: "swimlanes", Positions: []ghstore.BoardPosition{{IssueID: "gh-2", Position: 4, AddedAt: stamp}}}}}
+	data.Native = append(data.Native, ghstore.NativeExport{Number: 3, Kind: "board", Title: "All Issues"})
+	target := gitHubPrepareTarget(t, data)
+	if result, err := PrepareGitHubWorkspace(source, target, nil, 0); err == nil || result != nil {
+		t.Fatal("builtin position collision accepted")
+	}
+	data.Boards[0].Details.Positions[0].Position = 8
+	target = gitHubPrepareTarget(t, data)
+	if _, err := PrepareGitHubWorkspace(source, target, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := BuildDataPlan(source, target.Observation, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, d := range plan.Disclosures {
+		if d.Code == "builtin_github_board_configuration" {
+			found = d.Handling == "reuse_existing" && d.Count == 1
+		}
+		if d.Code == "boards_configuration_queries" && d.Count != 0 {
+			t.Fatal("existing builtin settings counted as copied")
+		}
+	}
+	if !found {
+		t.Fatal("existing builtin settings reuse undisclosed")
+	}
+}

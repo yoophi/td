@@ -79,6 +79,18 @@ func PrepareGitHubWorkspace(source *Source, target *InspectedTarget, bindings ma
 	}
 	for _, b := range entities.Boards {
 		if b.Builtin {
+			for _, existing := range t.GitHub.Boards {
+				if !existing.IsBuiltin || existing.Number == 0 {
+					continue
+				}
+				for _, incoming := range b.Options.Positions {
+					for _, position := range existing.Details.Positions {
+						if position.IssueID == incoming.IssueID || position.Position == incoming.Position {
+							return nil, fmt.Errorf("builtin source position for %s at %d conflicts with destination membership/slot; inspect before transfer writes", incoming.IssueID, incoming.Position)
+						}
+					}
+				}
+			}
 			continue
 		}
 		for _, existing := range t.GitHub.Boards {
