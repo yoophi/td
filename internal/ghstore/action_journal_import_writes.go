@@ -38,6 +38,26 @@ func (c *Client) importCommand(ctx context.Context, input []ImportItem, force bo
 	if err != nil {
 		return nil, err
 	}
+	operation, _ := ctx.Value(importOperationKey{}).(string)
+	if operation != "" {
+		if root != nil && root.OperationID != operation {
+			return nil, fmt.Errorf("pending import %s belongs to operation %s, not %s; no write attempted", root.ID, root.OperationID, operation)
+		}
+		pinned, err := findPinnedImportCommand(plan.snapshot, items, force, operation, session, actor.Login)
+		if err != nil {
+			return nil, err
+		}
+		if pinned != nil && pinned.Phase == "applied" {
+			if err := c.verifyCompletedImport(ctx, pinned, plan.snapshot); err != nil {
+				return nil, err
+			}
+			plan.DryRun = false
+			return &ImportResult{Plan: plan, Skipped: len(plan.Rows)}, nil
+		}
+		if pinned != nil && root == nil {
+			return nil, fmt.Errorf("pinned import intent did not match original pending membership; no write attempted")
+		}
+	}
 	resumed := root != nil
 	if root == nil {
 		changes := false
@@ -85,7 +105,10 @@ func (c *Client) importCommand(ctx context.Context, input []ImportItem, force bo
 		for used[fmt.Sprintf("gh-%d", carrier)] {
 			carrier++
 		}
-		a := ActionJournal{OperationID: "td-op-" + rand.Text(), SessionID: session, CarrierID: fmt.Sprintf("gh-%d", carrier), Action: "import", Phase: "prepared", ImportCommand: command}
+		if operation == "" {
+			operation = "td-op-" + rand.Text()
+		}
+		a := ActionJournal{OperationID: operation, SessionID: session, CarrierID: fmt.Sprintf("gh-%d", carrier), Action: "import", Phase: "prepared", ImportCommand: command}
 		if _, err := planActionJournalPublication(a); err != nil {
 			return nil, err
 		}

@@ -2,7 +2,9 @@ package ghstore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"github.com/marcus/td/internal/models"
 	"strings"
 	"syscall"
 	"testing"
@@ -13,6 +15,30 @@ type mutationRecorderFixture struct {
 	results  [][]byte
 	before   error
 	after    error
+}
+
+func TestMutationIntentExtractsNativeOperationWithoutRetainingBodies(t *testing.T) {
+	body, err := encodeBody("private content", metadata{EntityKind: "note", OperationID: "fixed-note-op", Type: models.TypeTask, Priority: models.PriorityP2, Note: &NoteDetails{Version: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]string{"body": body})
+	request := mutationRequest("POST", "repos/owner/repo/issues", payload)
+	if request.OperationID != "fixed-note-op" || request.EntityKind != "note" {
+		t.Fatal("native creation operation not captured", request)
+	}
+	root := `td action\n` + actionImportCommandStart + `{"operation_id":"fixed-command-op"}` + markerEnd
+	payload, _ = json.Marshal(map[string]string{"body": root})
+	request = mutationRequest("POST", "repos/owner/repo/issues/9/comments", payload)
+	if request.OperationID != "fixed-command-op" || request.EntityKind != "" {
+		t.Fatal("native root operation not captured", request)
+	}
+	root = "td import action\n" + actionImportArchiveStart + `{"journal":{"operation_id":"fixed-archive-op"},"documents":[]}` + markerEnd
+	payload, _ = json.Marshal(map[string]string{"body": root})
+	request = mutationRequest("POST", "repos/owner/repo/issues/9/comments", payload)
+	if request.OperationID != "fixed-archive-op" {
+		t.Fatal("nested import root operation not captured", request)
+	}
 }
 
 func (r *mutationRecorderFixture) BeginMutation(request MutationRequest) (int, error) {

@@ -115,15 +115,21 @@ func testStoreTransferExecuteGitHubWholeWorkspace(t *testing.T, adopt bool) {
 		t.Fatal("invalid mutation progress", progress, err)
 	}
 	archiveResponses := map[int64]bool{}
+	taskOperation, err := stored.TaskOperationID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskRootRecorded := false
 	for _, mutation := range progress.Mutations {
 		if mutation.State != "response_received" {
 			t.Fatal("successful fixture lost a mutation response", mutation)
 		}
 		if strings.HasSuffix(mutation.Request.Path, "/comments") {
 			archiveResponses[mutation.ResponseID] = true
+			taskRootRecorded = taskRootRecorded || mutation.Request.OperationID == taskOperation
 		}
 	}
-	if !archiveResponses[result.SourceArchiveID] || !archiveResponses[result.CompletionArchiveID] || bytes.Contains(progressBytes, []byte("source content")) {
+	if !taskRootRecorded || !archiveResponses[result.SourceArchiveID] || !archiveResponses[result.CompletionArchiveID] || bytes.Contains(progressBytes, []byte("source content")) {
 		t.Fatal("archive mutation results missing or private body copied into progress")
 	}
 	after, err := os.ReadFile(filepath.Join(source, ".todos", "issues.db"))

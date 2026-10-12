@@ -102,6 +102,10 @@ func TestCheckpointEntityOperationsRemainStableAndQualified(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	operation, err := c.TaskOperationID()
+	if err != nil || operation != c.OperationID+"-tasks" {
+		t.Fatal("whole task command not pinned to checkpoint", operation, err)
+	}
 	preview, err := source.Preview()
 	if err != nil {
 		t.Fatal(err)

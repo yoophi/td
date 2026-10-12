@@ -57,6 +57,14 @@ func (p *Progress) validate(c *Checkpoint) error {
 		if mutation.Sequence != n+1 || !strings.HasPrefix(request.Path, "repos/"+c.Destination.Namespace+"/") || len(request.Path) > 4096 || strings.ContainsAny(request.Path, "\r\n\x00") || !validProgressHash(request.PayloadSHA256) || mutation.ResponseID < 0 || mutation.ResponseNumber < 0 {
 			return fmt.Errorf("invalid transfer mutation %d identity/request", n+1)
 		}
+		if request.OperationID != "" && !validCheckpointActor(request.OperationID) {
+			return fmt.Errorf("invalid transfer mutation operation identity")
+		}
+		switch request.EntityKind {
+		case "", "issue", "journal", "note", "board":
+		default:
+			return fmt.Errorf("invalid transfer mutation entity kind")
+		}
 		switch request.Method {
 		case "POST", "PATCH", "PUT", "DELETE":
 		default:
@@ -212,7 +220,11 @@ func (r *progressRecorder) BeginMutation(request ghstore.MutationRequest) (int, 
 	defer r.mu.Unlock()
 	if r.noReplay {
 		for _, previous := range r.current.Mutations {
-			if previous.Request == request {
+			exact := previous.Request.Method == request.Method && previous.Request.Path == request.Path && previous.Request.PayloadSHA256 == request.PayloadSHA256
+			creation := request.Method == "POST" && previous.Request.Method == request.Method && previous.Request.Path == request.Path && strings.HasSuffix(request.Path, "/issues") && request.OperationID != "" && previous.Request.OperationID == request.OperationID
+			carrier := request.Method == "POST" && previous.Request.Method == request.Method && previous.Request.Path == request.Path && strings.HasSuffix(request.Path, "/issues") && request.EntityKind == "journal" && previous.Request.EntityKind == "journal"
+			root := request.Method == "POST" && previous.Request.Method == request.Method && previous.Request.Path == request.Path && strings.HasSuffix(request.Path, "/comments") && request.EntityKind == "" && request.OperationID != "" && previous.Request.OperationID == request.OperationID
+			if exact || creation || carrier || root {
 				return 0, fmt.Errorf("mutation %d was already attempted (%s); inspect native state before continuing; no request replayed", previous.Sequence, previous.State)
 			}
 		}

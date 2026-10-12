@@ -112,6 +112,13 @@ func ReadCheckpoint(reader io.Reader, maxBytes int64) (*Checkpoint, error) {
 
 var checkpointOperationID = regexp.MustCompile(`^td-workspace-[A-Z2-7]{26}$`)
 
+func (c *Checkpoint) TaskOperationID() (string, error) {
+	if c == nil || !checkpointOperationID.MatchString(c.OperationID) || c.SHA256 != c.digest() {
+		return "", fmt.Errorf("valid immutable checkpoint required")
+	}
+	return c.OperationID + "-tasks", nil
+}
+
 // EntityOperationID derives a stable note/board creation identity from this
 // immutable execution and an exact qualified source key. It is not a receipt.
 func (c *Checkpoint) EntityOperationID(sourceKey string) (string, error) {

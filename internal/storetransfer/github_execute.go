@@ -147,7 +147,11 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 	}
 	result.SourceArchiveID = archive.ID
 	if len(input.Items) > 0 {
-		result.TaskImport, err = client.Import(ctx, input.Items, false)
+		taskOperation, err := checkpoint.TaskOperationID()
+		if err != nil {
+			return fail("task operation identity", err)
+		}
+		result.TaskImport, err = client.ImportWithOperationID(ctx, input.Items, false, taskOperation)
 		if err != nil {
 			return fail("tasks", err)
 		}

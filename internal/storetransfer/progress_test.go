@@ -201,3 +201,29 @@ func TestReopenedProgressRejectsBothUncertainAndReceivedRequestReplay(t *testing
 		}
 	}
 }
+
+func TestReopenedProgressRejectsCreationAndRootReplayWithChangedBodyHash(t *testing.T) {
+	for _, kind := range []string{"issue", "note", "board", "journal", "command_root"} {
+		c, path, original := progressFixture(t)
+		request := progressRequest()
+		request.OperationID = "fixed-original-operation"
+		if kind != "command_root" {
+			request.EntityKind = kind
+			request.Path = "repos/owner/repo/issues"
+		}
+		if _, err := original.BeginMutation(request); err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := openProgressRecorder(path, c, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.PayloadSHA256 = strings.Repeat("b", 64) // Clock/input observation changed.
+		if kind == "journal" {
+			request.OperationID = "new-bootstrap-nonce"
+		}
+		if _, err := reopened.BeginMutation(request); err == nil {
+			t.Fatal("changed bytes authorized recreating same resource", kind)
+		}
+	}
+}

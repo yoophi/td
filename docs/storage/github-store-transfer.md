@@ -666,3 +666,26 @@ resume refuses replay and performs zero new POSTs. Repeated completed resume is
 read-only. This connects archive-level continuation, not the entire task/entity
 workspace or public resume command. Phase receipt/native reconciliation and the
 whole-workspace CLI remain required before #94 can close.
+
+### Checkpoint-pinned task command and creation identity (#94, in progress)
+
+New workspace executions use `CHECKPOINT_OPERATION-tasks` for the whole import
+command. `ImportWithOperationID` requires an independent tracked actor and checks
+already validated bulk history against the exact frozen input, force selection,
+session and native author. Pending commands must retain that operation; completed
+commands are freshly verified and returned without another command/target write.
+Changed input/actor, duplicate roots and inverse phases fail before writes.
+Ordinary imports retain their existing random command identity.
+
+Local mutation records now optionally retain the native operation and entity
+kind in addition to the exact payload SHA. Resume refuses a repeated issue/entity
+creation or command-root POST with the same operation even when observation
+clocks change its bytes. A previously attempted journal bootstrap blocks another
+bootstrap nonce. Fields are omitted in older progress records, preserving their
+existing checksums; missing historical fields do not invent an original identity.
+Earlier random import roots are never silently relabeled as checkpoint-pinned
+roots. Legacy root recovery must validate the original observed operation.
+
+Pinned-task and changed-body replay fixtures pass, including public workspace
+execution recording the checkpoint's exact task operation. The complete
+task/entity reconciliation controller and public resume CLI remain unfinished.
