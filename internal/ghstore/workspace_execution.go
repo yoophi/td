@@ -57,6 +57,17 @@ func (c *Client) ResumeWorkspaceArchiveData(ctx context.Context, operation strin
 // match its native applied receipt, including the server clock. Observed-only,
 // undone, foreign-session and incomplete actions do not become completion proof.
 func (c *Client) VerifiedEntityOperationMappings(ctx context.Context, operations map[string]string) (map[string]string, error) {
+	return c.entityOperationMappings(ctx, operations, false)
+}
+
+// ObservedEntityOperationMappings permits native journal reconciliation while
+// preserving its observed attribution. Callers must not call this verified
+// execution evidence; the strict mapper above continues to reject observation.
+func (c *Client) ObservedEntityOperationMappings(ctx context.Context, operations map[string]string) (map[string]string, error) {
+	return c.entityOperationMappings(ctx, operations, true)
+}
+
+func (c *Client) entityOperationMappings(ctx context.Context, operations map[string]string, allowObserved bool) (map[string]string, error) {
 	if c == nil || c.journal == nil {
 		return nil, fmt.Errorf("entity verification requires the actual tracked actor")
 	}
@@ -98,8 +109,12 @@ func (c *Client) VerifiedEntityOperationMappings(ctx context.Context, operations
 		if !wanted {
 			continue
 		}
+		if _, duplicate := result[action.OperationID]; duplicate {
+			return nil, fmt.Errorf("entity operation %s has duplicate native receipts", action.OperationID)
+		}
 		supportedAction := action.Action == "create" || kind == "board" && action.Action == "board"
-		if action.Phase != "applied" || action.SessionID != c.journal.SessionID || !strings.EqualFold(action.Author, actor.Login) || action.After == nil || action.Restored != nil || action.UpdateObservation != nil || action.UndoObservation != nil || action.CreationCommand != nil || !supportedAction {
+		observed := action.Reconciliation != nil || action.UpdateObservation != nil
+		if action.Phase != "applied" || action.SessionID != c.journal.SessionID || !strings.EqualFold(action.Author, actor.Login) || action.After == nil || action.Restored != nil || observed && !allowObserved || action.UndoObservation != nil || action.CreationCommand != nil || !supportedAction {
 			return nil, fmt.Errorf("entity operation %s lacks an applied receipt for its original tracked actor", action.OperationID)
 		}
 		record := records[action.IssueID]
@@ -117,7 +132,20 @@ func (c *Client) VerifiedEntityOperationMappings(ctx context.Context, operations
 		if err != nil {
 			return nil, err
 		}
-		if state.Revision != action.After.Revision {
+		expected := action.After
+		if action.Reconciliation != nil {
+			if action.Reconciliation.SessionID != c.journal.SessionID || !strings.EqualFold(action.Reconciliation.Actor, actor.Login) {
+				return nil, fmt.Errorf("entity reconciliation belongs to another observer")
+			}
+			expected = action.Reconciliation.State
+		}
+		if action.UpdateObservation != nil {
+			if action.UpdateObservation.SessionID != c.journal.SessionID || !strings.EqualFold(action.UpdateObservation.Actor, actor.Login) {
+				return nil, fmt.Errorf("entity observation belongs to another observer")
+			}
+			expected = action.UpdateObservation.State
+		}
+		if expected == nil || state.Revision != expected.Revision {
 			return nil, &ConflictError{ID: record.ID}
 		}
 		id := ""
