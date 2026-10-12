@@ -563,3 +563,10 @@ the entire inverse, confirming that the adopted task remains byte-for-byte
 unchanged while the new allocation is logically deleted. This is fixture
 evidence, not a live GitHub adoption claim. Public adoption and verified workspace
 mapping integration remain required before #93 can close.
+
+Workspace task input preparation also carries each explicit adopted task
+assignment through the qualified transfer key to its stable importer key and
+`adopt_target_id`. Fresh input copies retain those bindings without changing the
+original source envelope checksum or adding a destination decision to the passive
+source capsule. The public execution guard remains in place until verified task
+mapping integration is complete.

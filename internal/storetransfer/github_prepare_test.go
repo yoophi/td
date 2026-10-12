@@ -60,6 +60,63 @@ func TestPrepareGitHubWorkspaceFreezesInputsAndChecksFreshnessWithoutObservation
 	}
 }
 
+func TestPrepareGitHubWorkspaceTaskInputsBindExplicitAdoptionWithoutMutatingSource(t *testing.T) {
+	source, _ := githubEntitySourceFixture(t)
+	target := gitHubPrepareTarget(t, githubTaskInputFixture(t).GitHub)
+	preview, err := source.Preview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings := map[string]string{}
+	for _, identity := range preview.Identities {
+		if identity.Kind == "task" && identity.ID == "td-parent" {
+			bindings[identity.Key] = "gh-2"
+		}
+	}
+	if len(bindings) != 1 {
+		t.Fatal("fixture has no source parent")
+	}
+	prepared, err := PrepareGitHubWorkspace(source, target, bindings, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := prepared.TaskInputs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adopted := 0
+	for _, item := range input.Items {
+		if item.AdoptTargetID != "" {
+			adopted++
+			if item.AdoptTargetID != "gh-2" {
+				t.Fatal("binding changed", item.AdoptTargetID)
+			}
+		}
+	}
+	if adopted != 1 || input.SourceSHA256 != source.Envelope.SHA256 {
+		t.Fatal("lost adoption or changed original source digest", input)
+	}
+	input.Items[0].AdoptTargetID = "gh-999"
+	fresh, err := prepared.TaskInputs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range fresh.Items {
+		if item.AdoptTargetID == "gh-999" {
+			t.Fatal("mutable adoption input escaped into preparation")
+		}
+	}
+	plain, err := BuildTaskImportInput(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range plain.Items {
+		if item.AdoptTargetID != "" {
+			t.Fatal("destination decision mutated original source")
+		}
+	}
+}
+
 func TestPrepareGitHubWorkspaceRejectsBoardConflictAndPermitsExplicitReuse(t *testing.T) {
 	source, _ := githubEntitySourceFixture(t)
 	now := time.Now().UTC()

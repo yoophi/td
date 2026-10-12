@@ -127,7 +127,28 @@ func (p *PreparedGitHubWorkspace) SourceSHA256() string { return p.source.Envelo
 
 // TaskInputs returns a fresh conversion, never the preparation's mutable slices.
 func (p *PreparedGitHubWorkspace) TaskInputs() (*TaskImportInput, error) {
-	return BuildTaskImportInput(p.source)
+	input, err := BuildTaskImportInput(p.source)
+	if err != nil {
+		return nil, err
+	}
+	byKey := map[string]int{}
+	for i, item := range input.Items {
+		byKey[item.SourceKey()] = i
+	}
+	for _, row := range p.identities.Assignments {
+		if row.Kind != "task" || row.Action != "adopt" {
+			continue
+		}
+		index, exists := byKey[input.Keys[row.SourceKey]]
+		if !exists {
+			return nil, fmt.Errorf("adopted task %s has no frozen importer source key", row.SourceKey)
+		}
+		input.Items[index].AdoptTargetID = row.TargetID
+	}
+	if err := ghstore.ValidateImportItems(input.Items); err != nil {
+		return nil, fmt.Errorf("prepare explicit task adoptions: %w", err)
+	}
+	return input, nil
 }
 
 // OriginalArchive returns original bytes only, not the capacity probe mappings.
