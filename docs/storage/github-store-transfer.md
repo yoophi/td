@@ -444,3 +444,13 @@ errors retain their original cause. An error after publication requires inspecti
 before another attempt. Destination paths remain local controller state and are
 not included in remote provenance. This is not yet wired to GitHub CLI execution
 and does not implement phase receipts, reconciliation or resume.
+
+Checkpoint-derived note and board operation IDs bind an exact qualified source
+key to the original execution. Configured creation accepts these explicit IDs
+only under action tracking for the actual actor. IDs are installed in the initial
+entity metadata and existing creation journal, so a repeated ID is rejected
+before another entity POST, including after a lost creation response or denied
+completion receipt. Changing a title does not bypass this guard. This identifies
+an incomplete operation for inspection; it does not itself reconcile a receipt
+or provide workspace resume. Task creation retains the importer's existing
+qualified-source operation identity rather than using these auxiliary IDs.

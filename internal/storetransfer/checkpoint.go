@@ -86,6 +86,29 @@ func ReadCheckpoint(reader io.Reader, maxBytes int64) (*Checkpoint, error) {
 
 var checkpointOperationID = regexp.MustCompile(`^td-workspace-[A-Z2-7]{26}$`)
 
+// EntityOperationID derives a stable note/board creation identity from this
+// immutable execution and an exact qualified source key. It is not a receipt.
+func (c *Checkpoint) EntityOperationID(sourceKey string) (string, error) {
+	if c == nil || !checkpointOperationID.MatchString(c.OperationID) || c.SHA256 != c.digest() {
+		return "", fmt.Errorf("valid immutable checkpoint required")
+	}
+	source, err := c.Source.decode()
+	if err != nil {
+		return "", err
+	}
+	preview, err := source.Preview()
+	if err != nil {
+		return "", err
+	}
+	for _, identity := range preview.Identities {
+		if identity.Key == sourceKey && (identity.Kind == "note" || identity.Kind == "board") {
+			hash := sha256.Sum256([]byte(identity.Kind + "\x00" + sourceKey))
+			return c.OperationID + "-" + hex.EncodeToString(hash[:]), nil
+		}
+	}
+	return "", fmt.Errorf("checkpoint source key %q is not a note or board", sourceKey)
+}
+
 // SaveCheckpointNew syncs a private sibling file and publishes with a hard link.
 // An existing checkpoint is never overwritten; ENOSPC and IO errors retain their
 // original cause. Directory-sync errors explicitly identify possible publication.

@@ -95,3 +95,48 @@ func TestCheckpointPublishesPrivatelyWithoutOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCheckpointEntityOperationsRemainStableAndQualified(t *testing.T) {
+	c := checkpointFixture(t)
+	source, err := c.Source.decode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := source.Preview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(c)
+	restored, err := ReadCheckpoint(bytes.NewReader(data), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, identity := range preview.Identities {
+		op, err := c.EntityOperationID(identity.Key)
+		if identity.Kind == "task" {
+			if err == nil {
+				t.Fatal("task bypassed existing import identity")
+			}
+			continue
+		}
+		if err != nil || seen[op] || len(op) > 128 {
+			t.Fatal(op, err)
+		}
+		seen[op] = true
+		again, err := restored.EntityOperationID(identity.Key)
+		if err != nil || again != op {
+			t.Fatal("read changed original operation", again, op, err)
+		}
+	}
+	if len(seen) < 2 {
+		t.Fatal("fixture omitted notes or boards")
+	}
+	if _, err := c.EntityOperationID("unknown"); err == nil {
+		t.Fatal("unknown source key accepted")
+	}
+	c.Source.Namespace = "changed"
+	if _, err := c.EntityOperationID(preview.Identities[0].Key); err == nil {
+		t.Fatal("changed checkpoint accepted")
+	}
+}

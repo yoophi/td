@@ -54,6 +54,8 @@ func (c *Client) CreateBoard(ctx context.Context, name, expression, actor string
 type BoardCreateOptions struct {
 	ViewMode  string
 	Positions []BoardPosition
+	// OperationID pins controller-owned creation; explicit IDs require tracking.
+	OperationID string
 }
 
 // ValidateBoardCreateOptions shares pure query/mode/membership validation with
@@ -66,6 +68,10 @@ func (c *Client) CreateBoardWithOptions(ctx context.Context, name, expression, a
 	}
 	if strings.TrimSpace(name) == "" || strings.TrimSpace(actor) == "" {
 		return nil, &WorkflowInputError{Reason: "board creation requires a name and actual actor"}
+	}
+	operation, err := c.entityCreationOperation(options.OperationID, "td-board-op-", actor)
+	if err != nil {
+		return nil, err
 	}
 	mode := options.ViewMode
 	if mode == "" {
@@ -93,22 +99,24 @@ func (c *Client) CreateBoardWithOptions(ctx context.Context, name, expression, a
 			}
 		}
 	}
-	return c.createBoardConfigured(ctx, name, expression, actor, false, &boardConfigMutation{reason: "Transferred initial settings", apply: func(d *BoardDetails) error { d.ViewMode = mode; d.Positions = slices.Clone(positions); return nil }})
+	return c.createBoardConfigured(ctx, name, expression, actor, false, &boardConfigMutation{reason: "Transferred initial settings", apply: func(d *BoardDetails) error { d.ViewMode = mode; d.Positions = slices.Clone(positions); return nil }}, operation)
 }
 
 func (c *Client) createBoard(ctx context.Context, name, expression, actor string, builtin bool) (*BoardRecord, error) {
-	return c.createBoardConfigured(ctx, name, expression, actor, builtin, nil)
+	return c.createBoardConfigured(ctx, name, expression, actor, builtin, nil, "")
 }
 
 // Initial builtin settings belong to the creation payload and its existing
 // create journal. There is no intermediate empty carrier or second PATCH.
-func (c *Client) createBoardConfigured(ctx context.Context, name, expression, actor string, builtin bool, initial *boardConfigMutation) (result *BoardRecord, err error) {
+func (c *Client) createBoardConfigured(ctx context.Context, name, expression, actor string, builtin bool, initial *boardConfigMutation, operation string) (result *BoardRecord, err error) {
 	name = strings.TrimSpace(name)
 	if name == "" || strings.TrimSpace(actor) == "" {
 		return nil, &WorkflowInputError{Reason: "board creation requires a name and actual actor"}
 	}
 	now := time.Now().UTC()
-	operation := "td-board-op-" + rand.Text()
+	if operation == "" {
+		operation = "td-board-op-" + rand.Text()
+	}
 	details := BoardDetails{Version: 1, Builtin: builtin, Query: expression, ViewMode: "swimlanes", History: []BoardEvent{{OperationID: operation, Action: "create", SessionID: actor, At: now}}}
 	if initial != nil {
 		if err := initial.apply(&details); err != nil {
@@ -231,7 +239,7 @@ func (c *Client) writeBoardObserved(ctx context.Context, observed *BoardRecord, 
 			return nil, workflowStateError("virtual board has no saved configuration; no write attempted")
 		}
 		// Use canonical defaults, never mutable public observation fields.
-		return c.createBoardConfigured(ctx, "All Issues", "", actor, true, mutation)
+		return c.createBoardConfigured(ctx, "All Issues", "", actor, true, mutation, "")
 	}
 	if original.repository != c.repo || original.revision == ([32]byte{}) || original.Number != observed.Number || original.Number <= 0 {
 		return nil, &WorkflowInputError{Reason: "board write requires a persisted observation from this repository"}

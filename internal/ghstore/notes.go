@@ -160,6 +160,9 @@ func (c *Client) CreateNote(ctx context.Context, title, content, actor string) (
 // Original authors and native server clocks remain passive transfer provenance.
 type NoteCreateOptions struct {
 	Pinned, Archived, Deleted bool
+	// OperationID pins controller-owned creation to its durable checkpoint.
+	// Explicit identities require action tracking; replay requires reconciliation.
+	OperationID string
 	// Logical deletion time is portable metadata, unlike native server clocks.
 	DeletedAt *time.Time
 }
@@ -175,7 +178,10 @@ func (c *Client) CreateNoteWithOptions(ctx context.Context, title, content, acto
 	if options.DeletedAt != nil && (!options.Deleted || options.DeletedAt.IsZero()) {
 		return nil, fmt.Errorf("note creation deletion timestamp requires a deleted flag and nonzero time")
 	}
-	operation := "td-note-op-" + rand.Text()
+	operation, err := c.entityCreationOperation(options.OperationID, "td-note-op-", actor)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	d := NoteDetails{Version: 1, Pinned: options.Pinned, Archived: options.Archived, History: []NoteEvent{{OperationID: operation, Action: "create", SessionID: actor, At: now}}}
 	if options.Deleted {

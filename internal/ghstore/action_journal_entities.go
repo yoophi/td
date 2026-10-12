@@ -115,6 +115,27 @@ func (c *Client) prepareEntityJournal(ctx context.Context, before *Record, actor
 	return prepared, nil
 }
 
+// Controller-supplied identities are meaningful only with the existing native
+// creation journal/replay guard. Validate before bootstrap or any target write.
+func (c *Client) entityCreationOperation(requested, prefix, actor string) (string, error) {
+	if requested == "" {
+		return prefix + rand.Text(), nil
+	}
+	if c == nil || c.journal == nil || actor != c.journal.SessionID {
+		return "", fmt.Errorf("explicit entity creation operation requires tracking under the actual actor; no write attempted")
+	}
+	if len(requested) > 128 {
+		return "", fmt.Errorf("entity creation operation exceeds 128 bytes; no write attempted")
+	}
+	for _, char := range requested {
+		allowed := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_'
+		if !allowed {
+			return "", fmt.Errorf("invalid entity creation operation identity; no write attempted")
+		}
+	}
+	return requested, nil
+}
+
 func (c *Client) prepareEntityCreationJournal(ctx context.Context, operation, title, body, actor string) (*ActionJournalRecord, error) {
 	if c.journal == nil {
 		return nil, nil

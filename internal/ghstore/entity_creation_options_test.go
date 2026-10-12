@@ -80,3 +80,87 @@ func TestConfiguredBoardCreationRejectsInvalidOrForeignMembershipBeforeMutation(
 		})
 	}
 }
+
+func TestConfiguredEntityCreationPinsOperationAndNeverReplays(t *testing.T) {
+	for _, kind := range []string{"note", "board"} {
+		for _, mode := range []string{"", "create-uncertain", "receipt-denied"} {
+			t.Run(kind+"/"+mode, func(t *testing.T) {
+				f := newJournalWriteFixture(t, mode)
+				if err := f.client.TrackActions("ses_actor"); err != nil {
+					t.Fatal(err)
+				}
+				op := "td-workspace-fixed-" + kind
+				name := kind
+				create := func() error {
+					if kind == "note" {
+						_, err := f.client.CreateNoteWithOptions(context.Background(), name, "content", "ses_actor", NoteCreateOptions{OperationID: op})
+						return err
+					}
+					_, err := f.client.CreateBoardWithOptions(context.Background(), name, "", "ses_actor", BoardCreateOptions{OperationID: op})
+					return err
+				}
+				err := create()
+				if (err != nil) != (mode != "") {
+					t.Fatal(err)
+				}
+				if f.creationWrites != 1 {
+					t.Fatal(f.creationWrites)
+				}
+				action, err := decodeActionJournal(*f.comment, "gh-9")
+				if err != nil || action.OperationID != op {
+					t.Fatal(action, err)
+				}
+				_, meta, _, err := decodeBody(f.issues[2].Body)
+				if err != nil || meta.OperationID != op {
+					t.Fatal(meta, err)
+				}
+				f.mode = ""
+				// A different name must not bypass the operation replay guard.
+				name = "different name"
+				if err := create(); err == nil {
+					t.Fatal("operation replay accepted")
+				}
+				if f.creationWrites != 1 || f.intentWrites != 1 {
+					t.Fatal("same operation created another entity/intent", f)
+				}
+			})
+		}
+	}
+}
+
+func TestExplicitEntityCreationIdentityRejectsInvalidScopeBeforeAPI(t *testing.T) {
+	for _, kind := range []string{"note", "board"} {
+		for _, scope := range []string{"untracked", "wrong_actor", "invalid", "too_long"} {
+			t.Run(kind+"/"+scope, func(t *testing.T) {
+				f := newJournalWriteFixture(t, "")
+				op, actor := "td-fixed", "ses_actor"
+				if scope != "untracked" {
+					if err := f.client.TrackActions(actor); err != nil {
+						t.Fatal(err)
+					}
+				}
+				switch scope {
+				case "wrong_actor":
+					actor = "ses_other"
+				case "invalid":
+					op = "../foreign"
+				case "too_long":
+					op = strings.Repeat("x", 129)
+				}
+				f.client.run = func(context.Context, string, []byte, ...string) ([]byte, error) {
+					t.Fatal("invalid scope reached API")
+					return nil, nil
+				}
+				var err error
+				if kind == "note" {
+					_, err = f.client.CreateNoteWithOptions(context.Background(), "note", "content", actor, NoteCreateOptions{OperationID: op})
+				} else {
+					_, err = f.client.CreateBoardWithOptions(context.Background(), "board", "", actor, BoardCreateOptions{OperationID: op})
+				}
+				if err == nil {
+					t.Fatal("invalid scope accepted")
+				}
+			})
+		}
+	}
+}
