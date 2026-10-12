@@ -55,7 +55,7 @@ func (r *mutationRecorderFixture) ReceiveMutation(sequence int, data []byte) err
 }
 
 func TestTransferMutationRecorderFencesRealGHInvocationAndPreservesFailures(t *testing.T) {
-	for _, stage := range []string{"success", "before_enospc", "after_enospc", "uncertain_transport", "read", "cancelled"} {
+	for _, stage := range []string{"success", "before_enospc", "after_enospc", "uncertain_transport", "read", "cancelled", "cancelled_after_dispatch", "deadline_after_dispatch"} {
 		t.Run(stage, func(t *testing.T) {
 			recorder := &mutationRecorderFixture{}
 			if stage == "before_enospc" {
@@ -73,6 +73,12 @@ func TestTransferMutationRecorderFencesRealGHInvocationAndPreservesFailures(t *t
 				}
 				if stage == "uncertain_transport" {
 					return nil, lost
+				}
+				if stage == "cancelled_after_dispatch" {
+					return nil, context.Canceled
+				}
+				if stage == "deadline_after_dispatch" {
+					return nil, context.DeadlineExceeded
 				}
 				return []byte(`{"number":12}`), nil
 			}}
@@ -111,6 +117,14 @@ func TestTransferMutationRecorderFencesRealGHInvocationAndPreservesFailures(t *t
 			case "cancelled":
 				if !errors.Is(err, context.Canceled) || calls != 0 || len(recorder.requests) != 0 {
 					t.Fatal("cancelled mutation reached gh", err, calls)
+				}
+			case "cancelled_after_dispatch", "deadline_after_dispatch":
+				cause := context.Canceled
+				if stage == "deadline_after_dispatch" {
+					cause = context.DeadlineExceeded
+				}
+				if !errors.Is(err, cause) || calls != 1 || len(recorder.requests) != 1 || len(recorder.results) != 0 || data != nil {
+					t.Fatal("interrupted dispatch retried or invented received response", err, recorder, calls)
 				}
 			}
 		})

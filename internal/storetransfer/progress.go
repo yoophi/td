@@ -24,6 +24,7 @@ type Progress struct {
 	OperationID    string            `json:"operation_id"`
 	ActorSessionID string            `json:"actor_session_id"`
 	Mutations      []MutationReceipt `json:"mutations"`
+	Phases         []PhaseReceipt    `json:"phases,omitempty"`
 	SHA256         string            `json:"sha256"`
 }
 
@@ -83,6 +84,9 @@ func (p *Progress) validate(c *Checkpoint) error {
 			return fmt.Errorf("invalid transfer mutation state %q", mutation.State)
 		}
 	}
+	if err := validatePhaseReceipts(p.Phases, c); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -116,6 +120,12 @@ func validateProgressTransition(before, after *Progress) error {
 	if before.CheckpointSHA != after.CheckpointSHA || before.OperationID != after.OperationID || before.ActorSessionID != after.ActorSessionID || before.Version != after.Version {
 		return fmt.Errorf("progress cannot replace its original checkpoint or actor")
 	}
+	if !reflect.DeepEqual(before.Phases, after.Phases) {
+		if len(after.Phases) == len(before.Phases)+1 && (len(before.Phases) == 0 || reflect.DeepEqual(before.Phases, after.Phases[:len(before.Phases)])) && reflect.DeepEqual(before.Mutations, after.Mutations) {
+			return nil
+		}
+		return fmt.Errorf("progress cannot rewrite phase evidence or combine phase and mutation transitions")
+	}
 	if len(after.Mutations) == len(before.Mutations)+1 && reflect.DeepEqual(before.Mutations, after.Mutations[:len(before.Mutations)]) && after.Mutations[len(before.Mutations)].State == "started" {
 		return nil
 	}
@@ -148,6 +158,12 @@ type progressRecorder struct {
 }
 
 func (r *progressRecorder) ReplayGuardEnabled() bool { return r.noReplay }
+
+func (r *progressRecorder) hasMutations() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.current.Mutations) > 0
+}
 
 func (r *progressRecorder) entityRequest(operation, kind string) (ghstore.MutationRequest, bool, error) {
 	r.mu.Lock()

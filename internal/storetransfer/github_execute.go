@@ -150,11 +150,20 @@ func executePreparedGitHub(ctx context.Context, client *ghstore.Client, prepared
 	if resume {
 		publish = client.ResumeWorkspaceArchiveData
 	}
-	archive, err := publish(ctx, checkpoint.OperationID, prepared.OriginalArchive(), result.Mappings, maxBytes)
+	sourcePublish := publish
+	if resume && !progress.hasMutations() {
+		// A validated original empty sidecar and unchanged destination permit
+		// the first dispatch. Missing/uncertain records never enter this path.
+		sourcePublish = client.PublishWorkspaceArchiveData
+	}
+	archive, err := sourcePublish(ctx, checkpoint.OperationID, prepared.OriginalArchive(), result.Mappings, maxBytes)
 	if err != nil {
 		return fail("source archive", err)
 	}
 	result.SourceArchiveID = archive.ID
+	if err := progress.recordPhase(PhaseReceipt{Name: "source_archive", NativeRootID: fmt.Sprintf("ghc-%d", archive.ID), Mappings: prepared.ReusedBindings()}); err != nil {
+		return fail("source archive phase receipt", err)
+	}
 	if len(input.Items) > 0 {
 		taskOperation, err := checkpoint.TaskOperationID()
 		if err != nil {
@@ -175,6 +184,9 @@ func executePreparedGitHub(ctx context.Context, client *ghstore.Client, prepared
 	}
 	for key, id := range taskIDs {
 		result.Mappings[key] = id
+	}
+	if err := progress.recordPhase(PhaseReceipt{Name: "tasks", Mappings: taskIDs}); err != nil {
+		return fail("task phase receipt", err)
 	}
 	retained, err := client.ExportWorkspaceLimited(ctx, maxBytes)
 	if err != nil {
@@ -307,6 +319,17 @@ func executePreparedGitHub(ctx context.Context, client *ghstore.Client, prepared
 			return fail("entity binding", fmt.Errorf("confirmed entity identity differs from receipt"))
 		}
 	}
+	proofs := map[string]string{}
+	for op := range operations {
+		proof := result.EntityProofs[op]
+		if proof == "" {
+			proof = "verified"
+		}
+		proofs[op] = proof
+	}
+	if err := progress.recordPhase(PhaseReceipt{Name: "entities", Mappings: result.Mappings, EntityProofs: proofs}); err != nil {
+		return fail("entity phase receipt", err)
+	}
 	// Fresh task receipts reject edits that happened during auxiliary creation.
 	finalTasks, err := client.CompletedImportMappings(ctx, input.Items)
 	if err != nil {
@@ -330,6 +353,9 @@ func executePreparedGitHub(ctx context.Context, client *ghstore.Client, prepared
 		return fail("completion archive", err)
 	}
 	result.CompletionArchiveID = completion.ID
+	if err := progress.recordPhase(PhaseReceipt{Name: "completion_archive", NativeRootID: fmt.Sprintf("ghc-%d", completion.ID), Mappings: result.Mappings}); err != nil {
+		return fail("completion phase receipt", err)
+	}
 	result.Completed = true
 	plan, err := BuildDataPlan(prepared.source, prepared.target, prepared.ReusedBindings())
 	if err != nil {

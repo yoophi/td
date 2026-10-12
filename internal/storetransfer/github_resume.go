@@ -69,5 +69,18 @@ func ResumeGitHubDestination(ctx context.Context, checkpointPath string, maxByte
 	if state.Session.ID != checkpoint.ActorSessionID {
 		return nil, fmt.Errorf("actual resume session differs from original checkpoint actor; no write attempted")
 	}
+	if !progress.hasMutations() {
+		fresh, err := client.ExportWorkspaceLimited(ctx, maxBytes)
+		if err != nil {
+			return nil, err
+		}
+		observed, err := NewGitHub(fresh, maxBytes)
+		if err != nil {
+			return nil, err
+		}
+		if err := prepared.CheckTarget(observed); err != nil {
+			return nil, fmt.Errorf("unattempted transfer destination changed; no write attempted: %w", err)
+		}
+	}
 	return executePreparedGitHub(ctx, client, prepared, checkpoint, path, progress, true, maxBytes)
 }

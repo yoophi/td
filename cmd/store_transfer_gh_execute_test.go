@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,8 +18,176 @@ import (
 	"github.com/marcus/td/internal/storetransfer"
 )
 
+func TestStoreTransferPhasePublicationFailureStopsAndResumesWithoutDuplicateArchive(t *testing.T) {
+	target, _, run := journalCLIWithTimeout(t, 2*time.Minute)
+	useNativeCommentOrderFixture(t)
+	useHandoffReviewFixture(t)
+	t.Setenv("TD_GH_FIXTURE_NATIVE_EVENTS", "1")
+	configureImportJournalFixture(t)
+	if out, stderr, err := run("create", "baseline seed", "--minor", "--json"); err != nil {
+		t.Fatal(out, stderr, err)
+	}
+	source := t.TempDir()
+	database, err := db.Initialize(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.CreateIssue(&models.Issue{Title: "task after source phase"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := filepath.Join(t.TempDir(), "original.json")
+	t.Setenv("TD_WORKSPACE_PHASE_FAIL", checkpoint+".progress.json")
+	path, err := exec.LookPath("gh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seam := "def with_journal_observation(path,data):\n"
+	if !bytes.Contains(script, []byte(seam)) {
+		t.Fatal("missing collection readback seam")
+	}
+	hook := `def with_journal_observation(path,data):
+ phase_path=os.environ.get('TD_WORKSPACE_PHASE_FAIL')
+ if phase_path and pathlib.Path(phase_path).exists() and method=='GET' and '/comments?' in path:
+  progress=json.loads(pathlib.Path(phase_path).read_text())
+  latest=progress['mutations'][-1] if progress['mutations'] else {}
+  roots=[c for c in journal['comments'] if '<!-- td:workspace-archive:v1' in c['body'] and c['id']==latest.get('response_id')]
+  if not progress.get('phases') and latest.get('state')=='response_received' and roots:
+   pathlib.Path(phase_path+'.lock').touch(exist_ok=True)
+`
+	script = bytes.Replace(script, []byte(seam), []byte(hook), 1)
+	if err := os.WriteFile(path, script, 0755); err != nil {
+		t.Fatal(err)
+	}
+	before := relationFixtureBytes(t, "TD_SCHEDULE_STATE")
+	out, stderr, err := run("--work-dir", source, "store", "transfer", "--execute", "--to", "gh-issue", "--destination", target, "--remote", "origin", "--source-namespace", "phase-failure-fixture", "--checkpoint", checkpoint, "--json")
+	if err == nil || !strings.Contains(out+stderr, "source archive phase receipt") || !strings.Contains(out+stderr, "lock transfer progress") || !strings.Contains(out+stderr, "no automatic retry") {
+		t.Fatal("phase failure hidden", out, stderr, err)
+	}
+	if !bytes.Equal(before, relationFixtureBytes(t, "TD_SCHEDULE_STATE")) {
+		t.Fatal("phase failure allowed later entity writes")
+	}
+	data, err := os.ReadFile(checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cp, err := storetransfer.ReadCheckpoint(bytes.NewReader(data), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	progressData, err := os.ReadFile(checkpoint + ".progress.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress, err := storetransfer.ReadProgress(bytes.NewReader(progressData), cp, 0)
+	if err != nil || len(progress.Phases) != 0 || progress.Mutations[len(progress.Mutations)-1].State != "response_received" {
+		t.Fatal("failed local phase changed transport evidence", progress, err)
+	}
+	t.Setenv("TD_WORKSPACE_PHASE_FAIL", "")
+	if err := os.Remove(checkpoint + ".progress.json.lock"); err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, err = run("store", "transfer", "--resume", "--checkpoint", checkpoint, "--json")
+	var result storetransfer.GitHubTransferResult
+	if err != nil || json.Unmarshal([]byte(out), &result) != nil || !result.Completed {
+		t.Fatal("phase recovery failed", out, stderr, err)
+	}
+	var journal struct{ Comments []struct{ Body string } }
+	if err := json.Unmarshal(relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL"), &journal); err != nil {
+		t.Fatal(err)
+	}
+	roots := 0
+	for _, comment := range journal.Comments {
+		if strings.HasPrefix(comment.Body, "td workspace source archive "+cp.OperationID+"\n") {
+			roots++
+		}
+	}
+	if roots != 1 {
+		t.Fatal("source archive duplicated", roots)
+	}
+}
+
+func TestStoreTransferResumeBeforeFirstDispatchAndRefusesChangedBaseline(t *testing.T) {
+	for _, changed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unattempted", true: "changed_destination"}[changed], func(t *testing.T) {
+			target, actor, run := journalCLIWithTimeout(t, 2*time.Minute)
+			useNativeCommentOrderFixture(t)
+			useHandoffReviewFixture(t)
+			t.Setenv("TD_GH_FIXTURE_NATIVE_EVENTS", "1")
+			configureImportJournalFixture(t)
+			if out, stderr, err := run("create", "baseline seed", "--minor", "--json"); err != nil {
+				t.Fatal(out, stderr, err)
+			}
+			source := t.TempDir()
+			database, err := db.Initialize(source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := database.CreateIssue(&models.Issue{Title: "first dispatch task"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := database.Close(); err != nil {
+				t.Fatal(err)
+			}
+			collected, err := storetransfer.Collect(context.Background(), source, "first-dispatch-fixture", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			observed, err := storetransfer.InspectTarget(context.Background(), storetransfer.TargetSpec{ProjectDir: target, Store: "gh-issue", Remote: "origin"}, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkpoint, err := storetransfer.NewCheckpoint(collected.Source, observed, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := checkpoint.BindActor(actor); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "original.json")
+			if err := storetransfer.SaveCheckpointNew(path, checkpoint, 0); err != nil {
+				t.Fatal(err)
+			}
+			progress := storetransfer.Progress{Version: 1, CheckpointSHA: checkpoint.SHA256, OperationID: checkpoint.OperationID, ActorSessionID: actor, Mutations: []storetransfer.MutationReceipt{}}
+			data, _ := json.Marshal(progress)
+			digest := sha256.Sum256(data)
+			progress.SHA256 = fmt.Sprintf("%x", digest)
+			data, _ = json.Marshal(progress)
+			if _, err := storetransfer.ReadProgress(bytes.NewReader(data), checkpoint, 0); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path+".progress.json", data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if changed {
+				if out, stderr, err := run("create", "external new task", "--minor", "--json"); err != nil {
+					t.Fatal(out, stderr, err)
+				}
+			}
+			before := relationFixtureBytes(t, "TD_SCHEDULE_STATE")
+			out, stderr, err := run("store", "transfer", "--resume", "--checkpoint", path, "--json")
+			if changed {
+				if err == nil || !strings.Contains(out+stderr, "destination changed") || !bytes.Equal(before, relationFixtureBytes(t, "TD_SCHEDULE_STATE")) {
+					t.Fatal("changed baseline dispatched writes", out, stderr, err)
+				}
+			} else {
+				var result storetransfer.GitHubTransferResult
+				if err != nil || json.Unmarshal([]byte(out), &result) != nil || !result.Completed {
+					t.Fatal("unattempted resume failed", out, stderr, err)
+				}
+			}
+		})
+	}
+}
+
 func TestStoreTransferResumeAfterLostTaskOrNoteResponse(t *testing.T) {
-	for _, failure := range []string{"root-lost", "allocation-lost", "note-lost"} {
+	for _, failure := range []string{"root-lost", "allocation-lost", "note-lost", "board-lost"} {
 		t.Run(failure, func(t *testing.T) {
 			target, _, run := journalCLIWithTimeout(t, 2*time.Minute)
 			useNativeCommentOrderFixture(t)
@@ -37,7 +206,7 @@ func TestStoreTransferResumeAfterLostTaskOrNoteResponse(t *testing.T) {
 			if !bytes.Contains(script, []byte(seam)) {
 				t.Fatal("missing allocation seam")
 			}
-			script = bytes.Replace(script, []byte(seam), []byte("if os.environ.get('TD_GH_IMPORT_FAIL')=='note-lost' and '\"entity_kind\":\"note\"' in patch.get('body',''):sys.stderr.write('connection lost after workspace note');sys.exit(1)\n "+seam), 1)
+			script = bytes.Replace(script, []byte(seam), []byte("if os.environ.get('TD_GH_IMPORT_FAIL') in ('note-lost','board-lost') and ('\"entity_kind\":\"'+('note' if os.environ.get('TD_GH_IMPORT_FAIL')=='note-lost' else 'board')+'\"') in patch.get('body',''):sys.stderr.write('connection lost after workspace entity');sys.exit(1)\n "+seam), 1)
 			if err := os.WriteFile(path, script, 0755); err != nil {
 				t.Fatal(err)
 			}
@@ -77,12 +246,12 @@ func TestStoreTransferResumeAfterLostTaskOrNoteResponse(t *testing.T) {
 			if err != nil || json.Unmarshal([]byte(out), &result) != nil || !result.Completed || len(result.Mappings) != 4 {
 				t.Fatal("partial resume failed", out, stderr, err)
 			}
-			if failure == "note-lost" {
+			if failure == "note-lost" || failure == "board-lost" {
 				observed := false
 				for _, proof := range result.EntityProofs {
 					observed = observed || proof == "observed"
 				}
-				if !observed || result.Notes != 0 {
+				if !observed || failure == "note-lost" && result.Notes != 0 {
 					t.Fatal("lost note duplicated or proof upgraded", result)
 				}
 			}
@@ -198,7 +367,7 @@ func testStoreTransferExecuteGitHubWholeWorkspace(t *testing.T, adopt bool) {
 		t.Fatal("missing durable mutation progress", err)
 	}
 	progress, err := storetransfer.ReadProgress(bytes.NewReader(progressBytes), stored, 0)
-	if err != nil || len(progress.Mutations) == 0 {
+	if err != nil || len(progress.Mutations) == 0 || len(progress.Phases) != 4 {
 		t.Fatal("invalid mutation progress", progress, err)
 	}
 	archiveResponses := map[int64]bool{}

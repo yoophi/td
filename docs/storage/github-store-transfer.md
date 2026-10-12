@@ -716,3 +716,31 @@ rather than requiring an unrequested label replacement. Task label checks remain
 unchanged. Repeated completed resume rechecks native results without writes.
 Local phase completion receipts, remaining controller failure boundaries and
 final native integration (#95) still require work before #94 closes.
+
+### Durable phase receipts and interruption boundaries (#94)
+
+The original progress sidecar now appends `source_archive`, `tasks`, `entities`
+and `completion_archive` receipts in that order after their native checks.
+Archive receipts reference their actual `ghc-N` root. Task/entity receipts keep
+qualified mappings; entity receipts preserve `verified`/`observed` attribution.
+They are local controller evidence, not source authority, active reviews or a
+substitute for fresh native verification. Previously received/uncertain mutation
+records and existing phase receipts cannot be rewritten or combined in one
+transition. Empty phase fields remain omitted for older progress checksums.
+
+Phase publication uses the same private atomic file publication, expected digest
+and short lock as mutation records. Disk-full or lock/write failures stop with
+the original cause and describe already completed native checks; later entity
+writes do not run. Explicit resume observes native results again, appends the
+missing phase, and never invents a received response for an uncertain request.
+Repeated identical phase observations do not rewrite the progress file.
+
+A valid original sidecar with no dispatched mutation can resume its first write
+only after a fresh comparison with the original destination. Missing sidecars
+and attempted-but-unobserved writes never enter that path. Earlier legacy
+executions without durable mutation records are deliberately refused with an
+explicit error: a native listing cannot reconstruct which unobserved POSTs were
+attempted, and a replacement empty sidecar would incorrectly authorize duplicates.
+Keep those original checkpoints/journals for inspection; do not delete the
+sidecar, create a replacement empty file, or change the checkpoint to bypass
+that refusal. Final native integration and remaining release acceptance are #95.
