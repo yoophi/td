@@ -454,3 +454,13 @@ completion receipt. Changing a title does not bypass this guard. This identifies
 an incomplete operation for inspection; it does not itself reconcile a receipt
 or provide workspace resume. Task creation retains the importer's existing
 qualified-source operation identity rather than using these auxiliary IDs.
+
+The native check used a constructed SQLite workspace fixture with one note and
+one custom board, saved its immutable checkpoint before remote writes, and
+created `nt-gh-217` / `bd-gh-218` in `yoophi/td-sample`. Native creation receipts
+bound the checkpoint-derived operations to the helper's actual device session.
+Repeating those operations with different names created zero duplicate entities;
+the original deletion clock and checkpoint bytes remained intact. The note was
+created archived/deleted and the test board was logically deleted after validation.
+This verifies configured auxiliary creation and replay refusal, not task import,
+the workspace execution CLI or resumable whole-workspace completion.
