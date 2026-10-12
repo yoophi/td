@@ -140,3 +140,22 @@ func TestCheckpointEntityOperationsRemainStableAndQualified(t *testing.T) {
 		t.Fatal("changed checkpoint accepted")
 	}
 }
+
+func TestCheckpointBindsActualActorOnce(t *testing.T) {
+	c := checkpointFixture(t)
+	before := c.SHA256
+	if err := c.BindActor("../foreign"); err == nil || c.SHA256 != before {
+		t.Fatal("invalid actor mutated checkpoint")
+	}
+	if err := c.BindActor("ses_actual"); err != nil || c.SHA256 == before {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(c)
+	read, err := ReadCheckpoint(bytes.NewReader(data), 0)
+	if err != nil || read.ActorSessionID != "ses_actual" {
+		t.Fatal(read, err)
+	}
+	if err := c.BindActor("ses_other"); err == nil {
+		t.Fatal("original execution actor rebound")
+	}
+}

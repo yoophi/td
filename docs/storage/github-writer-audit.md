@@ -9,6 +9,17 @@ path; an existing builtin keeps its configuration and records one position delta
 replay and partial outcomes. This addition is not evidence of transfer CLI
 activation, whole-workspace compensation/resume, or the full #31/#68 audit.
 
+Further #93 execution wiring: `ExecuteGitHubDestination` saves a private original
+checkpoint/actual actor, publishes a passive source capsule before task writes,
+dispatches the existing native importer and tracked entity writers, re-observes
+completion mappings, and publishes a passive completion capsule. Source and
+completion capsules do not become active actions or undo authority. A failure
+stops with the original checkpoint/operation and native cause; no target write
+is automatically retried. `TestStoreTransferExecuteGitHubWholeWorkspaceAndNoDuplicateReplay`
+checks the real command dispatch and unchanged SQL bytes. Native evidence is
+currently partial allocation/listing-lag failure, not completed workspace proof.
+Existing task adoption and explicit checkpoint reconciliation remain unfinished.
+
 This is the release-preparation audit of #65 at `95141ed`, after native import
 acceptance #78. It checks the existing compound task writers and their real
 CLI/HTTP/monitor entry points. The complete command/flag contract audit remains

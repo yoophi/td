@@ -249,3 +249,18 @@ func (b *BoardRecord) Revision() string {
 	}
 	return fmt.Sprintf("%x", b.observed.revision)
 }
+
+// CheckNativeBaseline compares the private observation used by a writer with
+// the original native export, closing the gap between bulk preflight and GET.
+func (b *BoardRecord) CheckNativeBaseline(expected NativeExport) error {
+	if b == nil || b.Number != expected.Number || expected.Kind != "board" || b.observed.Title != expected.Title || b.observed.nativeBody != expected.Body || b.observed.nativeState != expected.State || !b.observed.UpdatedAt.Equal(expected.UpdatedAt) || !b.observed.CreatedAt.Equal(expected.CreatedAt) {
+		return fmt.Errorf("board observation changed from original native baseline")
+	}
+	labels, want := slices.Clone(b.observed.Labels), slices.Clone(expected.Labels)
+	slices.Sort(labels)
+	slices.Sort(want)
+	if !slices.Equal(labels, want) {
+		return fmt.Errorf("board labels changed from original native baseline")
+	}
+	return nil
+}

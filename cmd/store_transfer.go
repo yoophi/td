@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -12,20 +13,24 @@ import (
 
 func newStoreTransferCommand() *cobra.Command {
 	var destination, targetStore, sourceNamespace, targetNamespace, remote string
+	var checkpointPath string
 	var mappings []string
 	var dryRun, execute bool
 	var maxBytes int64
 	cmd := &cobra.Command{
 		Use:   "transfer",
 		Short: "Transfer explicitly between SQLite and GitHub",
-		Long:  "Transfer is separate from store selection. Choose --dry-run to inspect mappings and preservation limits without writes. --execute supports a SQLite destination; GitHub destination execution and resume are still in development.",
+		Long:  "Transfer is separate from store selection. Choose --dry-run to inspect mappings without writes, or --execute for a checked transfer. GitHub execution requires a new --checkpoint file; task adoption and resume are still in development.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if dryRun == execute {
 				return fmt.Errorf("choose exactly one of --dry-run or --execute")
 			}
-			if execute && targetStore == config.StoreGitHub {
-				return withErrorCode("unsupported_operation", fmt.Errorf("GitHub destination transfer execution is not yet available; no source or destination write attempted"))
+			if targetStore == config.StoreGitHub && execute && checkpointPath == "" {
+				return fmt.Errorf("GitHub execution requires an explicit new --checkpoint file")
+			}
+			if checkpointPath != "" && (!execute || targetStore != config.StoreGitHub) {
+				return fmt.Errorf("--checkpoint is only accepted for GitHub destination execution")
 			}
 			if targetStore != config.StoreSQLite && targetStore != config.StoreGitHub {
 				return fmt.Errorf("--to must explicitly be sqlite or gh-issue")
@@ -75,6 +80,32 @@ func newStoreTransferCommand() *cobra.Command {
 				return fmt.Errorf("plan transfer: %w", err)
 			}
 			if execute {
+				if targetStore == config.StoreGitHub {
+					result, err := storetransfer.ExecuteGitHubDestination(cmd.Context(), source.Source, target, bindings, checkpointPath, maxBytes)
+					if err != nil {
+						if errors.Is(err, storetransfer.ErrGitHubTaskAdoption) {
+							return withErrorCode("unsupported_operation", err)
+						}
+						return err
+					}
+					if jsonMode(cmd) {
+						err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+					} else {
+						_, err = fmt.Fprintf(cmd.OutOrStdout(), "GitHub transfer completed: operation=%s notes=%d boards=%d builtin_positions=%d\nSource SHA256: %s\nCheckpoint: %s\n", result.OperationID, result.Notes, result.Boards, result.BuiltinPositions, result.SourceSHA256, result.Checkpoint)
+						if err == nil {
+							for _, row := range result.Preservation {
+								_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s (%d): %s\n", row.Handling, row.Code, row.Count, row.Reason)
+								if err != nil {
+									break
+								}
+							}
+						}
+					}
+					if err != nil {
+						return fmt.Errorf("GitHub transfer completed (operation=%s, checkpoint=%s) but output failed; inspect completion archive before retry: %w", result.OperationID, result.Checkpoint, err)
+					}
+					return nil
+				}
 				result, err := storetransfer.ExecuteSQLiteDestination(cmd.Context(), source.Source, target, bindings, maxBytes)
 				if err != nil {
 					return err
@@ -131,7 +162,8 @@ func newStoreTransferCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&mappings, "map", nil, "Explicit qualified-source-key=existing-target-id binding; repeatable")
 	cmd.Flags().Int64Var(&maxBytes, "max-bytes", 0, "Serialized input limit in bytes (0 uses 64 MiB)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Inspect a transfer without source or destination writes")
-	cmd.Flags().BoolVar(&execute, "execute", false, "Execute to SQLite (GitHub destination execution is in development)")
+	cmd.Flags().BoolVar(&execute, "execute", false, "Execute a checked transfer (GitHub task adoption/resume are in development)")
+	cmd.Flags().StringVar(&checkpointPath, "checkpoint", "", "New local checkpoint file required before GitHub execution writes")
 	return cmd
 }
 

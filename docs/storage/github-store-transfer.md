@@ -4,8 +4,9 @@ Store configuration changes select a backend; they do not migrate data. #8
 requires a separate command with source/destination validation, preview, stable
 qualified ID mappings, checked writes and explicit partial-failure resume.
 This implementation is in progress. This feature branch supports bidirectional
-`td store transfer --dry-run` and explicit execution to SQLite. GitHub destination
-execution remains unavailable and fails before source or destination access.
+`td store transfer --dry-run` and explicit execution in both directions. GitHub
+execution supports new task mappings and note/board reuse; existing task adoption
+and explicit checkpoint resume remain incomplete. #93/#94/#95 stay open.
 
 ## CLI preview (#93, execution in progress)
 
@@ -442,8 +443,9 @@ syncs a private 0600 sibling file and uses a hard link so an existing checkpoint
 cannot be overwritten. Capacity errors occur before file creation; filesystem
 errors retain their original cause. An error after publication requires inspection
 before another attempt. Destination paths remain local controller state and are
-not included in remote provenance. This is not yet wired to GitHub CLI execution
-and does not implement phase receipts, reconciliation or resume.
+not included in remote provenance. Execution records the actual device actor
+before publication. Original checkpoint bytes are not replaced with claimed
+success counters; reconciliation and resume remain separate work.
 
 Checkpoint-derived note and board operation IDs bind an exact qualified source
 key to the original execution. Configured creation accepts these explicit IDs
@@ -483,3 +485,38 @@ conflicts, stale/fresh replay and permission/response/receipt failures. These ar
 production-client fixtures; no new native whole-workspace execution or builtin
 resume is claimed. Existing-task adoption still needs an importer source-key
 contract before the GitHub execution CLI can expose that route safely.
+
+## GitHub execution boundary
+
+```bash
+td -w /path/to/sqlite-project store transfer --execute --to gh-issue \
+  --source-namespace my-stable-source --destination /path/to/github-project \
+  --remote origin --checkpoint /existing/private-directory/transfer.json --json
+```
+
+The checkpoint is mandatory, private, and never overwritten. Source collection
+does not change SQLite or store selection. After fresh destination preflight the
+controller publishes the exact passive source capsule before task writes, reuses
+the native importer, creates notes/custom boards and handles builtin positions.
+Only unchanged native task receipts and exact current auxiliary receipts become
+final mappings. Selected reused entities are rechecked without overwriting them.
+The completion archive repeats the original capsule with verified mappings;
+it is passive evidence, not active review or undo authority. Whole GitHub execution
+is not atomic, and these checks cannot supply an atomic server CAS.
+
+Same-checkpoint execution is rejected. A new operation with overlapping archived
+source identities is also rejected rather than creating duplicate notes/boards.
+An error prints the original operation/checkpoint, confirmed import counters and
+underlying cause; earlier writes can remain and are never automatically replayed.
+Existing task `--map` bindings return `unsupported_operation` before checkpoint
+or remote writes until the import namespace contract is implemented. Note/board
+bindings preserve destination content; source originals remain in the capsule.
+
+The command fixture verified two tasks, one note, a custom board/query/position
+and builtin initialization, original SQL bytes, native receipt bindings, and both
+duplicate execution guards. The native run on a copied SQLite project preserved
+its bytes and published source root `6116667328`, then stopped when newly created
+`gh-220` was absent from the fresh list after `gh-219/220` allocation. Read-only
+inspection confirmed both exact creation operations and the original source
+archive. No auxiliary write or automatic resume occurred. This is native partial
+failure evidence; successful whole-workspace native completion remains unproven.

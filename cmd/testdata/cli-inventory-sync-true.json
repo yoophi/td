@@ -4303,6 +4303,10 @@
     "runnable": true,
     "flags": [
       {
+        "name": "checkpoint",
+        "type": "string"
+      },
+      {
         "name": "destination",
         "type": "string"
       },

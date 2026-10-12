@@ -117,7 +117,7 @@ func PrepareGitHubWorkspace(source *Source, target *InspectedTarget, bindings ma
 		}
 		probeMappings[a.SourceKey] = id
 	}
-	if _, err := ghstore.PlanWorkspaceArchive(t.GitHub.Repository, "gh-"+strconv.Itoa(int(^uint(0)>>1)), "td-workspace-XXXXXXXXXXXXXXXXXXXXXXXXXX", data.Bytes(), probeMappings, maxBytes); err != nil {
+	if _, err := ghstore.PlanWorkspaceArchive(t.GitHub.Repository, "gh-"+strconv.Itoa(int(^uint(0)>>1)), "td-workspace-XXXXXXXXXXXXXXXXXXXXXXXXXX-complete", data.Bytes(), probeMappings, maxBytes); err != nil {
 		return nil, fmt.Errorf("GitHub workspace archive preflight: %w", err)
 	}
 	return &PreparedGitHubWorkspace{source: s, target: t, identities: identities, reused: reused, archive: data.Bytes()}, nil

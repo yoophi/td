@@ -17,13 +17,39 @@ import (
 // Stored mappings are observations, not permission to skip native verification.
 // This file is local controller state and must not be published as provenance.
 type Checkpoint struct {
-	Version     int               `json:"version"`
-	OperationID string            `json:"operation_id"`
-	Source      Envelope          `json:"source"`
-	Target      Envelope          `json:"target"`
-	Destination TargetSpec        `json:"destination"`
-	Bindings    map[string]string `json:"bindings"`
-	SHA256      string            `json:"sha256"`
+	Version        int               `json:"version"`
+	OperationID    string            `json:"operation_id"`
+	ActorSessionID string            `json:"actor_session_id,omitempty"`
+	Source         Envelope          `json:"source"`
+	Target         Envelope          `json:"target"`
+	Destination    TargetSpec        `json:"destination"`
+	Bindings       map[string]string `json:"bindings"`
+	SHA256         string            `json:"sha256"`
+}
+
+// BindActor records the actual device-local execution identity before initial
+// publication. The controller never derives this from source actors/history.
+func (c *Checkpoint) BindActor(actor string) error {
+	if c == nil || c.SHA256 != c.digest() || c.ActorSessionID != "" || !validCheckpointActor(actor) {
+		return fmt.Errorf("immutable unbound checkpoint and actual actor required")
+	}
+
+	c.ActorSessionID = actor
+	c.SHA256 = c.digest()
+	return nil
+}
+
+func validCheckpointActor(actor string) bool {
+	if actor == "" || len(actor) > 128 {
+		return false
+	}
+	for _, char := range actor {
+		allowed := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_'
+		if !allowed {
+			return false
+		}
+	}
+	return true
 }
 
 func NewCheckpoint(source *Source, target *InspectedTarget, bindings map[string]string, maxBytes int64) (*Checkpoint, error) {
@@ -67,7 +93,7 @@ func ReadCheckpoint(reader io.Reader, maxBytes int64) (*Checkpoint, error) {
 	if err := strictJSON(data, &c); err != nil {
 		return nil, fmt.Errorf("decode store-transfer checkpoint: %w", err)
 	}
-	if c.Version != 1 || !checkpointOperationID.MatchString(c.OperationID) || c.SHA256 != c.digest() {
+	if c.Version != 1 || !checkpointOperationID.MatchString(c.OperationID) || c.ActorSessionID != "" && !validCheckpointActor(c.ActorSessionID) || c.SHA256 != c.digest() {
 		return nil, fmt.Errorf("invalid store-transfer checkpoint version/identity/checksum")
 	}
 	source, err := c.Source.decode()
