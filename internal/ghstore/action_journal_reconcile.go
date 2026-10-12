@@ -251,7 +251,14 @@ func (c *Client) observeReconcileResult(ctx context.Context, action *ActionJourn
 		if target.Title != action.CreateInput.Title || target.nativeBody != action.CreateInput.Body || target.nativeState != "open" {
 			return nil, &ConflictError{ID: target.ID}
 		}
-		if err := checkLabels(target, action.CreateInput.Labels, "observed"); err != nil {
+		labelAction := "observed"
+		// Auxiliary creation sends only title/body, so its intent does not
+		// request an exact label replacement. Observe any native labels in the
+		// recovered state; later receipt checks still fence that full state.
+		if target.meta.EntityKind == "note" || target.meta.EntityKind == "board" {
+			labelAction = "created"
+		}
+		if err := checkLabels(target, action.CreateInput.Labels, labelAction); err != nil {
 			return nil, err
 		}
 		for _, entry := range snapshot.entries {

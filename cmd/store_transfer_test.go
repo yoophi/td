@@ -34,6 +34,7 @@ func TestStoreTransferInvalidModesAndBindingsDoNotInitialize(t *testing.T) {
 	dir := storeTestDir(t)
 	for _, args := range [][]string{
 		{}, {"--dry-run", "--execute"}, {"--execute"}, {"--execute", "--to", "gh-issue"}, {"--dry-run", "--to", "unknown"},
+		{"--resume"}, {"--resume", "--execute"}, {"--resume", "--dry-run"}, {"--resume", "--to", "gh-issue"}, {"--resume", "--remote", "origin"}, {"--resume", "--map", "key=id"},
 		{"--dry-run", "--to", "sqlite", "--destination", dir},
 		{"--dry-run", "--to", "gh-issue", "--destination", dir},
 		{"--dry-run", "--to", "gh-issue", "--destination", dir, "--remote", "origin", "--map", "invalid"},

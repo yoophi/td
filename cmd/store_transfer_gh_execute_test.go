@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,6 +16,92 @@ import (
 	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/storetransfer"
 )
+
+func TestStoreTransferResumeAfterLostTaskOrNoteResponse(t *testing.T) {
+	for _, failure := range []string{"root-lost", "allocation-lost", "note-lost"} {
+		t.Run(failure, func(t *testing.T) {
+			target, _, run := journalCLIWithTimeout(t, 2*time.Minute)
+			useNativeCommentOrderFixture(t)
+			useHandoffReviewFixture(t)
+			t.Setenv("TD_GH_FIXTURE_NATIVE_EVENTS", "1")
+			configureImportJournalFixture(t)
+			path, err := exec.LookPath("gh")
+			if err != nil {
+				t.Fatal(err)
+			}
+			script, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			seam := "if os.environ.get('TD_GH_IMPORT_FAIL')=='allocation-lost':"
+			if !bytes.Contains(script, []byte(seam)) {
+				t.Fatal("missing allocation seam")
+			}
+			script = bytes.Replace(script, []byte(seam), []byte("if os.environ.get('TD_GH_IMPORT_FAIL')=='note-lost' and '\"entity_kind\":\"note\"' in patch.get('body',''):sys.stderr.write('connection lost after workspace note');sys.exit(1)\n "+seam), 1)
+			if err := os.WriteFile(path, script, 0755); err != nil {
+				t.Fatal(err)
+			}
+			source := t.TempDir()
+			database, err := db.Initialize(source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := database.CreateIssue(&models.Issue{Title: "resume task"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := database.CreateNote("resume note", "frozen content"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := database.CreateBoard("resume board", ""); err != nil {
+				t.Fatal(err)
+			}
+			if err := database.Close(); err != nil {
+				t.Fatal(err)
+			}
+			checkpoint := filepath.Join(t.TempDir(), "original.json")
+			t.Setenv("TD_GH_IMPORT_FAIL", failure)
+			out, stderr, err := run("--work-dir", source, "store", "transfer", "--execute", "--to", "gh-issue", "--destination", target, "--remote", "origin", "--source-namespace", "resume-fixture", "--checkpoint", checkpoint, "--json")
+			if err == nil || !strings.Contains(out+stderr, "connection lost") || !strings.Contains(out+stderr, "no automatic retry") {
+				t.Fatal("lost response hidden", out, stderr, err)
+			}
+			t.Setenv("TD_GH_IMPORT_FAIL", "")
+			original, err := os.ReadFile(checkpoint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(source); err != nil {
+				t.Fatal(err)
+			}
+			out, stderr, err = run("store", "transfer", "--resume", "--checkpoint", checkpoint, "--json")
+			var result storetransfer.GitHubTransferResult
+			if err != nil || json.Unmarshal([]byte(out), &result) != nil || !result.Completed || len(result.Mappings) != 4 {
+				t.Fatal("partial resume failed", out, stderr, err)
+			}
+			if failure == "note-lost" {
+				observed := false
+				for _, proof := range result.EntityProofs {
+					observed = observed || proof == "observed"
+				}
+				if !observed || result.Notes != 0 {
+					t.Fatal("lost note duplicated or proof upgraded", result)
+				}
+			}
+			var native struct{ Issues map[string]json.RawMessage }
+			if err := json.Unmarshal(relationFixtureBytes(t, "TD_SCHEDULE_STATE"), &native); err != nil || len(native.Issues) != 9 {
+				t.Fatal("duplicate or missing native entity", len(native.Issues), err)
+			}
+			before, journal := relationFixtureBytes(t, "TD_SCHEDULE_STATE"), relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")
+			out, stderr, err = run("store", "transfer", "--resume", "--checkpoint", checkpoint, "--json")
+			if err != nil || !bytes.Equal(before, relationFixtureBytes(t, "TD_SCHEDULE_STATE")) || !bytes.Equal(journal, relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")) {
+				t.Fatal("repeat resume wrote", out, stderr, err)
+			}
+			after, _ := os.ReadFile(checkpoint)
+			if !bytes.Equal(original, after) {
+				t.Fatal("resume replaced original preparation")
+			}
+		})
+	}
+}
 
 func TestStoreTransferExecuteGitHubWholeWorkspaceAndNoDuplicateReplay(t *testing.T) {
 	for _, adopt := range []bool{false, true} {
@@ -168,6 +255,41 @@ func testStoreTransferExecuteGitHubWholeWorkspace(t *testing.T, adopt bool) {
 	}
 	if !bytes.Equal(native, relationFixtureBytes(t, "TD_SCHEDULE_STATE")) || !bytes.Equal(journal, relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")) {
 		t.Fatal("replay mutated remote state")
+	}
+	// Resume must use the frozen preparation even if the original source no
+	// longer exists; completed native operations are rechecked, not replayed.
+	if err := os.RemoveAll(source); err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		out, stderr, err = run("store", "transfer", "--resume", "--checkpoint", checkpoint, "--json")
+		var resumed storetransfer.GitHubTransferResult
+		if err != nil || json.Unmarshal([]byte(out), &resumed) != nil || !resumed.Completed || resumed.SourceSHA256 != result.SourceSHA256 || resumed.SourceArchiveID != result.SourceArchiveID || resumed.CompletionArchiveID != result.CompletionArchiveID || len(resumed.Mappings) != len(result.Mappings) || resumed.Notes != 0 || resumed.Boards != 0 {
+			t.Fatal("completed resume failed", out, stderr, err)
+		}
+		for key, id := range result.Mappings {
+			if resumed.Mappings[key] != id {
+				t.Fatal("resume changed original mapping", key, id, resumed.Mappings[key])
+			}
+		}
+		if !bytes.Equal(native, relationFixtureBytes(t, "TD_SCHEDULE_STATE")) || !bytes.Equal(journal, relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")) {
+			t.Fatal("completed resume wrote native state")
+		}
+		checkpointAfter, _ := os.ReadFile(checkpoint)
+		progressAfter, _ := os.ReadFile(checkpoint + ".progress.json")
+		if !bytes.Equal(data, checkpointAfter) || !bytes.Equal(progressBytes, progressAfter) {
+			t.Fatal("completed resume rewrote immutable input or original progress")
+		}
+	}
+	if out, stderr, err := run("usage", "--new-session", "-q"); err != nil {
+		t.Fatal("fixture session rotation failed", out, stderr, err)
+	}
+	out, stderr, err = run("store", "transfer", "--resume", "--checkpoint", checkpoint, "--json")
+	if err == nil || !strings.Contains(out+stderr, "actual resume session differs") {
+		t.Fatal("rotated actor impersonated original execution", out, stderr, err)
+	}
+	if !bytes.Equal(native, relationFixtureBytes(t, "TD_SCHEDULE_STATE")) || !bytes.Equal(journal, relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")) {
+		t.Fatal("actor mismatch mutated remote state")
 	}
 }
 

@@ -30,6 +30,27 @@ type State struct {
 
 type Scope struct{ Directory, Path, Branch, Repo, Worktree string }
 
+// ReadExisting observes this actual device/branch/agent scope without creating
+// an identity or updating activity. Missing contexts cannot impersonate an
+// actor stored in a transfer checkpoint.
+func (s Scope) ReadExisting(ctx context.Context) (*State, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(s.Path)
+	if err != nil {
+		return nil, err
+	}
+	var state State
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("invalid local GitHub context (preserved): %w", err)
+	}
+	if state.Version != 1 || state.Session.ID == "" {
+		return nil, fmt.Errorf("unsupported local GitHub context version or identity")
+	}
+	return &state, nil
+}
+
 func Resolve(ctx context.Context, dir, repo string) (Scope, error) {
 	info, err := workdir.WorktreeForPath(dir)
 	if err != nil {

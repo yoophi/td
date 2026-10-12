@@ -1,6 +1,7 @@
 package ghcontext
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -8,6 +9,39 @@ import (
 	"sync"
 	"testing"
 )
+
+func TestReadExistingNeverCreatesOrUpdatesIdentity(t *testing.T) {
+	dir := t.TempDir()
+	scope := Scope{Directory: dir, Path: filepath.Join(dir, "actor.json")}
+	if _, err := scope.ReadExisting(context.Background()); !os.IsNotExist(err) {
+		t.Fatal("missing identity was created", err)
+	}
+	state, err := scope.Update(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(scope.Path)
+	observed, err := scope.ReadExisting(context.Background())
+	if err != nil || observed.Session.ID != state.Session.ID {
+		t.Fatal(observed, err)
+	}
+	after, _ := os.ReadFile(scope.Path)
+	if !bytes.Equal(before, after) {
+		t.Fatal("read updated actor activity")
+	}
+	for _, invalid := range []string{"broken", `{"version":2,"session":{"id":"ses_other"}}`} {
+		if err := os.WriteFile(scope.Path, []byte(invalid), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := scope.ReadExisting(context.Background()); err == nil {
+			t.Fatal("invalid identity accepted")
+		}
+		after, _ := os.ReadFile(scope.Path)
+		if string(after) != invalid {
+			t.Fatal("invalid identity overwritten")
+		}
+	}
+}
 
 func TestPersistentContextIsolationAndHistory(t *testing.T) {
 	dir := t.TempDir()

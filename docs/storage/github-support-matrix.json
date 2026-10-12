@@ -2081,7 +2081,7 @@
       "command": "td store transfer",
       "owner": "#93",
       "state": "partial",
-      "reason": "Both-direction previews, SQLite execution and GitHub execution with new task/note/board mappings are tested. GitHub requires a new checkpoint, publishes passive source/completion capsules and rechecks native receipts; source DB bytes and duplicate replay are checked. Explicit existing-task adoption is checked through its original tracked completion; import/repeat/undo and whole-workspace adoption fixtures retain existing native tasks. Checkpoint resume and final native/integration acceptance remain incomplete.",
+      "reason": "Both-direction previews, SQLite execution and GitHub execution with new task/note/board mappings are tested. GitHub requires a new checkpoint, publishes passive source/completion capsules and rechecks native receipts; source DB bytes and duplicate replay are checked. Explicit existing-task adoption is checked through its original tracked completion; import/repeat/undo and whole-workspace adoption fixtures retain existing native tasks. Checkpoint resume and final native/integration acceptance remain incomplete. Explicit --resume reads the frozen checkpoint and original progress, validates the actual existing execution actor, observes attempted auxiliary entity operations without target replay, and continues untouched stages. Phase receipt and final native/integration acceptance remain pending.",
       "evidence": [
         "TestStoreTransferInvalidModesAndBindingsDoNotInitialize",
         "TestStoreTransferDryRunBothDirectionsWithReadOnlyGH",
@@ -2089,7 +2089,8 @@
         "TestStoreTransferExecuteSQLiteReportsOutputFailureAfterCommit",
         "TestStoreTransferExecuteGitHubWholeWorkspaceAndNoDuplicateReplay",
         "TestGitHubJournalCLIImportAdoptionCompletionRepeatAndUndo",
-        "TestSQLiteImportRejectsExplicitGitHubAdoptionBeforeAnyTaskWrite"
+        "TestSQLiteImportRejectsExplicitGitHubAdoptionBeforeAnyTaskWrite",
+        "TestStoreTransferResumeAfterLostTaskOrNoteResponse"
       ],
       "flags": {
         "destination": "partial",
@@ -2105,7 +2106,8 @@
         "source-namespace": "partial",
         "to": "partial",
         "work-dir": "pending",
-        "checkpoint": "partial"
+        "checkpoint": "partial",
+        "resume": "partial"
       },
       "flag_evidence": {
         "dry-run": [
@@ -2135,6 +2137,10 @@
         ],
         "checkpoint": [
           "TestStoreTransferExecuteGitHubWholeWorkspaceAndNoDuplicateReplay"
+        ],
+        "resume": [
+          "TestStoreTransferExecuteGitHubWholeWorkspaceAndNoDuplicateReplay",
+          "TestStoreTransferResumeAfterLostTaskOrNoteResponse"
         ]
       }
     },

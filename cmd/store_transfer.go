@@ -14,14 +14,26 @@ func newStoreTransferCommand() *cobra.Command {
 	var destination, targetStore, sourceNamespace, targetNamespace, remote string
 	var checkpointPath string
 	var mappings []string
-	var dryRun, execute bool
+	var dryRun, execute, resume bool
 	var maxBytes int64
 	cmd := &cobra.Command{
 		Use:   "transfer",
 		Short: "Transfer explicitly between SQLite and GitHub",
-		Long:  "Transfer is separate from store selection. Choose --dry-run to inspect mappings without writes, or --execute for a checked transfer. GitHub execution requires a new --checkpoint file and preserves explicitly adopted tasks unchanged; checkpoint resume is still in development.",
+		Long:  "Transfer is separate from store selection. Choose --dry-run to inspect mappings without writes, or --execute for a checked transfer. GitHub execution requires a new --checkpoint file and preserves explicitly adopted tasks unchanged; use --resume --checkpoint to continue the immutable original transfer.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if resume {
+				for _, flag := range []string{"dry-run", "execute", "to", "destination", "source-namespace", "destination-namespace", "remote", "map"} {
+					if cmd.Flags().Changed(flag) {
+						return fmt.Errorf("--resume uses the immutable checkpoint and does not accept --%s", flag)
+					}
+				}
+				result, err := storetransfer.ResumeGitHubDestination(cmd.Context(), checkpointPath, maxBytes)
+				if err != nil {
+					return err
+				}
+				return printGitHubTransferResult(cmd, result)
+			}
 			if dryRun == execute {
 				return fmt.Errorf("choose exactly one of --dry-run or --execute")
 			}
@@ -84,23 +96,7 @@ func newStoreTransferCommand() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					if jsonMode(cmd) {
-						err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
-					} else {
-						_, err = fmt.Fprintf(cmd.OutOrStdout(), "GitHub transfer completed: operation=%s notes=%d boards=%d builtin_positions=%d\nSource SHA256: %s\nCheckpoint: %s\n", result.OperationID, result.Notes, result.Boards, result.BuiltinPositions, result.SourceSHA256, result.Checkpoint)
-						if err == nil {
-							for _, row := range result.Preservation {
-								_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s (%d): %s\n", row.Handling, row.Code, row.Count, row.Reason)
-								if err != nil {
-									break
-								}
-							}
-						}
-					}
-					if err != nil {
-						return fmt.Errorf("GitHub transfer completed (operation=%s, checkpoint=%s) but output failed; inspect completion archive before retry: %w", result.OperationID, result.Checkpoint, err)
-					}
-					return nil
+					return printGitHubTransferResult(cmd, result)
 				}
 				result, err := storetransfer.ExecuteSQLiteDestination(cmd.Context(), source.Source, target, bindings, maxBytes)
 				if err != nil {
@@ -158,8 +154,9 @@ func newStoreTransferCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&mappings, "map", nil, "Explicit qualified-source-key=existing-target-id binding; repeatable")
 	cmd.Flags().Int64Var(&maxBytes, "max-bytes", 0, "Serialized input limit in bytes (0 uses 64 MiB)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Inspect a transfer without source or destination writes")
-	cmd.Flags().BoolVar(&execute, "execute", false, "Execute a checked transfer (checkpoint resume is in development)")
-	cmd.Flags().StringVar(&checkpointPath, "checkpoint", "", "New local checkpoint file required before GitHub execution writes")
+	cmd.Flags().BoolVar(&execute, "execute", false, "Execute a new checked transfer")
+	cmd.Flags().BoolVar(&resume, "resume", false, "Continue the immutable original GitHub transfer without automatically replaying uncertain writes")
+	cmd.Flags().StringVar(&checkpointPath, "checkpoint", "", "Local checkpoint: new for --execute, original for --resume")
 	return cmd
 }
 
@@ -167,4 +164,25 @@ func init() {
 	storeCmd := &cobra.Command{Use: "store", Short: "Manage explicit store transfers", GroupID: "system", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
 	storeCmd.AddCommand(newStoreTransferCommand())
 	rootCmd.AddCommand(storeCmd)
+}
+
+func printGitHubTransferResult(cmd *cobra.Command, result *storetransfer.GitHubTransferResult) error {
+	var err error
+	if jsonMode(cmd) {
+		err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+	} else {
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "GitHub transfer completed: operation=%s notes=%d boards=%d builtin_positions=%d\nSource SHA256: %s\nCheckpoint: %s\n", result.OperationID, result.Notes, result.Boards, result.BuiltinPositions, result.SourceSHA256, result.Checkpoint)
+		if err == nil {
+			for _, row := range result.Preservation {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s (%d): %s\n", row.Handling, row.Code, row.Count, row.Reason)
+				if err != nil {
+					break
+				}
+			}
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("GitHub transfer completed (operation=%s, checkpoint=%s) but output failed; inspect completion archive before retry: %w", result.OperationID, result.Checkpoint, err)
+	}
+	return nil
 }

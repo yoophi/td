@@ -689,3 +689,30 @@ roots. Legacy root recovery must validate the original observed operation.
 Pinned-task and changed-body replay fixtures pass, including public workspace
 execution recording the checkpoint's exact task operation. The complete
 task/entity reconciliation controller and public resume CLI remain unfinished.
+
+### Whole-workspace explicit resume (#94, in progress)
+
+`td store transfer --resume --checkpoint /absolute/original.json --json`
+continues the frozen SQLite-to-GitHub preparation without collecting a newer
+source. Do not supply `--execute`, `--dry-run`, destination/source options or
+`--map`: those would replace the original preparation and are rejected.
+The original progress sidecar must exist and pass strict checkpoint validation.
+Older executions without that sidecar stop explicitly; absence is not proof that
+no write was attempted.
+
+The destination's current remote must still resolve to the original repository,
+and its actual device/branch/agent scope must retain the original session.
+Resume reads that existing identity without updating activity or creating a
+session from checkpoint metadata. Archives continue through the durable replay
+guard; tasks retain their original pinned command. Attempted note/board target
+requests are matched byte-for-byte against native journal input. Recovery can
+repair the journal after observing an applied target, but never repeats the
+entity POST or PATCH. An unobserved/changed target returns an explicit error.
+
+Recovered entity results report `entity_proofs` as `observed` or `verified`.
+Observation never becomes an original verified-write receipt. Auxiliary creation
+requests specify title/body only, so recovery preserves observed native labels
+rather than requiring an unrequested label replacement. Task label checks remain
+unchanged. Repeated completed resume rechecks native results without writes.
+Local phase completion receipts, remaining controller failure boundaries and
+final native integration (#95) still require work before #94 closes.

@@ -15,6 +15,7 @@ import (
 // GitHubTransferResult reports individually confirmed stages. GitHub is not a
 // transaction; an error may leave native intents/entities and the source archive.
 type GitHubTransferResult struct {
+	EntityProofs        map[string]string     `json:"entity_proofs,omitempty"`
 	SourceStore         string                `json:"source_store"`
 	TargetStore         string                `json:"target_store"`
 	Completed           bool                  `json:"completed"`
@@ -53,10 +54,6 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 		return nil, err
 	}
 	prepared, err := PrepareGitHubWorkspace(source, target, bindings, maxBytes)
-	if err != nil {
-		return nil, err
-	}
-	input, err := prepared.TaskInputs()
 	if err != nil {
 		return nil, err
 	}
@@ -126,22 +123,34 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 	if err := SaveCheckpointNew(checkpointPath, checkpoint, maxBytes); err != nil {
 		return nil, err
 	}
-	result := &GitHubTransferResult{SourceStore: "sqlite", TargetStore: "gh-issue", OperationID: checkpoint.OperationID, Checkpoint: checkpointPath, ActorSessionID: state.Session.ID, SourceSHA256: prepared.SourceSHA256(), TargetNamespace: client.Repository(), Mappings: prepared.ReusedBindings()}
+	progress, err := newProgressRecorder(checkpointPath, checkpoint, maxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("local progress initialization before remote writes: %w", err)
+	}
+	return executePreparedGitHub(ctx, client, prepared, checkpoint, checkpointPath, progress, false, maxBytes)
+}
+
+func executePreparedGitHub(ctx context.Context, client *ghstore.Client, prepared *PreparedGitHubWorkspace, checkpoint *Checkpoint, checkpointPath string, progress *progressRecorder, resume bool, maxBytes int64) (*GitHubTransferResult, error) {
+	input, err := prepared.TaskInputs()
+	if err != nil {
+		return nil, err
+	}
+	result := &GitHubTransferResult{SourceStore: "sqlite", TargetStore: "gh-issue", OperationID: checkpoint.OperationID, Checkpoint: checkpointPath, ActorSessionID: checkpoint.ActorSessionID, SourceSHA256: prepared.SourceSHA256(), TargetNamespace: client.Repository(), Mappings: prepared.ReusedBindings(), EntityProofs: map[string]string{}}
 	fail := func(stage string, err error) (*GitHubTransferResult, error) {
 		return result, fmt.Errorf("GitHub transfer %s failed (operation=%s, checkpoint=%s, source_sha256=%s); earlier writes may remain; inspect native state and the original checkpoint before explicit resume; no automatic retry: %w", stage, result.OperationID, checkpointPath, result.SourceSHA256, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return fail("before publication", err)
 	}
-	if err := client.TrackActions(state.Session.ID); err != nil {
+	if err := client.TrackActions(checkpoint.ActorSessionID); err != nil {
 		return fail("actor", err)
 	}
-	progress, err := newProgressRecorder(checkpointPath, checkpoint, maxBytes)
-	if err != nil {
-		return fail("local progress initialization", err)
-	}
 	ctx = ghstore.WithMutationRecorder(ctx, progress)
-	archive, err := client.PublishWorkspaceArchiveData(ctx, checkpoint.OperationID, prepared.OriginalArchive(), result.Mappings, maxBytes)
+	publish := client.PublishWorkspaceArchiveData
+	if resume {
+		publish = client.ResumeWorkspaceArchiveData
+	}
+	archive, err := publish(ctx, checkpoint.OperationID, prepared.OriginalArchive(), result.Mappings, maxBytes)
 	if err != nil {
 		return fail("source archive", err)
 	}
@@ -186,7 +195,23 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 			return fail("note identity", err)
 		}
 		note.Options.OperationID = op
-		created, err := client.CreateNoteWithOptions(ctx, note.Title, note.Content, state.Session.ID, note.Options)
+		if resume {
+			request, attempted, err := progress.entityRequest(op, "note")
+			if err != nil {
+				return fail("note intent", err)
+			}
+			if attempted {
+				recovered, err := client.RecoverEntityOperation(ctx, request)
+				if err != nil {
+					return fail("note recovery "+note.SourceKey, err)
+				}
+				result.Mappings[note.SourceKey] = recovered.ID
+				result.EntityProofs[op] = recovered.Proof
+				operations[op], operationKeys[op] = "note", note.SourceKey
+				continue
+			}
+		}
+		created, err := client.CreateNoteWithOptions(ctx, note.Title, note.Content, checkpoint.ActorSessionID, note.Options)
 		if err != nil {
 			return fail("note "+note.SourceKey, err)
 		}
@@ -201,6 +226,22 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 			return fail("board identity", err)
 		}
 		board.Options.OperationID = op
+		if resume {
+			request, attempted, err := progress.entityRequest(op, "board")
+			if err != nil {
+				return fail("board intent", err)
+			}
+			if attempted {
+				recovered, err := client.RecoverEntityOperation(ctx, request)
+				if err != nil {
+					return fail("board recovery "+board.SourceKey, err)
+				}
+				result.Mappings[board.SourceKey] = recovered.ID
+				result.EntityProofs[op] = recovered.Proof
+				operations[op], operationKeys[op] = "board", board.SourceKey
+				continue
+			}
+		}
 		var created *ghstore.BoardRecord
 		if board.Builtin {
 			// Recheck the original retained builtin before changing its positions.
@@ -233,7 +274,7 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 					}
 				}
 			}
-			created, err = client.ApplyBuiltinBoardTransferObserved(ctx, observed, state.Session.ID, board.Options)
+			created, err = client.ApplyBuiltinBoardTransferObserved(ctx, observed, checkpoint.ActorSessionID, board.Options)
 			if err != nil {
 				return fail("builtin positions", err)
 			}
@@ -243,7 +284,7 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 			}
 			result.BuiltinPositions += len(board.Options.Positions)
 		} else {
-			created, err = client.CreateBoardWithOptions(ctx, board.Name, board.Query, state.Session.ID, board.Options)
+			created, err = client.CreateBoardWithOptions(ctx, board.Name, board.Query, checkpoint.ActorSessionID, board.Options)
 			if err != nil {
 				return fail("board "+board.SourceKey, err)
 			}
@@ -253,7 +294,11 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 		}
 		result.Mappings[board.SourceKey] = created.ID
 	}
-	verified, err := client.VerifiedEntityOperationMappings(ctx, operations)
+	verify := client.VerifiedEntityOperationMappings
+	if resume {
+		verify = client.ObservedEntityOperationMappings
+	}
+	verified, err := verify(ctx, operations)
 	if err != nil {
 		return fail("entity receipts", err)
 	}
@@ -280,7 +325,7 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 	if len(result.Mappings) != len(prepared.identities.Assignments) {
 		return fail("complete mapping", fmt.Errorf("workspace mapping does not cover source identities"))
 	}
-	completion, err := client.PublishWorkspaceArchiveData(ctx, checkpoint.OperationID+"-complete", prepared.OriginalArchive(), result.Mappings, maxBytes)
+	completion, err := publish(ctx, checkpoint.OperationID+"-complete", prepared.OriginalArchive(), result.Mappings, maxBytes)
 	if err != nil {
 		return fail("completion archive", err)
 	}

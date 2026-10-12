@@ -149,6 +149,24 @@ type progressRecorder struct {
 
 func (r *progressRecorder) ReplayGuardEnabled() bool { return r.noReplay }
 
+func (r *progressRecorder) entityRequest(operation, kind string) (ghstore.MutationRequest, bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var request ghstore.MutationRequest
+	found := false
+	for _, mutation := range r.current.Mutations {
+		candidate := mutation.Request
+		if candidate.OperationID != operation || candidate.EntityKind != kind || candidate.Method != "POST" && candidate.Method != "PATCH" || !strings.Contains(candidate.Path, "/issues") || strings.Contains(candidate.Path, "/comments") {
+			continue
+		}
+		if found {
+			return request, false, fmt.Errorf("multiple recorded target requests for entity operation %s", operation)
+		}
+		request, found = candidate, true
+	}
+	return request, found, nil
+}
+
 // Reopening preserves the exact original actor, input and mutation evidence.
 // It does not mark unknown outcomes received or recreate a missing sidecar.
 func openProgressRecorder(checkpointPath string, c *Checkpoint, maxBytes int64) (*progressRecorder, error) {
