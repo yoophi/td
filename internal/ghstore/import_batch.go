@@ -97,6 +97,7 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 		return result, nil
 	}
 	initial := plan
+	allocated := map[string]string{}
 	for i, row := range plan.Rows {
 		if row.Action != "create" {
 			continue
@@ -109,6 +110,7 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 		}
 		result.Created++
 		plan.Rows[i].TargetID = record.ID
+		allocated[row.SourceKey] = record.ID
 	}
 	// One full re-observation recovers all allocated IDs and durable intents.
 	// Keep the decision basis for destinations that existed before allocation.
@@ -116,6 +118,15 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 		plan, err = c.planImport(ctx, items, force)
 		if err != nil {
 			return fail("replan", "", err)
+		}
+		// A successful creation response does not guarantee immediate visibility
+		// in GitHub's bulk collection. Do not fabricate a mapping or continue
+		// relationship/history writes from an incomplete observation.
+		result.Plan = plan
+		for _, row := range plan.Rows {
+			if id, created := allocated[row.SourceKey]; created && row.TargetID != id {
+				return fail("allocation observation", id, fmt.Errorf("allocated destination %s for source %s (source_digest=%s, operation=%s) is missing or mapped differently in the fresh GitHub collection (observed_target=%q); listing delay or remote changes may be involved; inspect allocated IDs and explicitly resume with the original input", id, row.SourceKey, row.Digest, row.OperationID, row.TargetID))
+			}
 		}
 		if err := validateImportExecutionPlan(ctx, plan, items, force); err != nil {
 			return fail("ownership after allocation", "", err)

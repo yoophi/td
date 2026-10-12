@@ -52,6 +52,60 @@ func importBatchFixture(t *testing.T) (*Client, map[int]map[string]any, *int, *[
 	return c, issues, writes, &comments
 }
 
+func TestImportAllocatedIssueMissingFromCollectionStopsAndExplicitlyResumes(t *testing.T) {
+	for _, hidden := range []int{4, 5} {
+		t.Run(fmt.Sprint(hidden), func(t *testing.T) {
+			c, _, writes, comments := importBatchFixture(t)
+			parent, child := importTestItem("td-parent"), importTestItem("td-child")
+			parent.SourceNamespace, child.SourceNamespace = "delayed", "delayed"
+			child.Issue.ParentID = parent.Issue.ID
+			items := []ImportItem{parent, child}
+			base := c.run
+			delay := true
+			c.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+				data, err := base(ctx, dir, payload, args...)
+				if err != nil || !delay || !strings.Contains(args[5], "/issues?state=all") {
+					return data, err
+				}
+				var pages [][]apiIssue
+				if err := json.Unmarshal(data, &pages); err != nil {
+					return nil, err
+				}
+				for i, page := range pages {
+					pages[i] = slices.DeleteFunc(page, func(issue apiIssue) bool { return issue.Number == hidden })
+				}
+				return json.Marshal(pages)
+			}
+			result, err := c.executeImport(context.Background(), items, false)
+			missing := items[hidden-4]
+			for _, text := range []string{"allocation observation", fmt.Sprintf("gh-%d", hidden), missing.SourceKey(), importOperationID(missing.SourceKey()), "source_digest=", "original input", "no automatic retry"} {
+				if err == nil || !strings.Contains(err.Error(), text) {
+					t.Fatalf("missing diagnostic %q: %v", text, err)
+				}
+			}
+			if result.Created != 2 || result.Applied != 0 || result.Completed != 0 || *writes != 2 || len(*comments) != 0 {
+				t.Fatal("continued writes after missing allocation", result, *writes, *comments)
+			}
+			// Explicitly observe the now-visible same allocation, without replaying
+			// either POST. Existing operation IDs bind both original source keys.
+			delay = false
+			result, err = c.executeImport(context.Background(), items, false)
+			if err != nil || result.Created != 0 || result.Completed != 2 || *writes != 4 {
+				t.Fatal("resume duplicated creation", result, *writes, err)
+			}
+			childRecord, err := c.Get(context.Background(), "gh-5")
+			if err != nil || childRecord.ParentID != "gh-4" {
+				t.Fatal(childRecord, err)
+			}
+			before := *writes
+			result, err = c.executeImport(context.Background(), items, false)
+			if err != nil || result.Skipped != 2 || *writes != before {
+				t.Fatal("completed repeat wrote again", result, err)
+			}
+		})
+	}
+}
+
 func TestImportBatchRelationshipsHistoryAndUncertainWriteResume(t *testing.T) {
 	for _, lost := range []string{"none", "allocate", "source", "intent", "patch", "complete"} {
 		t.Run(lost, func(t *testing.T) {
