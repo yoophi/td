@@ -50,6 +50,15 @@ The shared internal creation path can use this identity and retains normal
 validation, state/priority mirrors and uncertain-write diagnostics. Tests
 simulate a POST that creates an issue but loses its response, then recover
 the allocated ID from a fresh repository listing without a second POST.
+If a confirmed creation ID is absent or mapped differently in the fresh bulk
+collection, import stops at `allocation observation` before relationship,
+history or task-content writes. The error names the allocated ID, qualified
+source key, input digest and creation operation. Listing delay and external
+changes are possible causes; the observation alone cannot distinguish them.
+There is no automatic retry. Inspect the allocated issues and original command
+before explicitly resuming with the unchanged original input. Tests hide either
+member of a newly created parent/child pair, then verify resume creates zero
+issues and a completed repeat performs no writes.
 The CLI uses the same resumable batch path. Success reports confirmed created,
 applied, detached, archived-part, completed and skipped counts, plus the executed
 decision plan in JSON mode. The plan describes decisions rather than a new
@@ -321,4 +330,6 @@ did not become destination authority. Re-execution created zero tasks and skippe
 both completed imports. GitHub's fresh list briefly omitted newly allocated
 `gh-215`/`gh-216`; execution stopped, a read-only plan verified the original IDs
 and command owner, and explicit resume completed both with zero new allocations.
-Improving that listing-lag diagnostic is tracked separately in #97.
+This native incident is the evidence for #97's allocation-observation diagnostic
+above. The new diagnostic and no-duplicate resume regression use controlled
+collection omission; no new live GitHub listing delay is claimed.
