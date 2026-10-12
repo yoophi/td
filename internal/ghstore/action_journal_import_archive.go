@@ -10,6 +10,7 @@ import (
 )
 
 const actionImportArchiveStart = actionJournalPrefix + "v34\n"
+const actionImportAdoptionArchiveStart = actionJournalPrefix + "v36\n"
 const importArchiveChunkBytes = actionJournalPartBytes / 4 * 3
 
 // Documents reuse immutable v1 journal parts. Each chunk has its own transfer
@@ -61,7 +62,14 @@ func renderImportArchiveManifest(manifest importArchiveManifest) (string, error)
 		return "", err
 	}
 	a := manifest.Journal
-	return fmt.Sprintf("td import action %s (%s): %s\n\n%s%s%s", a.OperationID, a.SessionID, a.Phase, actionImportArchiveStart, data, markerEnd), nil
+	start := actionImportArchiveStart
+	for _, member := range a.ImportCommand.Members {
+		if member.Action == "adopt" {
+			start = actionImportAdoptionArchiveStart
+			break
+		}
+	}
+	return fmt.Sprintf("td import action %s (%s): %s\n\n%s%s%s", a.OperationID, a.SessionID, a.Phase, start, data, markerEnd), nil
 }
 
 // Pure preparation includes root sizing with maximum-width native references.
@@ -196,7 +204,7 @@ func (p *importArchivePublication) bindParts(parts []apiComment) (*journalPublic
 }
 
 func importArchiveNeedsCollection(body string) bool {
-	return strings.Contains(body, actionImportArchiveStart) || strings.Contains(body, actionCompressedJournalStart+`{"schema":"v34",`)
+	return strings.Contains(body, actionImportArchiveStart) || strings.Contains(body, actionImportAdoptionArchiveStart) || strings.Contains(body, actionCompressedJournalStart+`{"schema":"v34",`) || strings.Contains(body, actionCompressedJournalStart+`{"schema":"v36",`)
 }
 
 func journalNeedsCollection(body string) bool {
@@ -224,12 +232,17 @@ func decodeInlineJournalFromCollection(root apiComment, carrier string, collecti
 }
 
 func decodeImportArchiveJournal(root apiComment, carrier string, collection *journalPartCollection) (*ActionJournalRecord, error) {
-	index := strings.Index(root.Body, actionImportArchiveStart)
+	start := actionImportArchiveStart
+	index := strings.Index(root.Body, start)
+	if index < 0 {
+		start = actionImportAdoptionArchiveStart
+		index = strings.Index(root.Body, start)
+	}
 	if index < 0 || !strings.HasSuffix(root.Body, markerEnd) || len(root.Body) > actionDecodedBudget+actionCommentBudget {
 		return nil, fmt.Errorf("invalid import archive manifest framing or size")
 	}
 	var manifest importArchiveManifest
-	if err := strictJournalJSON([]byte(strings.TrimSuffix(root.Body[index+len(actionImportArchiveStart):], markerEnd)), &manifest); err != nil {
+	if err := strictJournalJSON([]byte(strings.TrimSuffix(root.Body[index+len(start):], markerEnd)), &manifest); err != nil {
 		return nil, err
 	}
 	canonical, err := renderImportArchiveManifest(manifest)

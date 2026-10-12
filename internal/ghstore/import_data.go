@@ -16,6 +16,9 @@ import (
 // ImportItem is the portable JSON issue envelope. GitHub data is provenance,
 // never proof of a current review or permission to impersonate its author.
 type ImportItem struct {
+	// AdoptTargetID explicitly retains an existing destination without importing
+	// source fields/history into it. The source remains portable provenance.
+	AdoptTargetID   string                   `json:"adopt_target_id,omitempty"`
 	SourceNamespace string                   `json:"source_namespace,omitempty"`
 	GitHub          *ExportedIssue           `json:"github,omitempty"`
 	Issue           models.Issue             `json:"issue"`
@@ -30,6 +33,7 @@ func (e *ImportItem) UnmarshalJSON(data []byte) error {
 }
 func (e *ImportItem) decodeJSON(data []byte, strict bool) error {
 	var aux struct {
+		AdoptTargetID   string             `json:"adopt_target_id,omitempty"`
 		SourceNamespace string             `json:"source_namespace,omitempty"`
 		GitHub          *ExportedIssue     `json:"github,omitempty"`
 		Issue           models.Issue       `json:"issue"`
@@ -46,7 +50,7 @@ func (e *ImportItem) decodeJSON(data []byte, strict bool) error {
 	if err := decode(data, &aux); err != nil {
 		return err
 	}
-	*e = ImportItem{SourceNamespace: aux.SourceNamespace, GitHub: aux.GitHub, Issue: aux.Issue, Logs: aux.Logs, Handoffs: aux.Handoffs, Files: aux.Files}
+	*e = ImportItem{AdoptTargetID: aux.AdoptTargetID, SourceNamespace: aux.SourceNamespace, GitHub: aux.GitHub, Issue: aux.Issue, Logs: aux.Logs, Handoffs: aux.Handoffs, Files: aux.Files}
 	if len(e.Handoffs) == 0 && aux.Handoff != nil {
 		e.Handoffs = []models.Handoff{*aux.Handoff}
 	}
@@ -183,6 +187,9 @@ func (e ImportItem) Digest() (string, error) {
 func ValidateImportItems(items []ImportItem) error {
 	byID := map[string]int{}
 	for i, e := range items {
+		if e.AdoptTargetID != "" && (!canonicalGroupID(e.AdoptTargetID) || e.GitHub != nil) {
+			return fmt.Errorf("import adoption for %s requires a canonical destination gh-N and a legacy source", e.Issue.ID)
+		}
 		if e.SourceNamespace != "" && (e.GitHub != nil || !importNamespacePattern.MatchString(e.SourceNamespace)) {
 			return fmt.Errorf("invalid source namespace for %s; only legacy exports can declare a source namespace", e.Issue.ID)
 		}

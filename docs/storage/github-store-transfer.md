@@ -520,3 +520,22 @@ its bytes and published source root `6116667328`, then stopped when newly create
 inspection confirmed both exact creation operations and the original source
 archive. No auxiliary write or automatic resume occurred. This is native partial
 failure evidence; successful whole-workspace native completion remains unproven.
+
+### Existing task adoption contract (implementation in progress)
+
+The importer now models an explicit `adopt_target_id` for a legacy source item.
+Read-only planning selects an existing canonical `gh-N` task and retains its
+native observation instead of matching titles or rewriting fields. The binding
+is included in the frozen source digest. Duplicate destinations, missing/wrong
+kinds and force-overwrite combinations are errors before writes. Source-owned
+content and history must remain passive; new task references will resolve through
+the retained destination ID once execution is connected.
+
+Prepared commands with adoption use logical journal v35 and archive transport
+v36. Ordinary imports retain v33/v34. The version split prevents old logical
+contracts from accepting a no-overwrite destination decision as a regular import.
+Both inline and archived prepared command readers retain the original native
+before-state and reject a downgraded contract. Execution remains guarded before
+API access until ownership, forward completion and inverse/resume rules handle
+adopted members. No v35/v36 native action has been published; older readers must
+be upgraded before those formats are used remotely. This does not close #93.

@@ -9,6 +9,7 @@ import (
 )
 
 const actionImportCommandStart = actionJournalPrefix + "v33\n"
+const actionImportAdoptionStart = actionJournalPrefix + "v35\n"
 
 // Input is canonical portable JSON, retained verbatim instead of decoded with
 // the legacy envelope normalizer. Members bind each source to the original
@@ -61,6 +62,19 @@ func (i *ActionImportCommand) inputItems() ([]ImportItem, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+func (i *ActionImportCommand) hasAdoptions() bool {
+	items, err := i.inputItems()
+	if err != nil {
+		return false
+	}
+	for _, item := range items {
+		if item.AdoptTargetID != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *ImportNativeState) validate(repository, id string) error {
@@ -134,10 +148,10 @@ func (a ActionJournal) validateImportCommand() error {
 		if err != nil || member.SourceKey != source.SourceKey() || member.Digest != digest || member.OperationID != importOperationID(member.SourceKey) {
 			return fmt.Errorf("import membership differs from its frozen source identity/input")
 		}
-		if !slices.Contains([]string{"create", "overwrite", "resume", "resume_history", "skip"}, member.Action) {
+		if !slices.Contains([]string{"create", "overwrite", "resume", "resume_history", "skip", "adopt"}, member.Action) {
 			return fmt.Errorf("unknown import destination decision")
 		}
-		changes = changes || member.Action != "skip"
+		changes = changes || member.Action != "skip" && member.Action != "adopt"
 		if member.Action == "create" {
 			if member.TargetID != "" || member.Before != nil {
 				return fmt.Errorf("unallocated import source cannot invent a destination observation")

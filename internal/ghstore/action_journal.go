@@ -372,6 +372,9 @@ func renderActionJournal(a ActionJournal) (string, error) {
 	}
 	if a.ImportCommand != nil {
 		start, target = actionImportCommandStart, "repository "+a.ImportCommand.Repository
+		if a.ImportCommand.hasAdoptions() {
+			start = actionImportAdoptionStart
+		}
 	}
 	return fmt.Sprintf("td action %s: %s %s (%s)\n\n%s%s%s", a.OperationID, a.Action, target, a.Phase, start, data, markerEnd), nil
 }
@@ -397,7 +400,9 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 		}
 	}
 	start := actionJournalStart
-	if strings.HasPrefix(block, actionImportCommandStart) {
+	if strings.HasPrefix(block, actionImportAdoptionStart) {
+		start = actionImportAdoptionStart
+	} else if strings.HasPrefix(block, actionImportCommandStart) {
 		start = actionImportCommandStart
 	} else if strings.HasPrefix(block, actionCreationCommandStart) {
 		start = actionCreationCommandStart
@@ -474,10 +479,13 @@ func decodeActionJournal(comment apiComment, issueID string) (*ActionJournalReco
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	if (a.ImportCommand != nil) != (start == actionImportCommandStart) {
+	if (a.ImportCommand != nil) != (start == actionImportCommandStart || start == actionImportAdoptionStart) {
 		return nil, fmt.Errorf("import command version differs from payload")
 	}
 	if a.ImportCommand != nil {
+		if a.ImportCommand.hasAdoptions() != (start == actionImportAdoptionStart) {
+			return nil, fmt.Errorf("import adoption contract version differs from its immutable input")
+		}
 		client := &Client{repo: a.ImportCommand.Repository}
 		number, err := client.commentIssueNumber(comment.IssueURL)
 		if err != nil || fmt.Sprintf("gh-%d", number) != a.CarrierID {

@@ -23,6 +23,9 @@ type ImportResult struct {
 type importBatchResult = ImportResult
 
 func (c *Client) Import(ctx context.Context, items []ImportItem, force bool) (*ImportResult, error) {
+	if err := requireExecutableImportContract(items); err != nil {
+		return nil, err
+	}
 	if err := RequireImportSourceNamespaces(items); err != nil {
 		return nil, err
 	}
@@ -75,6 +78,9 @@ func addImportParts(inventory importProvenanceInventory, parts []importProvenanc
 }
 
 func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bool) (*importBatchResult, error) {
+	if err := requireExecutableImportContract(items); err != nil {
+		return nil, err
+	}
 	result := &importBatchResult{}
 	fail := func(stage, id string, err error) (*importBatchResult, error) {
 		return result, fmt.Errorf("import %s %s failed (created=%d, applied=%d, detached=%d, archived_parts=%d, completed=%d); writes may already have occurred; refresh remote state before resuming, no automatic retry: %w", stage, id, result.Created, result.Applied, result.Detached, result.ArchivedParts, result.Completed, err)

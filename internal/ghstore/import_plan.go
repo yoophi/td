@@ -156,6 +156,21 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 				row.DependencySourceKeys = append(row.DependencySourceKeys, e.ReferenceKey(d.DependsOnID))
 			}
 		}
+		if e.AdoptTargetID != "" {
+			if force {
+				return nil, fmt.Errorf("explicit task adoption cannot be combined with force overwrite")
+			}
+			record, exists := byID[e.AdoptTargetID]
+			if !exists {
+				return nil, fmt.Errorf("adopted destination %s is absent or not a task", e.AdoptTargetID)
+			}
+			row.TargetID = record.ID
+			row.Observed = &record
+			row.Action = "adopt"
+			row.basis = bases[row.TargetID]
+			plan.Rows = append(plan.Rows, row)
+			continue
+		}
 		if e.GitHub != nil && strings.EqualFold(e.GitHub.Repository, c.repo) {
 			r, ok := byID[e.Issue.ID]
 			if !ok {
@@ -251,6 +266,16 @@ func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot 
 		}
 		row.basis = bases[row.TargetID]
 		plan.Rows = append(plan.Rows, row)
+	}
+	used := map[string]string{}
+	for _, row := range plan.Rows {
+		if row.TargetID == "" {
+			continue
+		}
+		if prior, exists := used[row.TargetID]; exists {
+			return nil, fmt.Errorf("sources %s and %s map to the same destination %s", prior, row.SourceKey, row.TargetID)
+		}
+		used[row.TargetID] = row.SourceKey
 	}
 	return plan, nil
 }
