@@ -648,3 +648,21 @@ source/completion archive response references, private source/checkpoint
 retention, and no remote mutation when progress initialization cannot publish.
 Explicit native-observation recovery, phase completion receipts and the resume
 CLI are still required; #94 remains in progress.
+
+### Explicit archive upload continuation (#94, in progress)
+
+Reopening the original progress file keeps both received and uncertain requests
+intact and enables an atomic no-replay check in `BeginMutation`. The archive
+resume API requires that guard; ordinary recording alone is insufficient. It
+revalidates the existing native journal carrier, original data/mappings and
+current native publisher, reuses exact immutable chunks, and uploads only missing
+chunks whose exact POST was never recorded. An accepted chunk not yet listed or
+a previously posted root now absent produces an explicit error, not another POST.
+An already complete native root is observed without rewriting its outcome proof.
+
+Fixtures lose an accepted chunk/root response and successfully continue without
+duplicate uploads. They also hide an accepted chunk or remove the posted root:
+resume refuses replay and performs zero new POSTs. Repeated completed resume is
+read-only. This connects archive-level continuation, not the entire task/entity
+workspace or public resume command. Phase receipt/native reconciliation and the
+whole-workspace CLI remain required before #94 can close.

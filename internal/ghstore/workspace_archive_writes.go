@@ -11,6 +11,20 @@ import (
 // changes. It requires an enabled, verified journal carrier matching the pure
 // plan. It never retries a POST, replays a partial upload, or adopts prior chunks.
 func (c *Client) PublishWorkspaceArchive(ctx context.Context, plan *WorkspaceArchivePlan) (*WorkspaceArchiveEvidence, error) {
+	return c.publishWorkspaceArchive(ctx, plan, false)
+}
+
+// ResumeWorkspaceArchive reuses only freshly verified immutable chunks/root.
+// A durable transfer recorder must reject every previously attempted POST;
+// missing native data alone never authorizes replay of an uncertain upload.
+func (c *Client) ResumeWorkspaceArchive(ctx context.Context, plan *WorkspaceArchivePlan) (*WorkspaceArchiveEvidence, error) {
+	if recorder, _ := ctx.Value(mutationRecorderKey{}).(MutationResumeRecorder); recorder == nil || !recorder.ReplayGuardEnabled() {
+		return nil, fmt.Errorf("archive resume requires its durable mutation replay guard; no write attempted")
+	}
+	return c.publishWorkspaceArchive(ctx, plan, true)
+}
+
+func (c *Client) publishWorkspaceArchive(ctx context.Context, plan *WorkspaceArchivePlan, resume bool) (*WorkspaceArchiveEvidence, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -32,6 +46,22 @@ func (c *Client) PublishWorkspaceArchive(ctx context.Context, plan *WorkspaceArc
 	if err != nil {
 		return nil, err
 	}
+	parts := make([]apiComment, len(plan.bodies))
+	if resume {
+		if _, err := c.journalCarrier(ctx, plan.manifest.CarrierID); err != nil {
+			return nil, err
+		}
+		observation := &WorkspaceArchiveObservation{Parts: []WorkspaceArchivePartObservation{}, MissingParts: []int{}}
+		if err := observeWorkspaceArchiveCollection(plan, collection, actor.Login, observation, 0); err != nil {
+			return nil, err
+		}
+		if observation.Archive != nil {
+			return observation.Archive, nil
+		}
+		for _, part := range observation.Parts {
+			parts[part.Index] = collection.byID[part.ID]
+		}
+	}
 	for _, root := range collection.byID {
 		archive, err := decodeWorkspaceArchive(root, c.repo, plan.manifest.CarrierID, collection, 0)
 		if err != nil {
@@ -41,7 +71,7 @@ func (c *Client) PublishWorkspaceArchive(ctx context.Context, plan *WorkspaceArc
 			return nil, fmt.Errorf("workspace archive operation %s already has a native root; inspect it before explicit resume", archive.OperationID)
 		}
 	}
-	if len(collection.byTransfer[plan.manifest.Transfer]) != 0 {
+	if !resume && len(collection.byTransfer[plan.manifest.Transfer]) != 0 {
 		return nil, fmt.Errorf("workspace archive operation %s has a partial upload; no automatic replay; inspect before explicit resume", plan.manifest.OperationID)
 	}
 	if _, err := c.journalCarrier(ctx, plan.manifest.CarrierID); err != nil {
@@ -49,8 +79,10 @@ func (c *Client) PublishWorkspaceArchive(ctx context.Context, plan *WorkspaceArc
 	}
 	number, _ := Number(plan.manifest.CarrierID)
 	path := fmt.Sprintf("/issues/%d/comments", number)
-	parts := make([]apiComment, len(plan.bodies))
 	for i, body := range plan.bodies {
+		if parts[i].ID != 0 {
+			continue
+		}
 		data, err := c.request(ctx, "POST", path, map[string]string{"body": body}, false)
 		if err != nil {
 			return nil, fmt.Errorf("workspace archive %s part %d upload uncertain; no automatic retry or entity write: %w", plan.manifest.OperationID, i+1, err)

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -135,6 +136,37 @@ type progressRecorder struct {
 	current    *Progress
 	maxBytes   int64
 	persist    func(*Progress, string) error
+	noReplay   bool
+}
+
+func (r *progressRecorder) ReplayGuardEnabled() bool { return r.noReplay }
+
+// Reopening preserves the exact original actor, input and mutation evidence.
+// It does not mark unknown outcomes received or recreate a missing sidecar.
+func openProgressRecorder(checkpointPath string, c *Checkpoint, maxBytes int64) (*progressRecorder, error) {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+	frozen, err := ReadCheckpoint(bytes.NewReader(data), maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	path := checkpointPath + ".progress.json"
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open original progress; cannot infer unattempted writes from missing records: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+	progress, err := ReadProgress(file, frozen, maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	r := &progressRecorder{checkpoint: frozen, current: progress, maxBytes: maxBytes, noReplay: true}
+	r.persist = func(next *Progress, previousSHA string) error {
+		return saveProgress(path, next, previousSHA, frozen, maxBytes)
+	}
+	return r, nil
 }
 
 func newProgressRecorder(checkpointPath string, c *Checkpoint, maxBytes int64) (*progressRecorder, error) {
@@ -178,6 +210,13 @@ func (r *progressRecorder) save(next *Progress) error {
 func (r *progressRecorder) BeginMutation(request ghstore.MutationRequest) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.noReplay {
+		for _, previous := range r.current.Mutations {
+			if previous.Request == request {
+				return 0, fmt.Errorf("mutation %d was already attempted (%s); inspect native state before continuing; no request replayed", previous.Sequence, previous.State)
+			}
+		}
+	}
 	next, err := r.next()
 	if err != nil {
 		return 0, err

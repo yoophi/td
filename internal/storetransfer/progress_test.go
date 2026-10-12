@@ -169,3 +169,35 @@ func TestProgressReceivedBytesDoNotInventNativeIdentityOrLogicalProof(t *testing
 		}
 	}
 }
+
+func TestReopenedProgressRejectsBothUncertainAndReceivedRequestReplay(t *testing.T) {
+	for _, received := range []bool{false, true} {
+		c, path, original := progressFixture(t)
+		sequence, err := original.BeginMutation(progressRequest())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if received {
+			if err := original.ReceiveMutation(sequence, []byte(`{"id":12345}`)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		before, _ := os.ReadFile(path + ".progress.json")
+		reopened, err := openProgressRecorder(path, c, 0)
+		if err != nil || !reopened.ReplayGuardEnabled() {
+			t.Fatal(reopened, err)
+		}
+		if _, err := reopened.BeginMutation(progressRequest()); err == nil {
+			t.Fatal("reopened recorder repeated attempted request", received)
+		}
+		after, _ := os.ReadFile(path + ".progress.json")
+		if !bytes.Equal(before, after) {
+			t.Fatal("refused replay rewrote original evidence")
+		}
+		fresh := progressRequest()
+		fresh.PayloadSHA256 = strings.Repeat("b", 64)
+		if sequence, err := reopened.BeginMutation(fresh); err != nil || sequence != 2 {
+			t.Fatal("new unattempted request not recorded", sequence, err)
+		}
+	}
+}

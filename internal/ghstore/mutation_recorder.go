@@ -22,6 +22,13 @@ type MutationRecorder interface {
 	ReceiveMutation(int, []byte) error
 }
 
+// MutationResumeRecorder atomically refuses already attempted requests when
+// BeginMutation runs. Ordinary recording alone cannot make absence replay-safe.
+type MutationResumeRecorder interface {
+	MutationRecorder
+	ReplayGuardEnabled() bool
+}
+
 type mutationRecorderKey struct{}
 
 // WithMutationRecorder is used by explicit transfer execution only. Ordinary

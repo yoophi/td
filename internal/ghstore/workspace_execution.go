@@ -27,6 +27,31 @@ func (c *Client) PublishWorkspaceArchiveData(ctx context.Context, operation stri
 	return c.PublishWorkspaceArchive(ctx, plan)
 }
 
+// ResumeWorkspaceArchiveData revalidates the existing carrier and original
+// upload. It never bootstraps a missing carrier from an uncertain observation.
+func (c *Client) ResumeWorkspaceArchiveData(ctx context.Context, operation string, source []byte, mappings map[string]string, maxBytes int64) (*WorkspaceArchiveEvidence, error) {
+	if recorder, _ := ctx.Value(mutationRecorderKey{}).(MutationResumeRecorder); recorder == nil || !recorder.ReplayGuardEnabled() {
+		return nil, fmt.Errorf("workspace resume requires the original durable replay guard; no write attempted")
+	}
+	observation, err := c.ObserveWorkspaceArchiveData(ctx, operation, source, mappings, maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	if observation.CarrierID == "" {
+		return nil, fmt.Errorf("original archive carrier is not observed; inspect progress before attempting any bootstrap; no write attempted")
+	}
+	carrier, err := c.journalCarrier(ctx, observation.CarrierID)
+	if err != nil {
+		return nil, err
+	}
+	c.journal.Carrier = *carrier
+	plan, err := PlanWorkspaceArchive(c.repo, carrier.ID, operation, source, mappings, maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	return c.ResumeWorkspaceArchive(ctx, plan)
+}
+
 // VerifiedEntityOperationMappings uses one fresh bulk issue/comment observation
 // for every requested operation. A created/updated entity must still exactly
 // match its native applied receipt, including the server clock. Observed-only,
