@@ -601,3 +601,20 @@ unchanged repeat and undo, plus whole-workspace transfer with an explicitly
 adopted parent and a new child/note/board. Real GitHub destination completion and
 checkpoint resume remain acceptance work in #94/#95; no native v35/v36 publication
 is claimed here. Older readers must be upgraded before reading these actions.
+
+### Checkpoint resume: passive archive observation (#94, in progress)
+
+`ObserveWorkspaceArchiveData` now inspects the original operation/source bytes/
+mapping request without bootstrapping a carrier or replaying any upload. One
+fresh bulk issue/comment snapshot and one native actor lookup distinguish an
+exact completed root, immutable observed chunks, and missing chunk indices.
+Foreign authors, changed native clocks/content/mappings, duplicate chunks/roots
+and changed carriers fail without writes. Capacity/cancellation errors occur
+before GitHub access. The archive remains passive source evidence, not an active
+actor or mutation receipt.
+
+A missing chunk is not proof that its POST was unattempted: the earlier request
+may have timed out or its accepted result may not yet be listed. The controller
+must match durable per-phase write intents before deciding what may be attempted.
+That atomic receipt persistence and explicit resume CLI remain unfinished in #94;
+this read-only boundary alone does not complete archive upload recovery.
