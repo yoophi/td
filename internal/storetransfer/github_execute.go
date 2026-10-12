@@ -136,6 +136,11 @@ func ExecuteGitHubDestination(ctx context.Context, source *Source, target *Inspe
 	if err := client.TrackActions(state.Session.ID); err != nil {
 		return fail("actor", err)
 	}
+	progress, err := newProgressRecorder(checkpointPath, checkpoint, maxBytes)
+	if err != nil {
+		return fail("local progress initialization", err)
+	}
+	ctx = ghstore.WithMutationRecorder(ctx, progress)
 	archive, err := client.PublishWorkspaceArchiveData(ctx, checkpoint.OperationID, prepared.OriginalArchive(), result.Mappings, maxBytes)
 	if err != nil {
 		return fail("source archive", err)

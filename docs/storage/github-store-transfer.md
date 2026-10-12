@@ -618,3 +618,33 @@ may have timed out or its accepted result may not yet be listed. The controller
 must match durable per-phase write intents before deciding what may be attempted.
 That atomic receipt persistence and explicit resume CLI remain unfinished in #94;
 this read-only boundary alone does not complete archive upload recovery.
+
+### Durable mutation requests and received responses (#94, in progress)
+
+New GitHub transfer executions create a private `CHECKPOINT.progress.json`
+sibling before the first remote mutation. The original checkpoint is unchanged.
+Every gh POST/PATCH/PUT/DELETE records its exact method, repository path and
+payload SHA before dispatch. Its returned body SHA and available native ID/number
+are saved before the caller proceeds. Request/response bodies and credentials
+are not duplicated into this file. GETs and ordinary commands do not use it.
+
+Records distinguish `started` from `response_received`. A received transport
+response does not claim a verified logical result: existing native journal
+readback, author/session and conflict checks still apply. Transport failure or
+receipt-save failure leaves the original started request uncertain. Missing
+native data cannot make it unattempted or authorize an automatic retry.
+
+Updates preserve the original checkpoint/operation/actor and all previous
+request evidence. Private staging, file/directory sync and atomic replacement
+prevent truncated publication; a short exclusive lock and expected previous
+digest reject concurrent/stale replacement. Only one appended request or one
+exact started-to-received transition is allowed. Lock leftovers require explicit
+inspection; there is no automatic stale-lock deletion. ENOSPC/IO causes remain
+in errors: before-intent failure prevents gh dispatch, after-response failure
+reports that the remote write may remain and stops subsequent transfer stages.
+
+Production CLI fixtures verify both new-task and adopted-parent transfers,
+source/completion archive response references, private source/checkpoint
+retention, and no remote mutation when progress initialization cannot publish.
+Explicit native-observation recovery, phase completion receipts and the resume
+CLI are still required; #94 remains in progress.

@@ -27,6 +27,17 @@ completion. CLI import/repeat/undo and whole-workspace adoption fixtures cover
 the public paths. Explicit checkpoint reconciliation and final native/integration
 acceptance remain unfinished (#94/#95).
 
+#94 transfer-only request recording now brackets each real gh mutation: persist
+its exact input hash before dispatch, then persist returned bytes' hash/native
+IDs before proceeding. This captures archive chunks/roots as well as task and
+configured-entity journal writes, without copying bodies or credentials. The
+immutable checkpoint and existing native logical receipts remain distinct from
+these local transport observations. Receipt failure stops the transfer with the
+original IO error; no automatic API retry or active-source authority is added.
+Ordinary CLI/HTTP/monitor writers keep their existing request path when this
+transfer context is absent. Explicit resume and final native acceptance remain
+unfinished; this addition does not close #94 or the full #31/#68 audit.
+
 This is the release-preparation audit of #65 at `95141ed`, after native import
 acceptance #78. It checks the existing compound task writers and their real
 CLI/HTTP/monitor entry points. The complete command/flag contract audit remains

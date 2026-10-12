@@ -106,6 +106,26 @@ func testStoreTransferExecuteGitHubWholeWorkspace(t *testing.T, adopt bool) {
 	if err != nil || stored.ActorSessionID != result.ActorSessionID || stored.Source.SHA256 != result.SourceSHA256 {
 		t.Fatal("checkpoint did not preserve original execution", stored, err)
 	}
+	progressBytes, err := os.ReadFile(checkpoint + ".progress.json")
+	if err != nil {
+		t.Fatal("missing durable mutation progress", err)
+	}
+	progress, err := storetransfer.ReadProgress(bytes.NewReader(progressBytes), stored, 0)
+	if err != nil || len(progress.Mutations) == 0 {
+		t.Fatal("invalid mutation progress", progress, err)
+	}
+	archiveResponses := map[int64]bool{}
+	for _, mutation := range progress.Mutations {
+		if mutation.State != "response_received" {
+			t.Fatal("successful fixture lost a mutation response", mutation)
+		}
+		if strings.HasSuffix(mutation.Request.Path, "/comments") {
+			archiveResponses[mutation.ResponseID] = true
+		}
+	}
+	if !archiveResponses[result.SourceArchiveID] || !archiveResponses[result.CompletionArchiveID] || bytes.Contains(progressBytes, []byte("source content")) {
+		t.Fatal("archive mutation results missing or private body copied into progress")
+	}
 	after, err := os.ReadFile(filepath.Join(source, ".todos", "issues.db"))
 	if err != nil || sha256.Sum256(before) != sha256.Sum256(after) {
 		t.Fatal("source database changed", err)
@@ -142,5 +162,49 @@ func testStoreTransferExecuteGitHubWholeWorkspace(t *testing.T, adopt bool) {
 	}
 	if !bytes.Equal(native, relationFixtureBytes(t, "TD_SCHEDULE_STATE")) || !bytes.Equal(journal, relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")) {
 		t.Fatal("replay mutated remote state")
+	}
+}
+
+func TestStoreTransferProgressInitializationFailureStopsBeforeGitHubWrites(t *testing.T) {
+	target, _, run := journalCLIWithTimeout(t, 2*time.Minute)
+	useNativeCommentOrderFixture(t)
+	useHandoffReviewFixture(t)
+	t.Setenv("TD_GH_FIXTURE_NATIVE_EVENTS", "1")
+	configureImportJournalFixture(t)
+	if out, stderr, err := run("create", "Unrelated fixture seed", "--minor", "--json"); err != nil {
+		t.Fatal(out, stderr, err)
+	}
+	native, journals := relationFixtureBytes(t, "TD_SCHEDULE_STATE"), relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")
+	source := t.TempDir()
+	database, err := db.Initialize(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.CreateIssue(&models.Issue{Title: "Source must remain unchanged"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sourceBefore, err := os.ReadFile(filepath.Join(source, ".todos", "issues.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := filepath.Join(t.TempDir(), "checkpoint.json")
+	oldProgress := []byte("unrelated existing private file")
+	if err := os.WriteFile(checkpoint+".progress.json", oldProgress, 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, err := run("--work-dir", source, "store", "transfer", "--execute", "--to", "gh-issue", "--destination", target, "--remote", "origin", "--source-namespace", "progress-failure-fixture", "--checkpoint", checkpoint, "--json")
+	if err == nil || !strings.Contains(out+stderr, "local progress initialization") {
+		t.Fatal("receipt initialization failure became success", out, stderr, err)
+	}
+	if !bytes.Equal(native, relationFixtureBytes(t, "TD_SCHEDULE_STATE")) || !bytes.Equal(journals, relationFixtureBytes(t, "TD_GH_FIXTURE_JOURNAL")) {
+		t.Fatal("progress initialization failure reached GitHub mutation")
+	}
+	sourceAfter, _ := os.ReadFile(filepath.Join(source, ".todos", "issues.db"))
+	progressAfter, _ := os.ReadFile(checkpoint + ".progress.json")
+	if !bytes.Equal(sourceBefore, sourceAfter) || !bytes.Equal(oldProgress, progressAfter) {
+		t.Fatal("failure changed source or existing private progress")
 	}
 }

@@ -129,6 +129,20 @@ func (c *Client) requestAPI(ctx context.Context, method, path, endpoint string, 
 	if paginate {
 		args = append(args, "--paginate", "--slurp")
 	}
+	var recorder MutationRecorder
+	var receipt int
+	if method != "GET" {
+		recorder, _ = ctx.Value(mutationRecorderKey{}).(MutationRecorder)
+		if recorder != nil {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			receipt, err = recorder.BeginMutation(mutationRequest(method, path, body))
+			if err != nil {
+				return nil, fmt.Errorf("record gh %s %s intent failed; no API write attempted: %w", method, endpoint, err)
+			}
+		}
+	}
 	if method != "GET" {
 		c.snapshotReadGeneration(true)
 		defer c.snapshotReadGeneration(true)
@@ -159,6 +173,11 @@ func (c *Client) requestAPI(ctx context.Context, method, path, endpoint string, 
 			}
 		}
 		return nil, fmt.Errorf("gh %s %s failed: %w%s", method, endpoint, err, hint)
+	}
+	if recorder != nil {
+		if err := recorder.ReceiveMutation(receipt, data); err != nil {
+			return nil, fmt.Errorf("gh %s %s response received but local receipt failed; remote write may remain; inspect original checkpoint and native state before explicit resume, no automatic retry: %w", method, endpoint, err)
+		}
 	}
 	return data, nil
 }
