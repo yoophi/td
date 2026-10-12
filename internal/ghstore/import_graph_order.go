@@ -26,6 +26,9 @@ func importGraphOrder(plan *ImportPlan, relations map[string]importRelations) ([
 	}
 	pending := []int{}
 	for i, row := range plan.Rows {
+		if row.Action == "adopt" {
+			continue
+		}
 		want := relations[row.SourceKey]
 		if row.Action == "skip" || row.Action == "resume_history" {
 			got := slices.Clone(dependencies[row.TargetID])

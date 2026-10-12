@@ -90,6 +90,9 @@ func (c *Client) planImportSnapshot(items []ImportItem, force bool, snapshot *Sn
 // and a compact identity inventory for all original tasks. Both that reader
 // and a fresh remote plan use exactly the same target and checkpoint decisions.
 func (c *Client) planImportObservation(items []ImportItem, force bool, snapshot *Snapshot, identities []ImportTargetIdentity, compensations ...[]ImportCompensation) (*ImportPlan, error) {
+	if err := validateImportAdoptionRelations(items); err != nil {
+		return nil, err
+	}
 	if err := ValidateImportItems(items); err != nil {
 		return nil, err
 	}

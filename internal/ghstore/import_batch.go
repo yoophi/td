@@ -78,9 +78,6 @@ func addImportParts(inventory importProvenanceInventory, parts []importProvenanc
 }
 
 func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bool) (*importBatchResult, error) {
-	if err := requireExecutableImportContract(items); err != nil {
-		return nil, err
-	}
 	result := &importBatchResult{}
 	fail := func(stage, id string, err error) (*importBatchResult, error) {
 		return result, fmt.Errorf("import %s %s failed (created=%d, applied=%d, detached=%d, archived_parts=%d, completed=%d); writes may already have occurred; refresh remote state before resuming, no automatic retry: %w", stage, id, result.Created, result.Applied, result.Detached, result.ArchivedParts, result.Completed, err)
@@ -139,6 +136,9 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 		}
 	}
 	result.Plan = plan
+	if err := verifyImportAdoptionBaseline(initial, plan.snapshot); err != nil {
+		return fail("adoption basis", "", err)
+	}
 	mapping := map[string]string{}
 	for i, row := range plan.Rows {
 		prior := initial.Rows[i]
@@ -175,7 +175,7 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 	// Preserve the source and any overwritten destination before field PATCHes.
 	for i := range plan.Rows {
 		row := &plan.Rows[i]
-		if row.Action == "skip" {
+		if row.Action == "skip" || row.Action == "adopt" {
 			result.Skipped++
 			continue
 		}
@@ -235,7 +235,7 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 	}
 	if detach {
 		for i, row := range plan.Rows {
-			if row.Action == "skip" || row.Action == "resume_history" || row.ResumeState == "after_apply" {
+			if row.Action == "skip" || row.Action == "adopt" || row.Action == "resume_history" || row.ResumeState == "after_apply" {
 				continue
 			}
 			prepared, err := c.prepareImportDetach(ctx, items[i], row, relations[row.SourceKey])
@@ -255,6 +255,9 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 			return fail("replan after detach", "", err)
 		}
 		result.Plan = plan
+		if err := verifyImportAdoptionBaseline(initial, plan.snapshot); err != nil {
+			return fail("adoption basis after detach", "", err)
+		}
 		if err := validateImportExecutionPlan(ctx, plan, items, force); err != nil {
 			return fail("ownership after detach", "", err)
 		}
@@ -304,6 +307,9 @@ func (c *Client) executeImport(ctx context.Context, items []ImportItem, force bo
 		snapshot, err := c.ReadSnapshot(WithFreshSnapshot(ctx), true)
 		if err != nil {
 			return fail("completion inventory", "", err)
+		}
+		if err := verifyImportAdoptionBaseline(initial, snapshot); err != nil {
+			return fail("adoption basis before completion", "", err)
 		}
 		inventory, err = snapshotImportProvenance(snapshot)
 		if err != nil {

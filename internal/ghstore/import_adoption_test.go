@@ -3,6 +3,7 @@ package ghstore
 import (
 	"context"
 	"encoding/json"
+	"github.com/marcus/td/internal/models"
 	"strings"
 	"testing"
 	"time"
@@ -74,8 +75,57 @@ func TestImportAdoptionCanonicalInputAndExecutionGuard(t *testing.T) {
 	if _, err := client.Import(context.Background(), decoded, false); err == nil {
 		t.Fatal("adoption executed without its native journal contract")
 	}
-	if _, err := client.executeImport(context.Background(), decoded, false); err == nil {
-		t.Fatal("private executor bypassed contract guard")
+}
+
+func TestImportAdoptionPrivateExecutionPreservesTargetAndMapsNewParent(t *testing.T) {
+	c, issues, writes, comments := importBatchFixture(t)
+	before, err := json.Marshal(issues[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	adopted, child := importTestItem("td-adopted"), importTestItem("td-new")
+	adopted.SourceNamespace, child.SourceNamespace = "original", "original"
+	adopted.AdoptTargetID = "gh-1"
+	adopted.Issue.Title = "must remain source provenance"
+	adopted.Issue.ParentID = child.Issue.ID // Source-owned relationship is not applied.
+	child.Issue.ParentID = ""               // Avoid a source cycle; reference adoption as dependency.
+	child.Dependencies = []models.IssueDependency{{DependsOnID: adopted.Issue.ID, RelationType: "depends_on"}}
+	result, err := c.executeImport(context.Background(), []ImportItem{adopted, child}, false)
+	if err != nil || result.Created != 1 || result.Applied != 1 || result.Completed != 1 || result.Skipped != 1 || *writes != 2 {
+		t.Fatal(result, err, *writes)
+	}
+	after, err := json.Marshal(issues[1])
+	if err != nil || string(before) != string(after) {
+		t.Fatal("adopted task changed", err)
+	}
+	for _, comment := range *comments {
+		if strings.HasSuffix(comment.IssueURL, "/1") {
+			t.Fatal("adopted task received source history/checkpoints")
+		}
+	}
+	newTask, err := c.Get(context.Background(), "gh-4")
+	if err != nil || len(newTask.Details.Dependencies) != 1 || newTask.Details.Dependencies[0] != "gh-1" {
+		t.Fatal(newTask, err)
+	}
+}
+
+func TestImportAdoptionRejectsRetainedEditAfterAllocation(t *testing.T) {
+	c, issues, writes, _ := importBatchFixture(t)
+	adopted, child := importTestItem("td-adopted"), importTestItem("td-new")
+	adopted.SourceNamespace, child.SourceNamespace = "original", "original"
+	adopted.AdoptTargetID = "gh-1"
+	child.Issue.ParentID = adopted.Issue.ID
+	base := c.run
+	c.run = func(ctx context.Context, dir string, payload []byte, args ...string) ([]byte, error) {
+		data, err := base(ctx, dir, payload, args...)
+		if err == nil && args[4] == "POST" && strings.HasSuffix(args[5], "/issues") {
+			issues[1]["title"] = "external retained edit"
+		}
+		return data, err
+	}
+	result, err := c.executeImport(context.Background(), []ImportItem{adopted, child}, false)
+	if err == nil || result.Created != 1 || result.Applied != 0 || result.Completed != 0 || *writes != 1 {
+		t.Fatal("changed adoption basis was replaced", result, err, *writes)
 	}
 }
 

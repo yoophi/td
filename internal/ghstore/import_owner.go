@@ -204,7 +204,7 @@ func validateImportExecutionPlan(ctx context.Context, plan *ImportPlan, items []
 			return err
 		}
 		for _, row := range plan.Rows {
-			if row.Action != "skip" && row.Owner != nil {
+			if row.Action != "skip" && row.Action != "adopt" && row.Owner != nil {
 				return fmt.Errorf("%s is owned by import %s in session %s; use its tracked command before resuming", row.TargetID, row.Owner.CommandID, row.Owner.SessionID)
 			}
 		}

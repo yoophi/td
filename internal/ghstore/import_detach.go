@@ -16,7 +16,7 @@ func importDetachedGraphOrder(plan *ImportPlan, relations map[string]importRelat
 	clone.snapshot = &snapshot
 	detachedIDs := map[string]bool{}
 	for _, row := range plan.Rows {
-		if row.Action != "skip" && row.Action != "resume_history" && row.ResumeState != "after_apply" {
+		if row.Action != "skip" && row.Action != "adopt" && row.Action != "resume_history" && row.ResumeState != "after_apply" {
 			detachedIDs[row.TargetID] = true
 		}
 	}

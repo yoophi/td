@@ -119,7 +119,7 @@ func validateNewImportCommandPlan(plan *ImportPlan, items []ImportItem, force bo
 		// ActionHistory is newest first. A skipped member only observes an
 		// earlier source version; it does not acquire that version's ownership.
 		for _, member := range root.ImportCommand.Members {
-			if _, exists := completedSources[member.SourceKey]; !exists && member.Action != "skip" {
+			if _, exists := completedSources[member.SourceKey]; !exists && member.Action != "skip" && member.Action != "adopt" {
 				completedSources[member.SourceKey] = root
 			}
 		}
@@ -133,7 +133,7 @@ func validateNewImportCommandPlan(plan *ImportPlan, items []ImportItem, force bo
 		entries[fmt.Sprintf("gh-%d", entry.Issue.Number)] = entry
 	}
 	for _, row := range plan.Rows {
-		if row.Action == "skip" {
+		if row.Action == "skip" || row.Action == "adopt" {
 			continue
 		}
 		if row.compensation != nil {

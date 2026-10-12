@@ -539,3 +539,15 @@ before-state and reject a downgraded contract. Execution remains guarded before
 API access until ownership, forward completion and inverse/resume rules handle
 adopted members. No v35/v36 native action has been published; older readers must
 be upgraded before those formats are used remotely. This does not close #93.
+
+The private importer execution stage now skips every adopted member's source
+archive, detach, field PATCH and completion-receipt writes, while new members can
+refer to its retained ID. Graph sequencing uses the actual destination graph;
+source-owned relationships of an adopted member remain passive. Reverse `blocks`
+edges that would mutate an adopted owner are rejected. The original complete
+issue/comment observation is checked again after allocation/detach and before
+completion, so replan cannot replace it with a newer adoption basis. Production
+fixtures confirm unchanged retained issue bytes/comments and new mapped
+dependencies, and reject a retained edit after allocation. Public import/store
+execution remains guarded until tracked forward/ownership/inverse validation is
+connected. No new adoption action has been published natively.
