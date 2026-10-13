@@ -24,7 +24,7 @@ func init() {
 			if err != nil {
 				return err
 			}
-			if store == config.StoreSQLite {
+			if store != config.StoreGitHub {
 				return localRun(cmd, args)
 			}
 			cmd.SilenceUsage = true

@@ -72,7 +72,7 @@ func gitHubActionHistoryCommand(cmd *cobra.Command, undo bool) (bool, error) {
 	if reconcile != "" && list {
 		return true, fmt.Errorf("--reconcile and --list cannot be combined")
 	}
-	if kind == config.StoreSQLite {
+	if kind != config.StoreGitHub {
 		if reconcile != "" {
 			return true, fmt.Errorf("--reconcile requires store=gh-issue; no SQLite write attempted")
 		}

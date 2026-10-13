@@ -24,7 +24,7 @@ func init() {
 		if err != nil {
 			return err
 		}
-		if kind == config.StoreSQLite {
+		if kind != config.StoreGitHub {
 			return local(cmd, args)
 		}
 		return checkGitHubHandoff(cmd, args, cfg)

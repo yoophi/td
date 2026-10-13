@@ -98,6 +98,20 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		database.Close()
 		t.Fatal("backend silently opened SQLite")
 	}
+	for _, tc := range []struct {
+		command *cobra.Command
+		args    []string
+	}{
+		{listCmd, nil}, {showCmd, []string{"td-0123456789abcdef"}},
+		{queryCmd, []string{"status = open"}}, {searchCmd, []string{"example"}},
+		{startCmd, []string{"td-0123456789abcdef"}},
+		{closeCmd, []string{"td-0123456789abcdef"}},
+	} {
+		err := tc.command.RunE(tc.command, tc.args)
+		if err == nil || !strings.Contains(err.Error(), "td-backend") {
+			t.Fatalf("%s routed outside backend guard: %v", tc.command.Name(), err)
+		}
+	}
 	if _, e = run("--project-id=invalid", "--json"); e == nil {
 		t.Fatal("invalid project accepted")
 	}
