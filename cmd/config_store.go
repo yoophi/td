@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
+	"github.com/marcus/td/internal/backendstore"
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/ghstore"
 	"github.com/marcus/td/internal/models"
@@ -25,6 +27,31 @@ func prepareProjectStore(cmd *cobra.Command, store, remote string) (*models.GitH
 }
 
 func setProjectStore(cmd *cobra.Command, store, remote string) error {
+	kind, endpoint, err := config.ParseStore(store)
+	if err != nil {
+		return err
+	}
+	if kind == config.StoreBackend {
+		if endpoint == "" {
+			cfg, e := config.Load(getBaseDir())
+			if e != nil {
+				return e
+			}
+			if cfg.Backend != nil {
+				endpoint = cfg.Backend.URL
+			}
+		}
+		client, e := backendstore.NewClient(endpoint, os.Getenv("TD_BACKEND_TOKEN"))
+		if e != nil {
+			return e
+		}
+		association, e := client.Initialize(cmd.Context(), getBaseDir(), "")
+		if e != nil {
+			return e
+		}
+		return reportBackendStore(cmd, association)
+	}
+	store = kind
 	github, err := prepareProjectStore(cmd, store, remote)
 	if err != nil {
 		return err
@@ -57,7 +84,7 @@ var configSetupCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if jsonMode(cmd) {
-			return fmt.Errorf("config setup is interactive; use 'td config set store <sqlite|gh-issue> --json'")
+			return fmt.Errorf("config setup is interactive; use 'td config set store <sqlite|gh-issue|td-backend,URL> --json'")
 		}
 		cfg, err := config.Load(getBaseDir())
 		if err != nil {
@@ -71,6 +98,7 @@ var configSetupCmd = &cobra.Command{
 		cmd.Println("Select project issue store:")
 		cmd.Println("  1. SQLite — local database")
 		cmd.Println("  2. GitHub Issues — requires a GitHub remote")
+		cmd.Println("  3. td-backend — requires API URL and TD_BACKEND_TOKEN")
 		selection, err := readStoreChoice(cmd, reader, "Store", current)
 		if err != nil {
 			return err
@@ -80,6 +108,19 @@ var configSetupCmd = &cobra.Command{
 			selection = config.StoreSQLite
 		case "2":
 			selection = config.StoreGitHub
+		case "3":
+			selection = config.StoreBackend
+		}
+		if selection == config.StoreBackend {
+			endpoint := "http://localhost:7000"
+			if cfg.Backend != nil {
+				endpoint = cfg.Backend.URL
+			}
+			endpoint, err = readStoreChoice(cmd, reader, "Backend API URL", endpoint)
+			if err != nil {
+				return err
+			}
+			selection += "," + endpoint
 		}
 		remote := "origin"
 		if selection == config.StoreGitHub {
@@ -100,7 +141,7 @@ func readStoreChoice(cmd *cobra.Command, reader *bufio.Reader, label, fallback s
 	line, err := reader.ReadString('\n')
 	if err != nil {
 		if err == io.EOF {
-			return "", fmt.Errorf("setup cancelled: input ended; use 'td config set store <sqlite|gh-issue>' for non-interactive setup")
+			return "", fmt.Errorf("setup cancelled: input ended; use 'td config set store <sqlite|gh-issue|td-backend,URL>' for non-interactive setup")
 		}
 		return "", err
 	}
@@ -109,4 +150,16 @@ func readStoreChoice(cmd *cobra.Command, reader *bufio.Reader, label, fallback s
 		line = fallback
 	}
 	return line, nil
+}
+
+func reportBackendStore(cmd *cobra.Command, b models.BackendStoreConfig) error {
+	if jsonMode(cmd) {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
+			Store     string                    `json:"store"`
+			Backend   models.BackendStoreConfig `json:"backend"`
+			Supported bool                      `json:"issue_operations_supported"`
+		}{config.StoreBackend, b, false})
+	}
+	cmd.Printf("Project store: %s\nBackend URL: %s\nProject ID: %s\n", config.StoreBackend, b.URL, b.ProjectID)
+	return nil
 }

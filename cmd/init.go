@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/marcus/td/internal/agent"
+	"github.com/marcus/td/internal/backendstore"
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/git"
@@ -19,7 +20,7 @@ import (
 var initCmd = &cobra.Command{
 	Use:     "init",
 	Short:   "Initialize a new td project",
-	Long:    `Initialize project storage. SQLite is the default. GitHub Issues storage requires gh authentication and a GitHub remote with Issues enabled.`,
+	Long:    `Initialize project storage. SQLite is the default. GitHub Issues storage requires gh authentication and a GitHub remote with Issues enabled. Use --store=td-backend,http://localhost:7000 with TD_BACKEND_TOKEN for a backend. --project-id attaches an existing project; otherwise init creates once and reuses its saved association.`,
 	GroupID: "system",
 	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -34,6 +35,35 @@ var initCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
+		}
+		kind, endpoint, err := config.ParseStore(store)
+		if err != nil {
+			return err
+		}
+		store = kind
+		projectID, _ := cmd.Flags().GetString("project-id")
+		if store == config.StoreBackend {
+			if cmd.Flags().Changed("remote") {
+				return fmt.Errorf("--remote is only valid for store gh-issue")
+			}
+			if endpoint == "" && cfg.Backend != nil {
+				endpoint = cfg.Backend.URL
+			}
+			if endpoint == "" {
+				return fmt.Errorf("td-backend requires an API URL: --store=td-backend,http://localhost:7000")
+			}
+			client, err := backendstore.NewClient(endpoint, os.Getenv("TD_BACKEND_TOKEN"))
+			if err != nil {
+				return err
+			}
+			backend, err := client.Initialize(cmd.Context(), baseDir, projectID)
+			if err != nil {
+				return err
+			}
+			return reportBackendStore(cmd, backend)
+		}
+		if cmd.Flags().Changed("project-id") {
+			return fmt.Errorf("--project-id is only valid for td-backend")
 		}
 		remote, _ := cmd.Flags().GetString("remote")
 		if cmd.Flags().Changed("remote") && store != config.StoreGitHub {
@@ -195,7 +225,8 @@ func suggestAgentFileAddition(baseDir string) {
 }
 
 func init() {
-	initCmd.Flags().String("store", config.StoreSQLite, "Issue store: sqlite or gh-issue (defaults to current project setting)")
+	initCmd.Flags().String("store", config.StoreSQLite, "Issue store: sqlite, gh-issue or td-backend,<URL> (defaults to current project setting)")
+	initCmd.Flags().String("project-id", "", "Connect to an existing backend Project UUIDv7")
 	initCmd.Flags().String("remote", "origin", "Git remote to use for gh-issue storage")
 	rootCmd.AddCommand(initCmd)
 }

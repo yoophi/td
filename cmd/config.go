@@ -250,9 +250,12 @@ var configListCmd = &cobra.Command{
 			return err
 		}
 		values := map[string]any{"store": store}
-		if store == config.StoreGitHub {
+		if store == config.StoreGitHub || store == config.StoreBackend {
 			values["sync_scope"] = "global-sqlite"
 			values["sync_applies_to_store"] = false
+		}
+		if project.Backend != nil {
+			values["backend"] = project.Backend
 		}
 		if project.GitHub != nil {
 			values["github"] = project.GitHub
@@ -272,7 +275,7 @@ var configListCmd = &cobra.Command{
 
 func init() {
 	configSetCmd.Flags().String("remote", "origin", "Git remote to use for gh-issue storage")
-	configSetCmd.Example = "  td config set store sqlite\n  td config set store gh-issue --remote origin"
+	configSetCmd.Example = "  td config set store sqlite\n  td config set store gh-issue --remote origin\n  td config set store td-backend,http://localhost:7000"
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configGetCmd)
 	configCmd.AddCommand(configListCmd)
@@ -298,6 +301,9 @@ func requireSyncConfigWrite(key string) error {
 	kind, err := config.Store(cfg)
 	if err != nil {
 		return err
+	}
+	if kind == config.StoreBackend {
+		return fmt.Errorf("%s is a global SQLite/td-sync setting and does not apply to td-backend", key)
 	}
 	if kind == config.StoreGitHub {
 		return fmt.Errorf("%s is a global SQLite/td-sync setting and does not apply to gh-issue; change it from a SQLite project; use monitor/tail --interval for GitHub polling; no global or project settings changed", key)

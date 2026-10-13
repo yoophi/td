@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	StoreSQLite = "sqlite"
-	StoreGitHub = "gh-issue"
+	StoreSQLite  = "sqlite"
+	StoreGitHub  = "gh-issue"
+	StoreBackend = "td-backend"
 )
 
 // Store returns the project's effective store, defaulting legacy projects to SQLite.
@@ -16,10 +17,10 @@ func Store(cfg *models.Config) (string, error) {
 	switch cfg.Store {
 	case "", StoreSQLite:
 		return StoreSQLite, nil
-	case StoreGitHub:
-		return StoreGitHub, nil
+	case StoreGitHub, StoreBackend:
+		return cfg.Store, nil
 	default:
-		return "", fmt.Errorf("invalid store %q (use sqlite or gh-issue)", cfg.Store)
+		return "", fmt.Errorf("invalid store (use sqlite, gh-issue or td-backend)")
 	}
 }
 
@@ -38,6 +39,7 @@ func SetStore(baseDir, store string, github *models.GitHubStoreConfig) error {
 		}
 		cfg.Store = store
 		cfg.GitHub = nil
+		cfg.Backend = nil
 		if store == StoreGitHub {
 			cfg.GitHub = github
 		}

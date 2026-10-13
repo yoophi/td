@@ -192,6 +192,34 @@ selected Git remote. GitHub Enterprise hosts are not supported in this version.
 input line; EOF cancels without saving. Configuration commands are always visible
 in `td --help`, independently of sync feature flags.
 
+### Connecting to td-backend
+
+Use a running [td-backend](https://github.com/yoophi/td-backend) server and set
+`TD_BACKEND_TOKEN` to an authorized bearer token. The token stays in the environment.
+
+```sh
+td init --store=td-backend,http://localhost:7000
+# Attach another checkout to an existing project:
+td init --store=td-backend,http://localhost:7000 --project-id=prj_<UUIDv7>
+td config list
+```
+
+Without `--project-id`, the first init creates a project. Later init calls reuse
+its saved connection. Project IDs have a `prj_` prefix and a lowercase UUIDv7;
+the server generates them. Init validates the API version, required capabilities,
+project access, and registered session before saving the connection. It refuses
+to overwrite a connection to a different URL or project.
+
+The endpoint and project ID live in `.todos/config.json`. A durable init intent
+under `.todos/backend-init/` preserves UUIDv4 idempotency keys before requests,
+so retrying after a lost response or config write failure avoids duplicate
+projects and sessions. Keep this directory when recovering an interrupted init.
+Git worktrees share the existing project config through normal root resolution.
+
+Backend initialization is available on the integration branch. Remote issue,
+monitor, and serve commands are being connected in subsequent implementation
+steps; commands currently fail explicitly instead of opening local SQLite.
+
 ### Working with GitHub Issues
 
 ```bash

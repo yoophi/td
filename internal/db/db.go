@@ -90,6 +90,9 @@ func Open(baseDir string) (*DB, error) {
 	if store == config.StoreGitHub {
 		return nil, unavailable(fmt.Errorf("this command requires SQLite and is not supported by gh-issue; supported issue commands: create, list, show, update, close, reopen"))
 	}
+	if store == config.StoreBackend {
+		return nil, unavailable(fmt.Errorf("this command is not yet connected to td-backend; no SQLite database was opened"))
+	}
 	dbPath := filepath.Join(baseDir, dbFile)
 
 	// Check if db exists
