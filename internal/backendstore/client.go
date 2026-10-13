@@ -147,20 +147,7 @@ func (c *Client) CreateProject(ctx context.Context, key, name string) (Project, 
 	return out.Project, e
 }
 func (c *Client) RegisterInitSession(ctx context.Context, project, key string) (string, error) {
-	var out struct {
-		Session struct {
-			ID string `json:"id"`
-		} `json:"session"`
-	}
-	e := c.request(ctx, "POST", "/v1/projects/"+project+"/sessions", "", key, struct {
-		Name      string `json:"name"`
-		ContextID string `json:"context_id"`
-		AgentType string `json:"agent_type"`
-	}{"td init", "backend-init:" + key, "cli"}, &out)
-	if e == nil && (!strings.HasPrefix(out.Session.ID, "ses_") || !config.ValidBackendProjectID("prj_"+strings.TrimPrefix(out.Session.ID, "ses_"))) {
-		e = fmt.Errorf("backend returned invalid session ID")
-	}
-	return out.Session.ID, e
+	return c.RegisterSession(ctx, project, key, SessionCommand{Name: "td init", ContextID: "backend-init:" + key, AgentType: "cli"})
 }
 func (c *Client) GetProject(ctx context.Context, id, session string) (Project, error) {
 	var out struct {

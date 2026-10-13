@@ -6,6 +6,7 @@ package issuestore
 import (
 	"context"
 
+	"github.com/marcus/td/internal/backendstore"
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/ghstore"
@@ -14,6 +15,7 @@ import (
 
 type Record struct {
 	models.Issue
+	Revision                string `json:"revision,omitempty"`
 	StateLabelDiagnostic    string `json:"state_label_warning,omitempty"`
 	PriorityLabelDiagnostic string `json:"priority_label_warning,omitempty"`
 	Number                  int    `json:"number,omitempty"`
@@ -30,6 +32,12 @@ type Reader interface {
 }
 
 func OpenReader(ctx context.Context, dir string) (Reader, error) {
+	return OpenReaderWithContext(ctx, dir, dir)
+}
+
+// OpenReaderWithContext retains the actual checkout identity when shared project
+// config resides in another worktree. SQLite/GitHub behavior remains unchanged.
+func OpenReaderWithContext(ctx context.Context, dir, contextDir string) (Reader, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -40,6 +48,13 @@ func OpenReader(ctx context.Context, dir string) (Reader, error) {
 	kind, err := config.Store(cfg)
 	if err != nil {
 		return nil, err
+	}
+	if kind == config.StoreBackend {
+		connection, err := backendstore.Open(ctx, dir, contextDir)
+		if err != nil {
+			return nil, err
+		}
+		return &backendReader{connection}, nil
 	}
 	if kind == config.StoreGitHub {
 		client, err := ghstore.Open(ctx, dir, cfg.GitHub)
@@ -111,6 +126,29 @@ func (r *githubReader) List(ctx context.Context, all bool) ([]Record, error) {
 	records := make([]Record, 0, len(issues))
 	for _, issue := range issues {
 		records = append(records, Record{Issue: issue.Issue, Number: issue.Number, URL: issue.URL, StateLabelDiagnostic: issue.StateLabelDiagnostic, PriorityLabelDiagnostic: issue.PriorityLabelDiagnostic})
+	}
+	return records, nil
+}
+
+// backendReader owns no local database or HTTP response body.
+type backendReader struct{ connection *backendstore.Connection }
+
+func (r *backendReader) Close() error { return nil }
+func (r *backendReader) Get(ctx context.Context, id string) (*Record, error) {
+	issue, e := r.connection.Get(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	return &Record{Issue: issue.Issue, Revision: issue.Revision}, nil
+}
+func (r *backendReader) List(ctx context.Context, all bool) ([]Record, error) {
+	issues, e := r.connection.List(ctx, all)
+	if e != nil {
+		return nil, e
+	}
+	records := make([]Record, 0, len(issues))
+	for _, issue := range issues {
+		records = append(records, Record{Issue: issue.Issue, Revision: issue.Revision})
 	}
 	return records, nil
 }
