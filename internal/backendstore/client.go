@@ -36,6 +36,12 @@ func NewClient(endpoint, token string) (*Client, error) {
 	return &Client{URL: endpoint, Token: token, HTTP: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 func (c *Client) request(ctx context.Context, method, path, session, key string, body any, out any) error {
+	return c.requestWithMatch(ctx, method, path, session, key, "", body, out)
+}
+func (c *Client) requestWithMatch(ctx context.Context, method, path, session, key, match string, body any, out any) error {
+	if e := ctx.Err(); e != nil {
+		return e
+	}
 	var data []byte
 	var e error
 	if body != nil {
@@ -56,33 +62,40 @@ func (c *Client) request(ctx context.Context, method, path, session, key string,
 	if key != "" {
 		req.Header.Set("Idempotency-Key", key)
 	}
+	if match != "" {
+		req.Header.Set("If-Match", match)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	response, e := c.HTTP.Do(req)
 	if e != nil {
-		return fmt.Errorf("backend request failed: %w", e)
+		return requestFailure(method, key, fmt.Errorf("backend request failed: %w", e))
 	}
 	defer response.Body.Close()
-	raw, e := io.ReadAll(io.LimitReader(response.Body, 4<<20+1))
+	raw, e := io.ReadAll(io.LimitReader(response.Body, (4<<20)+1))
 	if e != nil {
-		return fmt.Errorf("read backend response: %w", e)
+		return requestFailure(method, key, fmt.Errorf("read backend response: %w", e))
 	}
 	if len(raw) > 4<<20 {
-		return fmt.Errorf("backend response exceeds limit")
+		return requestFailure(method, key, fmt.Errorf("backend response exceeds limit"))
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("backend %s %s returned HTTP %d", method, path, response.StatusCode)
+		e := &APIError{StatusCode: response.StatusCode, Code: statusCode(response.StatusCode), Method: method, Path: path}
+		if response.StatusCode >= 500 {
+			return requestFailure(method, key, e)
+		}
+		return e
 	}
 	var envelope struct {
 		OK   bool            `json:"ok"`
 		Data json.RawMessage `json:"data"`
 	}
 	if e = json.Unmarshal(raw, &envelope); e != nil || !envelope.OK || len(envelope.Data) == 0 || string(envelope.Data) == "null" {
-		return fmt.Errorf("invalid backend response envelope")
+		return requestFailure(method, key, fmt.Errorf("invalid backend response envelope"))
 	}
 	if e = json.Unmarshal(envelope.Data, out); e != nil {
-		return fmt.Errorf("invalid backend response data: %w", e)
+		return requestFailure(method, key, fmt.Errorf("invalid backend response data: %w", e))
 	}
 	return nil
 }
