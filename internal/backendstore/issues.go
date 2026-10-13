@@ -2,6 +2,7 @@ package backendstore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -15,7 +16,10 @@ import (
 // Nullable API strings decode to the model's empty strings; timestamps retain UTC.
 type Issue struct {
 	models.Issue
-	Revision string `json:"revision"`
+	Revision             string          `json:"revision"`
+	Reviews              json.RawMessage `json:"reviews,omitempty"`
+	ActiveReview         json.RawMessage `json:"active_review,omitempty"`
+	AvailableTransitions []string        `json:"available_transitions,omitempty"`
 }
 
 var issueIDPattern = regexp.MustCompile(`^td-[0-9a-f]{16}$`)

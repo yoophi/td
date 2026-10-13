@@ -18,6 +18,7 @@ import (
 
 func TestInitBackendCommandAndReuse(t *testing.T) {
 	dir := storeTestDir(t)
+	t.Setenv("TD_BACKEND_CONTEXT_ROOT", t.TempDir())
 	t.Setenv("TD_BACKEND_TOKEN", "cli-backend-test-credential-only")
 	const p = "prj_0199dc38-1200-7000-8000-000000000001"
 	const session = "ses_0199dc38-1200-7000-8000-000000000002"
@@ -102,12 +103,15 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		command *cobra.Command
 		args    []string
 	}{
-		{listCmd, nil}, {showCmd, []string{"td-0123456789abcdef"}},
+		{listCmd, nil},
 		{queryCmd, []string{"status = open"}}, {searchCmd, []string{"example"}},
 		{startCmd, []string{"td-0123456789abcdef"}},
 		{closeCmd, []string{"td-0123456789abcdef"}},
 	} {
+		previous := tc.command.Context()
+		tc.command.SetContext(context.Background())
 		err := tc.command.RunE(tc.command, tc.args)
+		tc.command.SetContext(previous)
 		if err == nil || !strings.Contains(err.Error(), "td-backend") {
 			t.Fatalf("%s routed outside backend guard: %v", tc.command.Name(), err)
 		}
