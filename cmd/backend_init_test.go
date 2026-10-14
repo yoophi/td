@@ -99,19 +99,19 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		database.Close()
 		t.Fatal("backend silently opened SQLite")
 	}
-	allFlag := approveCmd.Flags().Lookup("all")
-	previousAll := allFlag.Changed
-	if e := approveCmd.Flags().Set("all", "true"); e != nil {
+	minorFlag := reviewCmd.Flags().Lookup("minor")
+	previousMinor := minorFlag.Changed
+	if e := reviewCmd.Flags().Set("minor", "true"); e != nil {
 		t.Fatal(e)
 	}
-	previousContext := approveCmd.Context()
-	approveCmd.SetContext(context.Background())
-	err := approveCmd.RunE(approveCmd, []string{"td-0123456789abcdef"})
-	approveCmd.SetContext(previousContext)
-	_ = approveCmd.Flags().Set("all", "false")
-	allFlag.Changed = previousAll
-	if err == nil || !strings.Contains(err.Error(), "td-backend does not support --all") {
-		t.Fatalf("unsupported approve flag bypassed backend guard: %v", err)
+	previousContext := reviewCmd.Context()
+	reviewCmd.SetContext(context.Background())
+	err := reviewCmd.RunE(reviewCmd, []string{"td-0123456789abcdef"})
+	reviewCmd.SetContext(previousContext)
+	_ = reviewCmd.Flags().Set("minor", "false")
+	minorFlag.Changed = previousMinor
+	if err == nil || !strings.Contains(err.Error(), "td-backend does not support --minor") {
+		t.Fatalf("unsupported review flag bypassed backend guard: %v", err)
 	}
 	if _, e = run("--project-id=invalid", "--json"); e == nil {
 		t.Fatal("invalid project accepted")

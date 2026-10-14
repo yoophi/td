@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/marcus/td/internal/backendstore"
@@ -16,7 +17,7 @@ var errBackendTransitionUnchanged = errors.New("issue already has requested work
 
 func runBackendTransition(cmd *cobra.Command, args []string, action string) error {
 	cmd.SilenceUsage = true
-	if len(args) == 0 {
+	if len(args) == 0 && action != "approve" {
 		return fmt.Errorf("%s requires at least one issue ID", action)
 	}
 	allowed := " json work-dir help refresh reason "
@@ -27,7 +28,7 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 		allowed += "message comment note notes "
 	}
 	if action == "approve" {
-		allowed += "record-only self-review reviewed-by decision "
+		allowed += "all record-only self-review reviewed-by decision "
 	}
 	if action == "close" {
 		allowed += "admin self-close-exception "
@@ -76,6 +77,33 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 	c, e := openBackendCommand(cmd)
 	if e != nil {
 		return e
+	}
+	if action == "approve" {
+		all, _ := cmd.Flags().GetBool("all")
+		if all && len(args) > 0 {
+			return fmt.Errorf("specify issue IDs or --all, not both")
+		}
+		if len(args) == 0 {
+			awaiting, ready, e := c.ReviewBuckets(cmd.Context())
+			if e != nil {
+				return e
+			}
+			for id := range awaiting {
+				args = append(args, id)
+			}
+			if !recordOnly {
+				for id := range ready {
+					args = append(args, id)
+				}
+			}
+			slices.Sort(args)
+			if len(args) == 0 {
+				return fmt.Errorf("no issues eligible for approval by this session")
+			}
+			if len(args) > 1 && !all {
+				return fmt.Errorf("multiple issues await approval (%s); specify an issue ID or --all", strings.Join(args, ", "))
+			}
+		}
 	}
 	target, label := models.StatusInProgress, "STARTED"
 	switch action {
