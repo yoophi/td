@@ -447,6 +447,11 @@ func NewEmbeddedWithOptions(opts EmbeddedOptions) (*Model, error) {
 		if err != nil {
 			return nil, err
 		}
+	} else if store == config.StoreBackend {
+		m, err = NewBackendModelForWorktree(context.Background(), resolvedBaseDir, opts.BaseDir, opts.Interval, opts.Version)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		// Use shared DB to prevent connection leaks on Model value copies
 		database, err := getSharedDB(resolvedBaseDir)

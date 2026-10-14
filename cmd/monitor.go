@@ -71,6 +71,21 @@ Mouse support:
 			}
 			return nil
 		}
+		if store == config.StoreBackend {
+			worktree, err := gitHubContextDirectory()
+			if err != nil {
+				return err
+			}
+			model, err := monitor.NewBackendModelForWorktree(cmd.Context(), baseDir, worktree, interval, versionStr)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = model.Close() }()
+			if _, err := tea.NewProgram(model).Run(); err != nil {
+				return fmt.Errorf("error running backend monitor: %w", err)
+			}
+			return nil
+		}
 		database, err := db.Open(baseDir)
 		if err != nil {
 			output.Error("%v", err)
