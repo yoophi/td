@@ -28,6 +28,12 @@ type Detail struct {
 }
 
 func (c *Client) Detail(ctx context.Context, project, session, id string) (Detail, error) {
+	return c.detail(ctx, project, session, id, false)
+}
+func (c *Client) DetailIncludingDeleted(ctx context.Context, project, session, id string) (Detail, error) {
+	return c.detail(ctx, project, session, id, true)
+}
+func (c *Client) detail(ctx context.Context, project, session, id string, withDeleted bool) (Detail, error) {
 	var out Detail
 	path, e := scopedPath(project, session)
 	if e != nil {
@@ -36,7 +42,11 @@ func (c *Client) Detail(ctx context.Context, project, session, id string) (Detai
 	if !issueIDPattern.MatchString(id) {
 		return out, fmt.Errorf("invalid backend issue ID")
 	}
-	e = c.request(ctx, "GET", path+"/issues/"+id+"?with=reviews", session, "", nil, &out)
+	resource := path + "/issues/" + id + "?with=reviews"
+	if withDeleted {
+		resource += "&with_deleted=true"
+	}
+	e = c.request(ctx, "GET", resource, session, "", nil, &out)
 	if e == nil {
 		e = validateIssue(out.Issue)
 	}
@@ -54,6 +64,9 @@ func (c *Client) Detail(ctx context.Context, project, session, id string) (Detai
 }
 func (c *Connection) Detail(ctx context.Context, id string) (Detail, error) {
 	return c.Client.Detail(ctx, c.ProjectID, c.SessionID, id)
+}
+func (c *Connection) DetailIncludingDeleted(ctx context.Context, id string) (Detail, error) {
+	return c.Client.DetailIncludingDeleted(ctx, c.ProjectID, c.SessionID, id)
 }
 func (c *Connection) Focus(ctx context.Context) (string, error) {
 	path, e := scopedPath(c.ProjectID, c.SessionID)

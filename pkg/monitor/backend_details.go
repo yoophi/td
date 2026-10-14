@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -13,6 +14,10 @@ import (
 type backendDetailReader interface {
 	Detail(context.Context, string) (backendstore.Detail, error)
 	List(context.Context, bool) ([]backendstore.Issue, error)
+}
+type backendArchiveDetailReader interface {
+	DetailIncludingDeleted(context.Context, string) (backendstore.Detail, error)
+	ListIssuesIncludingDeleted(context.Context) ([]backendstore.Issue, error)
 }
 
 // Details builds the monitor modal from the server's detail response. A
@@ -37,10 +42,25 @@ func (s *BackendDataSource) Details(id string) IssueDetailsMsg {
 		return fail(fmt.Errorf("backend detail reader unavailable"))
 	}
 	detail, err := reader.Detail(s.ctx, id)
+	archived := false
+	if err != nil {
+		var api *backendstore.APIError
+		if errors.As(err, &api) && api.StatusCode == 404 {
+			if archive, ok := s.reader.(backendArchiveDetailReader); ok {
+				detail, err = archive.DetailIncludingDeleted(s.ctx, id)
+				archived = err == nil
+			}
+		}
+	}
 	if err != nil {
 		return fail(err)
 	}
-	rows, err := reader.List(s.ctx, true)
+	var rows []backendstore.Issue
+	if archived {
+		rows, err = s.reader.(backendArchiveDetailReader).ListIssuesIncludingDeleted(s.ctx)
+	} else {
+		rows, err = reader.List(s.ctx, true)
+	}
 	if err != nil {
 		return fail(err)
 	}
