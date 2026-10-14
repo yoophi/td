@@ -99,20 +99,19 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		database.Close()
 		t.Fatal("backend silently opened SQLite")
 	}
-	for _, tc := range []struct {
-		command *cobra.Command
-		args    []string
-	}{
-
-		{approveCmd, []string{"td-0123456789abcdef"}},
-	} {
-		previous := tc.command.Context()
-		tc.command.SetContext(context.Background())
-		err := tc.command.RunE(tc.command, tc.args)
-		tc.command.SetContext(previous)
-		if err == nil || !strings.Contains(err.Error(), "td-backend") {
-			t.Fatalf("%s routed outside backend guard: %v", tc.command.Name(), err)
-		}
+	allFlag := approveCmd.Flags().Lookup("all")
+	previousAll := allFlag.Changed
+	if e := approveCmd.Flags().Set("all", "true"); e != nil {
+		t.Fatal(e)
+	}
+	previousContext := approveCmd.Context()
+	approveCmd.SetContext(context.Background())
+	err := approveCmd.RunE(approveCmd, []string{"td-0123456789abcdef"})
+	approveCmd.SetContext(previousContext)
+	_ = approveCmd.Flags().Set("all", "false")
+	allFlag.Changed = previousAll
+	if err == nil || !strings.Contains(err.Error(), "td-backend does not support --all") {
+		t.Fatalf("unsupported approve flag bypassed backend guard: %v", err)
 	}
 	if _, e = run("--project-id=invalid", "--json"); e == nil {
 		t.Fatal("invalid project accepted")

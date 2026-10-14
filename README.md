@@ -237,7 +237,9 @@ Issues already in the requested state. `update --status` uses the backend
 workflow endpoint with revision checks; workflow policy can reject a transition.
 General `update` fields use observed PATCH and durable request recovery.
 `start`, named `unstart`, `block`, `unblock`, `reopen`, `review`, `reject`,
-and `close` use backend workflow policy and retain Session attribution. `comment`, `comments add`,
+`approve <id>`, and `close` use backend workflow policy and retain Session attribution.
+`approve --record-only` records an `approved` or `changes_requested` review;
+candidate auto-selection and `--all` are still being connected. `comment`, `comments add`,
 and `comments` use the shared backend activity and detail APIs. `log`
 records typed activity with the calling Session and active Work Session.
 `handoff` saves structured progress and the Git snapshot as passive shared
