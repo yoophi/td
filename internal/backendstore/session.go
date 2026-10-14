@@ -26,6 +26,7 @@ type SessionCommand struct {
 
 type Connection struct {
 	Client                                 *Client
+	StateDirectory                         string
 	ProjectID, SessionID, Worktree, Branch string
 }
 
@@ -94,16 +95,9 @@ func Open(ctx context.Context, projectDir, contextDir string) (*Connection, erro
 	tokenKey := sha256.Sum256([]byte(client.Token))
 	identity, _ := json.Marshal([]any{client.URL, cfg.Backend.ProjectID, fmt.Sprintf("%x", tokenKey), hostname, info.WorktreeRoot, branch, fp, os.Getenv("TD_CONTEXT_ID"), os.Getenv("TERM_SESSION_ID"), os.Getenv("TMUX_PANE")})
 	digest := sha256.Sum256(identity)
-	root := os.Getenv("TD_BACKEND_CONTEXT_ROOT")
-	if root == "" {
-		root, e = os.UserConfigDir()
-		if e != nil {
-			return nil, e
-		}
-		root = filepath.Join(root, "td", "backend-contexts")
-	}
-	if !filepath.IsAbs(root) {
-		return nil, fmt.Errorf("TD_BACKEND_CONTEXT_ROOT must be absolute")
+	root, e := backendContextRoot()
+	if e != nil {
+		return nil, e
 	}
 	path := filepath.Join(root, fmt.Sprintf("%x.json", digest))
 	var intent sessionIntent
@@ -147,7 +141,7 @@ func Open(ctx context.Context, projectDir, contextDir string) (*Connection, erro
 	if _, e = client.GetProject(ctx, cfg.Backend.ProjectID, id); e != nil {
 		return nil, e
 	}
-	return &Connection{Client: client, ProjectID: cfg.Backend.ProjectID, SessionID: id, Worktree: info.WorktreeRoot, Branch: branch}, nil
+	return &Connection{StateDirectory: root, Client: client, ProjectID: cfg.Backend.ProjectID, SessionID: id, Worktree: info.WorktreeRoot, Branch: branch}, nil
 }
 
 func readSessionIntent(path string) (sessionIntent, error) {
@@ -165,6 +159,24 @@ func readSessionIntent(path string) (sessionIntent, error) {
 	return out, nil
 }
 func writeSessionIntent(path string, intent sessionIntent) error {
+	return writeJSONIntent(path, intent)
+}
+func backendContextRoot() (string, error) {
+	root := os.Getenv("TD_BACKEND_CONTEXT_ROOT")
+	if root == "" {
+		var e error
+		root, e = os.UserConfigDir()
+		if e != nil {
+			return "", e
+		}
+		root = filepath.Join(root, "td", "backend-contexts")
+	}
+	if !filepath.IsAbs(root) {
+		return "", fmt.Errorf("TD_BACKEND_CONTEXT_ROOT must be absolute")
+	}
+	return root, nil
+}
+func writeJSONIntent(path string, intent any) error {
 	dir := filepath.Dir(path)
 	if e := os.MkdirAll(dir, 0700); e != nil {
 		return e

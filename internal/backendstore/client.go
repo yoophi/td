@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -94,9 +95,15 @@ func (c *Client) requestWithMatch(ctx context.Context, method, path, session, ke
 	if e = json.Unmarshal(raw, &envelope); e != nil || !envelope.OK || len(envelope.Data) == 0 || string(envelope.Data) == "null" {
 		return requestFailure(method, key, fmt.Errorf("invalid backend response envelope"))
 	}
-	if e = json.Unmarshal(envelope.Data, out); e != nil {
+	target := reflect.ValueOf(out)
+	if !target.IsValid() || target.Kind() != reflect.Pointer || target.IsNil() {
+		return requestFailure(method, key, fmt.Errorf("backend response target must be a nonnil pointer"))
+	}
+	decoded := reflect.New(target.Elem().Type())
+	if e = json.Unmarshal(envelope.Data, decoded.Interface()); e != nil {
 		return requestFailure(method, key, fmt.Errorf("invalid backend response data: %w", e))
 	}
+	target.Elem().Set(decoded.Elem())
 	return nil
 }
 func (c *Client) Check(ctx context.Context) error {

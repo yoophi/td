@@ -14,14 +14,14 @@ func (c *Client) Mutate(ctx context.Context, method, project, session, resource,
 	if e != nil {
 		return e
 	}
-	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodDelete {
+	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodDelete && method != http.MethodPut {
 		return fmt.Errorf("unsupported backend mutation method")
 	}
 	if !operationPattern.MatchString(key) {
 		return fmt.Errorf("backend mutation requires UUIDv4 operation key")
 	}
 	// Resource paths are relative to this project and cannot escape its scope.
-	if !strings.HasPrefix(resource, "/") || strings.ContainsAny(resource, "?#%") || strings.Contains(resource, "..") || strings.Contains(resource, "//") {
+	if !validMutationResource(resource) {
 		return fmt.Errorf("invalid project resource path")
 	}
 	match := ""
@@ -34,4 +34,8 @@ func (c *Client) Mutate(ctx context.Context, method, project, session, resource,
 		return fmt.Errorf("backend mutation requires observed revision")
 	}
 	return c.requestWithMatch(ctx, method, path+resource, session, key, match, body, out)
+}
+
+func validMutationResource(resource string) bool {
+	return strings.HasPrefix(resource, "/") && !strings.ContainsAny(resource, "?#%") && !strings.Contains(resource, "..") && !strings.Contains(resource, "//")
 }
