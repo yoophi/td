@@ -229,7 +229,11 @@ scope and scoring; comments remain a TDQ-only search field. Status/type/priority
 label filters and `--show-score` are supported. `list` supports ordinary and TDQ
 filters, hierarchy, scheduling, review queues, sort/limit and long output. `info`
 reads project statistics and review eligibility from the backend. `deleted` lists
-soft-deleted issues, including closed issues, with JSON or human output. `create` supports core fields, rich text files/stdin, dates, parent/epic and
+soft-deleted issues, including closed issues, with JSON or human output.
+`delete` and `restore` accept multiple Issue IDs and optional `--reason`; each
+mutation is revision checked and stores its reason log atomically. A failed
+multi-Issue command reports the IDs already completed, and a retry skips
+Issues already in the requested state. `create` supports core fields, rich text files/stdin, dates, parent/epic and
 outgoing dependencies and incoming `--blocks` with durable request recovery.
 `--blocks` requires the server’s `create_blocks` capability and atomically creates
 the issue and dependency edges using observed target revisions. Update,

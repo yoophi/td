@@ -43,8 +43,11 @@ func init() {
 			if err != nil {
 				return err
 			}
-			if kind == config.StoreBackend && command == deletedCmd {
-				return runBackendDeleted(cmd, args)
+			if kind == config.StoreBackend {
+				if command == deletedCmd {
+					return runBackendDeleted(cmd, args)
+				}
+				return runBackendDeletion(cmd, args, command == deleteCmd)
 			}
 			if kind != config.StoreGitHub {
 				return local(cmd, args)

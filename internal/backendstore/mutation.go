@@ -2,6 +2,7 @@ package backendstore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -32,6 +33,9 @@ func (c *Client) Mutate(ctx context.Context, method, project, session, resource,
 		match = `"` + revision + `"`
 	} else if method == http.MethodPatch || method == http.MethodDelete {
 		return fmt.Errorf("backend mutation requires observed revision")
+	}
+	if raw, ok := body.(json.RawMessage); ok && len(raw) == 0 {
+		body = nil
 	}
 	return c.requestWithMatch(ctx, method, path+resource, session, key, match, body, out)
 }

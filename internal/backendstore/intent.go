@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/marcus/td/internal/config"
@@ -178,6 +179,9 @@ func validateMutationRequest(r MutationRequest) error {
 	}
 	if (r.Method == http.MethodPatch || r.Method == http.MethodDelete) && r.Revision == "" {
 		return fmt.Errorf("observed revision required")
+	}
+	if len(r.Body) == 0 && (r.Method == http.MethodDelete || (r.Method == http.MethodPost && strings.HasSuffix(r.Resource, "/restore"))) {
+		return nil
 	}
 	if !json.Valid(r.Body) {
 		return fmt.Errorf("invalid backend mutation intent body")
