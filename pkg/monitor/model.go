@@ -1774,7 +1774,7 @@ func (m Model) applyRefreshData(msg RefreshDataMsg) (tea.Model, tea.Cmd) {
 	}
 	m.clearGitHubRetry()
 	if m.DataSource != nil && strings.HasPrefix(m.StatusMessage, "Error refreshing monitor:") {
-		m.StatusMessage = "GitHub refreshed"
+		m.StatusMessage = "Remote refreshed"
 		m.StatusIsError = false
 	}
 	m.IssueTransitions = msg.Transitions

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/marcus/td/internal/backendstore"
@@ -22,6 +23,7 @@ type BackendDataSource struct {
 	reader  backendMonitorReader
 	guard   func(context.Context) error
 	refresh sync.Mutex
+	running atomic.Bool
 }
 
 func NewBackendDataSource(ctx context.Context, reader backendMonitorReader, guard func(context.Context) error) *BackendDataSource {
@@ -33,6 +35,8 @@ func (s *BackendDataSource) Fetch(search string, includeClosed bool, sortMode So
 		return RefreshDataMsg{Skipped: true}
 	}
 	defer s.refresh.Unlock()
+	s.running.Store(true)
+	defer s.running.Store(false)
 	defer func() { result.remoteFilter = &monitorRefreshFilter{search, includeClosed, sortMode} }()
 	if err := s.ctx.Err(); err != nil {
 		return RefreshDataMsg{Error: err}
@@ -59,6 +63,8 @@ func (s *BackendDataSource) Fetch(search string, includeClosed bool, sortMode So
 	}
 	return backendRefreshData(snapshot)
 }
+
+func (s *BackendDataSource) IsRefreshing() bool { return s.running.Load() }
 
 func backendRefreshData(snapshot backendstore.Monitor) RefreshDataMsg {
 	m := snapshot.Dashboard

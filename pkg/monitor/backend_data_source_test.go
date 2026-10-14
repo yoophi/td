@@ -47,9 +47,15 @@ func TestBackendMonitorSkipsOverlappingRefresh(t *testing.T) {
 	done := make(chan RefreshDataMsg, 1)
 	go func() { done <- source.Fetch("", false, SortByPriority) }()
 	<-entered
+	if !source.IsRefreshing() {
+		t.Fatal("in-flight backend request not reported")
+	}
 	if second := source.Fetch("", false, SortByPriority); !second.Skipped {
 		t.Fatalf("overlapping refresh was queued: %+v", second)
 	}
 	close(release)
 	<-done
+	if source.IsRefreshing() {
+		t.Fatal("completed backend request still reported in flight")
+	}
 }
