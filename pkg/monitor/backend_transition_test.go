@@ -35,6 +35,13 @@ func (f *backendWorkflowFixture) RunIntent(_ context.Context, _ any, prepare fun
 		return err
 	}
 	f.writes++
+	if f.request.Method == "DELETE" {
+		data, _ := json.Marshal(map[string]any{"deleted": true})
+		if err := json.Unmarshal(data, out); err != nil {
+			return err
+		}
+		return verify()
+	}
 	result := f.observed
 	result.Status = models.StatusInReview
 	if strings.HasSuffix(f.request.Resource, "/reopen") {
