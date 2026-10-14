@@ -40,6 +40,9 @@ func init() {
 			if store == config.StoreBackend && operation == "show" {
 				return runBackendShow(cmd, args)
 			}
+			if store == config.StoreBackend && operation == "update" {
+				return runBackendUpdate(cmd, args)
+			}
 			if store != config.StoreGitHub {
 				return localRun(cmd, args)
 			}
