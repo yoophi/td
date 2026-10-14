@@ -34,6 +34,7 @@ func scopedPath(project, session string) (string, error) {
 func validSessionID(id string) bool {
 	return len(id) > 4 && id[:4] == "ses_" && config.ValidBackendProjectID("prj_"+id[4:])
 }
+func ValidIssueID(id string) bool { return issueIDPattern.MatchString(id) }
 func ValidateIssue(i Issue) error {
 	if !issueIDPattern.MatchString(i.ID) || !revisionPattern.MatchString(i.Revision) {
 		return fmt.Errorf("invalid backend issue identity or revision")

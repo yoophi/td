@@ -35,8 +35,13 @@ func init() {
 			if err != nil {
 				return err
 			}
-			if kind == config.StoreBackend && (original == commentCmd || original == commentsAddCmd || original == commentsCmd) {
-				return runBackendComments(original, cmd, args)
+			if kind == config.StoreBackend {
+				if original == commentCmd || original == commentsAddCmd || original == commentsCmd {
+					return runBackendComments(original, cmd, args)
+				}
+				if original == logCmd {
+					return runBackendLog(cmd, args)
+				}
 			}
 			if kind != config.StoreGitHub {
 				return local(cmd, args)

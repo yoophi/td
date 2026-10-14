@@ -9,6 +9,33 @@ import (
 
 var workSessionIDPattern = regexp.MustCompile(`^ws-[0-9a-f]{16}$`)
 
+func (c *Connection) ActiveWorkSessionID(ctx context.Context) (string, error) {
+	path, e := scopedPath(c.ProjectID, c.SessionID)
+	if e != nil {
+		return "", e
+	}
+	var out struct {
+		Sessions []struct {
+			ID        string     `json:"id"`
+			SessionID string     `json:"session_id"`
+			EndedAt   *time.Time `json:"ended_at"`
+		} `json:"work_sessions"`
+	}
+	if e = c.Client.request(ctx, "GET", path+"/work-sessions", c.SessionID, "", nil, &out); e != nil {
+		return "", e
+	}
+	id := ""
+	for _, row := range out.Sessions {
+		if row.SessionID == c.SessionID && row.EndedAt == nil {
+			if id != "" || !workSessionIDPattern.MatchString(row.ID) {
+				return "", fmt.Errorf("invalid active backend work session")
+			}
+			id = row.ID
+		}
+	}
+	return id, nil
+}
+
 func (c *Connection) ActiveWorkIssueIDs(ctx context.Context) ([]string, error) {
 	path, e := scopedPath(c.ProjectID, c.SessionID)
 	if e != nil {
