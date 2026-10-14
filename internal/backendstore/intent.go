@@ -31,6 +31,7 @@ type mutationIntent struct {
 	InputHash  string          `json:"input_hash"`
 	Key        string          `json:"key"`
 	Request    MutationRequest `json:"request"`
+	Succeeded  bool            `json:"succeeded,omitempty"`
 	FinishedAt *time.Time      `json:"finished_at,omitempty"`
 }
 
@@ -40,6 +41,17 @@ type mutationIntent struct {
 // completion recover the original receipt. No network runs under the file lock.
 // verify must validate any required response fields before completion is saved.
 func (c *Connection) RunIntent(ctx context.Context, input any, prepare func() (MutationRequest, error), out any, verify func() error) error {
+	return c.runIntent(ctx, input, prepare, out, verify, false)
+}
+
+// RunGroupStepIntent pins successful child writes to a group ID. Retrying a
+// partially completed group replays committed receipts instead of writing the
+// already completed steps again; definite 4xx failures may be reobserved.
+func (c *Connection) RunGroupStepIntent(ctx context.Context, input any, prepare func() (MutationRequest, error), out any, verify func() error) error {
+	return c.runIntent(ctx, input, prepare, out, verify, true)
+}
+
+func (c *Connection) runIntent(ctx context.Context, input any, prepare func() (MutationRequest, error), out any, verify func() error, pinSuccess bool) error {
 	if _, e := scopedPath(c.ProjectID, c.SessionID); e != nil {
 		return e
 	}
@@ -66,7 +78,9 @@ func (c *Connection) RunIntent(ctx context.Context, input any, prepare func() (M
 	directory := filepath.Join(root, "operations", c.SessionID)
 	path := filepath.Join(directory, hash+".json")
 	var intent mutationIntent
-	reusable := func(i mutationIntent) bool { return i.FinishedAt == nil || !i.FinishedAt.Before(started) }
+	reusable := func(i mutationIntent) bool {
+		return i.FinishedAt == nil || pinSuccess && i.Succeeded || !i.FinishedAt.Before(started)
+	}
 	load := func() (mutationIntent, error) {
 		i, e := readMutationIntent(path)
 		if e != nil {
@@ -157,6 +171,7 @@ func (c *Connection) RunIntent(ctx context.Context, input any, prepare func() (M
 		}
 		finished := time.Now().UTC()
 		latest.FinishedAt = &finished
+		latest.Succeeded = result == nil
 		return writeJSONIntent(path, latest)
 	})
 	if saveErr != nil {
