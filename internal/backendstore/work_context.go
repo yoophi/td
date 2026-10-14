@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/marcus/td/internal/models"
 )
 
 var workSessionIDPattern = regexp.MustCompile(`^ws-[0-9a-f]{16}$`)
@@ -78,6 +80,33 @@ func (c *Connection) WorkSession(ctx context.Context, id string) (WorkSessionDet
 		seen[issueID] = true
 	}
 	return out, nil
+}
+
+func (c *Connection) WorkSessionActivity(ctx context.Context, id string) ([]models.Activity, error) {
+	path, e := scopedPath(c.ProjectID, c.SessionID)
+	if e != nil {
+		return nil, e
+	}
+	if !workSessionIDPattern.MatchString(id) {
+		return nil, fmt.Errorf("invalid backend work session ID")
+	}
+	var out struct {
+		Activity []models.Activity `json:"activity"`
+	}
+	if e = c.Client.request(ctx, "GET", path+"/work-sessions/"+id+"/activity", c.SessionID, "", nil, &out); e != nil {
+		return nil, e
+	}
+	if out.Activity == nil {
+		return nil, fmt.Errorf("invalid backend work session activity list")
+	}
+	seen := map[string]bool{}
+	for _, row := range out.Activity {
+		if row.ID == "" || seen[row.ID] || !issueIDPattern.MatchString(row.IssueID) || row.WorkSessionID != id || row.CreatedAt.IsZero() || row.UpdatedAt.IsZero() {
+			return nil, fmt.Errorf("invalid backend work session activity")
+		}
+		seen[row.ID] = true
+	}
+	return out.Activity, nil
 }
 
 func (c *Connection) ActiveWorkSessionID(ctx context.Context) (string, error) {

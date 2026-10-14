@@ -86,7 +86,7 @@ func runBackendWSRead(target, cmd *cobra.Command, args []string) error {
 		}
 		if id == "" {
 			if jsonMode(cmd) {
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"work_session": nil, "issues": []string{}})
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"work_session": nil, "issues": []string{}, "activities": []any{}})
 			}
 			_, e = fmt.Fprintln(cmd.OutOrStdout(), "No active work session")
 			return e
@@ -112,8 +112,12 @@ func runBackendWSRead(target, cmd *cobra.Command, args []string) error {
 	if e != nil {
 		return e
 	}
+	activities, e := c.WorkSessionActivity(cmd.Context(), id)
+	if e != nil {
+		return e
+	}
 	if jsonMode(cmd) {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"work_session": detail.WorkSession, "issues": detail.IssueIDs})
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"work_session": detail.WorkSession, "issues": detail.IssueIDs, "activities": activities})
 	}
 	if _, e = fmt.Fprintf(cmd.OutOrStdout(), "WORK SESSION: %s %q\n", detail.WorkSession.ID, detail.WorkSession.Name); e != nil {
 		return e
@@ -124,6 +128,24 @@ func runBackendWSRead(target, cmd *cobra.Command, args []string) error {
 	for _, issueID := range detail.IssueIDs {
 		if _, e = fmt.Fprintln(cmd.OutOrStdout(), issueID); e != nil {
 			return e
+		}
+	}
+	full, _ := cmd.Flags().GetBool("full")
+	display := activities
+	if target == wsCurrentCmd && len(display) > 5 {
+		display = display[len(display)-5:]
+	}
+	for _, activity := range display {
+		if target == wsShowCmd && !full && activity.Kind != "handoff" {
+			continue
+		}
+		if _, e = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s %s [%s] %s\n", activity.CreatedAt.Format("2006-01-02 15:04"), activity.Kind, activity.IssueID, activity.LogType, output.SanitizeIssueText(activity.Message)); e != nil {
+			return e
+		}
+		if activity.Kind == "handoff" {
+			if _, e = fmt.Fprintf(cmd.OutOrStdout(), "    done=%v remaining=%v decisions=%v uncertain=%v\n", sanitizeContextItems(activity.Done), sanitizeContextItems(activity.Remaining), sanitizeContextItems(activity.Decisions), sanitizeContextItems(activity.Uncertain)); e != nil {
+				return e
+			}
 		}
 	}
 	return nil
