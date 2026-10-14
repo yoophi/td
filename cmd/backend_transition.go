@@ -45,8 +45,15 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 		return e
 	}
 	target, label := models.StatusInProgress, "STARTED"
-	if action == "unstart" {
+	switch action {
+	case "unstart":
 		target, label = models.StatusOpen, "UNSTARTED"
+	case "block":
+		target, label = models.StatusBlocked, "BLOCKED"
+	case "unblock":
+		target, label = models.StatusOpen, "UNBLOCKED"
+	case "reopen":
+		target, label = models.StatusOpen, "REOPENED"
 	}
 	completed := []string{}
 	for index, rawID := range args {
@@ -78,6 +85,9 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 				return backendstore.MutationRequest{}, errBackendTransitionUnchanged
 			}
 			if action == "unstart" && observed.Status == target && observed.ImplementerSession == "" {
+				return backendstore.MutationRequest{}, errBackendTransitionUnchanged
+			}
+			if (action == "block" || action == "unblock" || action == "reopen") && observed.Status == target {
 				return backendstore.MutationRequest{}, errBackendTransitionUnchanged
 			}
 			body := map[string]any{}
