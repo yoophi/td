@@ -228,8 +228,9 @@ when needed. Ranked `search` uses the existing id/title/description/log/handoff
 scope and scoring; comments remain a TDQ-only search field. Status/type/priority/
 label filters and `--show-score` are supported. `list` supports ordinary and TDQ
 filters, hierarchy, scheduling, review queues, sort/limit and long output. `info`
-reads project statistics and review eligibility from the backend. Workflow writes,
-monitor, and serve
+reads project statistics and review eligibility from the backend. `create` supports core fields, rich text files/stdin, dates, parent/epic and
+outgoing dependencies with durable request recovery. Incoming `--blocks`, update,
+workflow writes, monitor, and serve
 commands are being connected in subsequent implementation steps; commands that
 remain unconnected fail explicitly.
 

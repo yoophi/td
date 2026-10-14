@@ -31,6 +31,9 @@ func init() {
 			if err != nil {
 				return err
 			}
+			if store == config.StoreBackend && operation == "create" {
+				return runBackendCreate(cmd, args)
+			}
 			if store == config.StoreBackend && operation == "list" {
 				return listBackendIssues(cmd, args)
 			}

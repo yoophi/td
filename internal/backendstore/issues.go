@@ -34,7 +34,7 @@ func scopedPath(project, session string) (string, error) {
 func validSessionID(id string) bool {
 	return len(id) > 4 && id[:4] == "ses_" && config.ValidBackendProjectID("prj_"+id[4:])
 }
-func validateIssue(i Issue) error {
+func ValidateIssue(i Issue) error {
 	if !issueIDPattern.MatchString(i.ID) || !revisionPattern.MatchString(i.Revision) {
 		return fmt.Errorf("invalid backend issue identity or revision")
 	}
@@ -53,7 +53,7 @@ func (c *Client) GetIssue(ctx context.Context, project, session, id string) (Iss
 	}
 	e = c.request(ctx, "GET", path+"/issues/"+id, session, "", nil, &out)
 	if e == nil {
-		e = validateIssue(out.Issue)
+		e = ValidateIssue(out.Issue)
 	}
 	if e == nil && out.Issue.ID != id {
 		e = fmt.Errorf("backend returned a different issue")
@@ -104,7 +104,7 @@ func (c *Client) ListIssues(ctx context.Context, project, session string, all bo
 				return nil, fmt.Errorf("invalid backend pagination metadata")
 			}
 			for _, i := range page.Issues {
-				if e := validateIssue(i); e != nil {
+				if e := ValidateIssue(i); e != nil {
 					return nil, e
 				}
 				if seen[i.ID] {
@@ -124,3 +124,5 @@ func (c *Client) ListIssues(ctx context.Context, project, session string, all bo
 	}
 	return nil, fmt.Errorf("backend snapshot changed repeatedly; retry the read")
 }
+
+func validateIssue(i Issue) error { return ValidateIssue(i) }
