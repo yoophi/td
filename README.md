@@ -247,6 +247,11 @@ and `dep rm` use the backend's revision-aware mutation endpoints. `comment`,
 `files` reads linked files from the backend and reports local file changes.
 `link` and `unlink` replace the observed remote file list with a durable request;
 `link --depends-on` adds a backend dependency.
+`last` reads the current Session's server operation history. `undo --list` shows
+recent effectful operations and whether each was undone; `undo` reverses the
+latest eligible operation through the server's guarded Undo endpoint. A later
+change to an affected entity can make Undo conflict, and only operations from
+the current Session are selected. Both commands support `--json`.
 `log` records typed activity with the calling Session and active Work Session.
 `handoff` saves structured progress and the Git snapshot as passive shared
 activity; `review` remains a separate workflow step. `--append` is supported for one Issue at a time; combined status, comments and
