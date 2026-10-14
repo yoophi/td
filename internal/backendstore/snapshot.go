@@ -51,15 +51,23 @@ func (c *Connection) QueryIDs(ctx context.Context, expression string) ([]string,
 // transient not-found errors caused by concurrent deletion. Callbacks must not
 // print or mutate: publish only after this method returns nil.
 func (c *Connection) ReadSnapshot(ctx context.Context, read func([]Issue) error) error {
+	return c.ReadConsistent(ctx, func() error {
+		rows, e := c.List(ctx, true)
+		if e != nil {
+			return e
+		}
+		return read(rows)
+	})
+}
+
+// ReadConsistent validates a compound read without fetching issue rows itself.
+func (c *Connection) ReadConsistent(ctx context.Context, read func() error) error {
 	for attempt := 0; attempt < 3; attempt++ {
 		before, e := c.ChangeToken(ctx)
 		if e != nil {
 			return e
 		}
-		rows, readErr := c.List(ctx, true)
-		if readErr == nil {
-			readErr = read(rows)
-		}
+		readErr := read()
 		if e := ctx.Err(); e != nil {
 			return e
 		}

@@ -216,7 +216,7 @@ so retrying after a lost response or config write failure avoids duplicate
 projects and sessions. Keep this directory when recovering an interrupted init.
 Git worktrees share the existing project config through normal root resolution.
 
-Backend initialization, `show`, `query`, and `search` are available on the integration branch.
+Backend initialization, `list`, `show`, `query`, `search`, and `info` are available on the integration branch.
 `show` supports full IDs or unique prefixes, JSON/short/long output, multiple
 issues, `--children`, and `--tree`; without an ID it uses Session focus or a single
 active issue. Work Session identity is device/checkout/branch/agent scoped and
@@ -226,7 +226,10 @@ conditions, sorting, limit, `--max-scan`, and JSON/ids/count output. Multi-reque
 queries compare project change tokens before and after evaluation and restart
 when needed. Ranked `search` uses the existing id/title/description/log/handoff
 scope and scoring; comments remain a TDQ-only search field. Status/type/priority/
-label filters and `--show-score` are supported. List, workflow writes, monitor, and serve
+label filters and `--show-score` are supported. `list` supports ordinary and TDQ
+filters, hierarchy, scheduling, review queues, sort/limit and long output. `info`
+reads project statistics and review eligibility from the backend. Workflow writes,
+monitor, and serve
 commands are being connected in subsequent implementation steps; commands that
 remain unconnected fail explicitly.
 

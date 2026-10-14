@@ -26,6 +26,9 @@ var infoCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		baseDir := getBaseDir()
+		if handled, err := backendInfo(cmd, baseDir); handled {
+			return err
+		}
 		if handled, err := githubInfo(cmd, baseDir); handled {
 			return err
 		}

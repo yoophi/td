@@ -12,6 +12,7 @@ import (
 )
 
 func runBackendSearch(cmd *cobra.Command, text string) error {
+	cmd.SilenceUsage = true
 	opts := db.ListIssuesOptions{}
 	statuses, _ := cmd.Flags().GetStringArray("status")
 	for _, value := range mergeMultiValueFlag(statuses) {

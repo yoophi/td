@@ -14,6 +14,7 @@ import (
 )
 
 func runBackendQuery(cmd *cobra.Command, expression string) error {
+	cmd.SilenceUsage = true
 	if e := validateGitHubQuery(expression); e != nil {
 		return e
 	}

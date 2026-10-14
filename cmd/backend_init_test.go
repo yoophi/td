@@ -103,7 +103,6 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		command *cobra.Command
 		args    []string
 	}{
-		{listCmd, nil},
 
 		{startCmd, []string{"td-0123456789abcdef"}},
 		{closeCmd, []string{"td-0123456789abcdef"}},
