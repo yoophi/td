@@ -20,7 +20,7 @@ func runBackendUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("requires at least one issue ID")
 	}
 	if !cmd.Flags().Changed("status") {
-		return fmt.Errorf("td-backend update requires a changed field")
+		return runBackendPatch(cmd, args)
 	}
 	allowed := " status json work-dir help refresh "
 	var invalid error

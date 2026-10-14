@@ -235,7 +235,9 @@ mutation is revision checked and stores its reason log atomically. A failed
 multi-Issue command reports the IDs already completed, and a retry skips
 Issues already in the requested state. `update --status` uses the backend
 workflow endpoint with revision checks; workflow policy can reject a transition.
-Combined status and field edits are not connected yet and fail before writing. `create` supports core fields, rich text files/stdin, dates, parent/epic and
+General `update` fields use observed PATCH and durable request recovery.
+`--append` is supported for one Issue at a time; combined status, comments and
+relation edits are not connected yet and fail before writing. `create` supports core fields, rich text files/stdin, dates, parent/epic and
 outgoing dependencies and incoming `--blocks` with durable request recovery.
 `--blocks` requires the server’s `create_blocks` capability and atomically creates
 the issue and dependency edges using observed target revisions. Update,
