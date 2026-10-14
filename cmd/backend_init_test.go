@@ -104,7 +104,7 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		args    []string
 	}{
 
-		{closeCmd, []string{"td-0123456789abcdef"}},
+		{approveCmd, []string{"td-0123456789abcdef"}},
 	} {
 		previous := tc.command.Context()
 		tc.command.SetContext(context.Background())

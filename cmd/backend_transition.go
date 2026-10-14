@@ -23,6 +23,12 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 	if action == "start" {
 		allowed += "force "
 	}
+	if action == "review" || action == "close" || action == "reject" {
+		allowed += "message comment note notes "
+	}
+	if action == "close" {
+		allowed += "admin self-close-exception "
+	}
 	var invalid error
 	cmd.Flags().Visit(func(f *pflag.Flag) {
 		if !strings.Contains(allowed, " "+f.Name+" ") {
@@ -32,7 +38,7 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 	if invalid != nil {
 		return invalid
 	}
-	reason, _ := cmd.Flags().GetString("reason")
+	reason := approvalReason(cmd)
 	if cmd.Flags().Changed("reason") && strings.TrimSpace(reason) == "" {
 		return fmt.Errorf("--reason requires a nonblank value")
 	}
@@ -54,6 +60,12 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 		target, label = models.StatusOpen, "UNBLOCKED"
 	case "reopen":
 		target, label = models.StatusOpen, "REOPENED"
+	case "review":
+		target, label = models.StatusInReview, "REVIEWED"
+	case "close":
+		target, label = models.StatusClosed, "CLOSED"
+	case "reject":
+		target, label = models.StatusOpen, "REJECTED"
 	}
 	completed := []string{}
 	for index, rawID := range args {
@@ -87,7 +99,7 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 			if action == "unstart" && observed.Status == target && observed.ImplementerSession == "" {
 				return backendstore.MutationRequest{}, errBackendTransitionUnchanged
 			}
-			if (action == "block" || action == "unblock" || action == "reopen") && observed.Status == target {
+			if (action == "block" || action == "unblock" || action == "reopen" || action == "review" || action == "close" || action == "reject") && observed.Status == target {
 				return backendstore.MutationRequest{}, errBackendTransitionUnchanged
 			}
 			body := map[string]any{}
@@ -96,6 +108,14 @@ func runBackendTransition(cmd *cobra.Command, args []string, action string) erro
 			}
 			if force {
 				body["force"] = true
+			}
+			if action == "close" {
+				if admin, _ := cmd.Flags().GetString("admin"); admin != "" {
+					body["admin_reason"] = admin
+				}
+				if exception, _ := cmd.Flags().GetString("self-close-exception"); exception != "" {
+					body["self_close_exception"] = exception
+				}
 			}
 			raw, e := json.Marshal(body)
 			if e != nil {

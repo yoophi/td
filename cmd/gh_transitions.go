@@ -26,7 +26,7 @@ func init() {
 			if err != nil {
 				return err
 			}
-			if kind == config.StoreBackend && (command == startCmd || command == unstartCmd || command == blockCmd || command == unblockCmd || command == reopenCmd) {
+			if kind == config.StoreBackend && (command == startCmd || command == unstartCmd || command == blockCmd || command == unblockCmd || command == reopenCmd || command == reviewCmd || command == closeCmd || command == rejectCmd) {
 				return runBackendTransition(cmd, args, command.Name())
 			}
 			if kind != config.StoreGitHub {
