@@ -65,7 +65,7 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		t.Fatal(e)
 	}
 	var decoded map[string]any
-	if e = json.Unmarshal([]byte(output), &decoded); e != nil || decoded["store"] != config.StoreBackend || decoded["backend"] == nil || decoded["issue_operations_supported"] != false {
+	if e = json.Unmarshal([]byte(output), &decoded); e != nil || decoded["store"] != config.StoreBackend || decoded["backend"] == nil || decoded["issue_operations_supported"] != true {
 		t.Fatal(output, e)
 	}
 	if _, e = run("--json"); e != nil {

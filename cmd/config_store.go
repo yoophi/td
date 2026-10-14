@@ -158,7 +158,7 @@ func reportBackendStore(cmd *cobra.Command, b models.BackendStoreConfig) error {
 			Store     string                    `json:"store"`
 			Backend   models.BackendStoreConfig `json:"backend"`
 			Supported bool                      `json:"issue_operations_supported"`
-		}{config.StoreBackend, b, false})
+		}{config.StoreBackend, b, true})
 	}
 	cmd.Printf("Project store: %s\nBackend URL: %s\nProject ID: %s\n", config.StoreBackend, b.URL, b.ProjectID)
 	return nil
