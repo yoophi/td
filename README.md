@@ -236,7 +236,8 @@ multi-Issue command reports the IDs already completed, and a retry skips
 Issues already in the requested state. `update --status` uses the backend
 workflow endpoint with revision checks; workflow policy can reject a transition.
 General `update` fields use observed PATCH and durable request recovery.
-`--append` is supported for one Issue at a time; combined status, comments and
+`start` and named `unstart` use backend workflow policy and retain Session
+attribution. `--append` is supported for one Issue at a time; combined status, comments and
 relation edits are not connected yet and fail before writing. `create` supports core fields, rich text files/stdin, dates, parent/epic and
 outgoing dependencies and incoming `--blocks` with durable request recovery.
 `--blocks` requires the server’s `create_blocks` capability and atomically creates

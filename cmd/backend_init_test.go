@@ -104,7 +104,6 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		args    []string
 	}{
 
-		{startCmd, []string{"td-0123456789abcdef"}},
 		{closeCmd, []string{"td-0123456789abcdef"}},
 	} {
 		previous := tc.command.Context()
