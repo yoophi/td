@@ -104,7 +104,7 @@ func TestInitBackendCommandAndReuse(t *testing.T) {
 		args    []string
 	}{
 		{listCmd, nil},
-		{queryCmd, []string{"status = open"}}, {searchCmd, []string{"example"}},
+		{searchCmd, []string{"example"}},
 		{startCmd, []string{"td-0123456789abcdef"}},
 		{closeCmd, []string{"td-0123456789abcdef"}},
 	} {

@@ -216,12 +216,15 @@ so retrying after a lost response or config write failure avoids duplicate
 projects and sessions. Keep this directory when recovering an interrupted init.
 Git worktrees share the existing project config through normal root resolution.
 
-Backend initialization and `show` are available on the integration branch.
+Backend initialization, `show`, and `query` are available on the integration branch.
 `show` supports full IDs or unique prefixes, JSON/short/long output, multiple
 issues, `--children`, and `--tree`; without an ID it uses Session focus or a single
 active issue. Work Session identity is device/checkout/branch/agent scoped and
 registered with a durable key under the user config directory. No local issue
-database is opened. List/query/search, workflow writes, monitor, and serve
+database is opened. `query` supports the existing TDQ predicates, cross-entity
+conditions, sorting, limit, `--max-scan`, and JSON/ids/count output. Multi-request
+queries compare project change tokens before and after evaluation and restart
+when needed. List/search, workflow writes, monitor, and serve
 commands are being connected in subsequent implementation steps; commands that
 remain unconnected fail explicitly.
 

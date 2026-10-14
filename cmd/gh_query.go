@@ -36,6 +36,9 @@ func init() {
 		if err != nil {
 			return err
 		}
+		if store == config.StoreBackend {
+			return runBackendQuery(cmd, args[0])
+		}
 		if store != config.StoreGitHub {
 			return localRun(cmd, args)
 		}
