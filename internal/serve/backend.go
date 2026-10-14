@@ -48,6 +48,7 @@ func NewBackendServer(baseDir string, conn *backendstore.Connection, project bac
 	for _, action := range []string{"restore", "start", "unstart", "review", "approve", "reject", "block", "unblock", "close", "reopen", "reviews", "status", "comments", "logs", "handoffs", "dependencies"} {
 		add("POST", "issues/{issue_id}/"+action)
 	}
+	add("POST", "issues/{issue_id}/release")
 	add("GET POST", "issues/{issue_id}/activity")
 	add("DELETE", "issues/{issue_id}/comments/{comment_id}")
 	add("DELETE", "issues/{issue_id}/dependencies/{dep_id}")
