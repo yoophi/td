@@ -20,6 +20,7 @@ type backendBoardWriterFixture struct {
 	backendBoardFixture
 	request backendstore.MutationRequest
 	stale   bool
+	writes  int
 }
 
 func (f *backendBoardWriterFixture) BoardDetail(ctx context.Context, id string, closed bool) (backendstore.BoardDetail, error) {
@@ -35,11 +36,50 @@ func (f *backendBoardWriterFixture) RunIntent(_ context.Context, _ any, prepare 
 	if err != nil {
 		return err
 	}
-	data, _ := json.Marshal(map[string]any{"board": f.board})
+	f.writes++
+	response := map[string]any{"board": f.board}
+	if f.request.Method == "DELETE" {
+		response = map[string]any{"deleted": true}
+	}
+	data, _ := json.Marshal(response)
 	if err = json.Unmarshal(data, out); err != nil {
 		return err
 	}
 	return verify()
+}
+
+func TestBackendBoardEditorUsesObservedRevisionAndLocalVisit(t *testing.T) {
+	now := time.Now()
+	fixture := &backendBoardWriterFixture{backendBoardFixture: backendBoardFixture{board: backendstore.Board{ID: "brd-1", Name: "Work", Query: "status = open", Revision: "r-1", CreatedAt: now, UpdatedAt: now}}}
+	prefs := &localMonitorPreferences{ctx: context.Background(), path: filepath.Join(t.TempDir(), "prefs.json")}
+	source := NewBackendBoardSource(context.Background(), fixture, func(context.Context) error { return nil }, prefs)
+	boards, editors, err := source.ListBoardsForEditing()
+	if err != nil || len(boards) != 1 || editors["brd-1"] == nil {
+		t.Fatalf("board editor unavailable: %+v, %v", editors, err)
+	}
+	visit := editors["brd-1"].(BoardVisitStore)
+	if _, err := visit.MarkViewed(); err != nil || fixture.writes != 0 {
+		t.Fatalf("personal board visit wrote remotely: %v", err)
+	}
+	if last, err := source.LastViewedBoard(); err != nil || last == nil || last.ID != "brd-1" {
+		t.Fatalf("local last viewed board missing: %+v, %v", last, err)
+	}
+	if _, err := source.CreateBoard("Fresh", "type = task"); err != nil || fixture.request.Method != "POST" || fixture.request.Resource != "/boards" {
+		t.Fatalf("board creation failed: %+v, %v", fixture.request, err)
+	}
+	if _, err := editors["brd-1"].Save("Renamed", "type = task"); err != nil || fixture.request.Method != "PATCH" || fixture.request.Revision != "r-1" {
+		t.Fatalf("observed board edit failed: %+v, %v", fixture.request, err)
+	}
+	fixture.stale = true
+	fixture.board.Revision = "r-2"
+	if err := editors["brd-1"].Delete(); err == nil {
+		t.Fatal("stale board editor deleted board")
+	}
+	fixture.stale = false
+	fixture.board.Revision = "r-1"
+	if err := editors["brd-1"].Delete(); err != nil || fixture.request.Method != "DELETE" || fixture.request.Revision != "r-1" {
+		t.Fatalf("observed board delete failed: %+v, %v", fixture.request, err)
+	}
 }
 
 func (f backendBoardFixture) Boards(context.Context) ([]backendstore.Board, error) {
