@@ -13,12 +13,17 @@ import (
 type backendWorkflowFixture struct {
 	observed backendstore.Issue
 	current  backendstore.Issue
+	monitor  backendstore.Issue
 	request  backendstore.MutationRequest
 	writes   int
 }
 
 func (f *backendWorkflowFixture) Monitor(context.Context, string, bool, string) (backendstore.Monitor, error) {
-	return backendstore.Monitor{}, nil
+	row := f.monitor
+	if row.ID == "" {
+		row = f.observed
+	}
+	return backendstore.Monitor{Dashboard: backendstore.MonitorSnapshot{TaskList: backendstore.MonitorTaskList{Reviewable: []backendstore.Issue{row}}}}, nil
 }
 func (f *backendWorkflowFixture) Detail(context.Context, string) (backendstore.Detail, error) {
 	return backendstore.Detail{Issue: f.current}, nil
@@ -35,12 +40,48 @@ func (f *backendWorkflowFixture) RunIntent(_ context.Context, _ any, prepare fun
 	if strings.HasSuffix(f.request.Resource, "/reopen") {
 		result.Status = models.StatusOpen
 	}
+	if strings.HasSuffix(f.request.Resource, "/approve") || strings.HasSuffix(f.request.Resource, "/close") {
+		result.Status = models.StatusClosed
+	}
 	result.Revision = "r-2"
 	data, _ := json.Marshal(map[string]any{"issue": result})
 	if err := json.Unmarshal(data, out); err != nil {
 		return err
 	}
 	return verify()
+}
+
+func TestBackendMonitorApprovalAndRecordUseServerPolicy(t *testing.T) {
+	row := backendstore.Issue{Issue: models.Issue{ID: "td-0123456789abcdef", Status: models.StatusInReview}, Revision: "r-1", AvailableTransitions: []string{"approve"}}
+	fixture := &backendWorkflowFixture{observed: row, current: row}
+	source := NewBackendDataSource(context.Background(), fixture, func(context.Context) error { return nil })
+	handle := source.backendTransitionHandlesForRows([]backendstore.Issue{row})[row.ID].(*backendIssueTransition)
+	plan, err := handle.ApprovalPlan()
+	if err != nil || !plan.NeedInput || plan.CloseExisting {
+		t.Fatalf("server policy approval plan missing: %+v, %v", plan, err)
+	}
+	if record, err := handle.RecordPlan(); err != nil || !record.NeedInput {
+		t.Fatalf("record-review plan missing: %+v, %v", record, err)
+	}
+	if err := handle.Approve("reviewer", "Reviewed", false); err != nil || fixture.request.Resource != "/issues/"+row.ID+"/approve" {
+		t.Fatalf("server approval failed: %+v, %v", fixture.request, err)
+	}
+	if err := handle.RecordReview("approved", "reviewer", "Reviewed", false); err != nil || fixture.request.Resource != "/issues/"+row.ID+"/reviews" {
+		t.Fatalf("review record failed: %+v, %v", fixture.request, err)
+	}
+	if err := handle.Close("done"); err != nil || fixture.request.Resource != "/issues/"+row.ID+"/close" {
+		t.Fatalf("server close failed: %+v, %v", fixture.request, err)
+	}
+	fixture.monitor = row
+	fixture.monitor.ActiveReview = json.RawMessage(`{"id":"review-1"}`)
+	plan, err = handle.ApprovalPlan()
+	if err != nil || !plan.CloseExisting {
+		t.Fatalf("active review did not offer close: %+v, %v", plan, err)
+	}
+	fixture.monitor.Revision = "r-2"
+	if _, err := handle.ApprovalPlan(); err == nil || !strings.Contains(err.Error(), "changed since") {
+		t.Fatalf("stale approval plan accepted: %v", err)
+	}
 }
 
 func TestBackendMonitorReopenUsesWorkflowEndpoint(t *testing.T) {
