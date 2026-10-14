@@ -59,7 +59,7 @@ func (f *backendWorkflowFixture) RunIntent(_ context.Context, _ any, prepare fun
 }
 
 func TestBackendMonitorApprovalAndRecordUseServerPolicy(t *testing.T) {
-	row := backendstore.Issue{Issue: models.Issue{ID: "td-0123456789abcdef", Status: models.StatusInReview}, Revision: "r-1", AvailableTransitions: []string{"approve"}}
+	row := backendstore.Issue{Issue: models.Issue{ID: "td-0123456789abcdef", Status: models.StatusInReview}, Revision: "r-1", AvailableTransitions: []string{"approve"}, ReviewOptions: &backendstore.ReviewOptions{RecordReviewAvailable: true}}
 	fixture := &backendWorkflowFixture{observed: row, current: row}
 	source := NewBackendDataSource(context.Background(), fixture, func(context.Context) error { return nil })
 	handle := source.backendTransitionHandlesForRows([]backendstore.Issue{row})[row.ID].(*backendIssueTransition)
@@ -70,6 +70,18 @@ func TestBackendMonitorApprovalAndRecordUseServerPolicy(t *testing.T) {
 	if record, err := handle.RecordPlan(); err != nil || !record.NeedInput {
 		t.Fatalf("record-review plan missing: %+v, %v", record, err)
 	}
+	fixture.monitor = row
+	fixture.monitor.ImplementerSession = "another-current-implementer"
+	fixture.monitor.ReviewOptions = &backendstore.ReviewOptions{SelfReviewPrompt: true, RecordReviewAvailable: true}
+	plan, err = handle.ApprovalPlan()
+	if err != nil || !plan.SelfReviewPrompt {
+		t.Fatalf("historical implementation prompt was lost: %+v, %v", plan, err)
+	}
+	fixture.monitor.ReviewOptions.RecordReviewAvailable = false
+	if _, err := handle.RecordPlan(); err == nil {
+		t.Fatal("record-review offered despite server policy denial")
+	}
+	fixture.monitor = row
 	if err := handle.Approve("reviewer", "Reviewed", false); err != nil || fixture.request.Resource != "/issues/"+row.ID+"/approve" {
 		t.Fatalf("server approval failed: %+v, %v", fixture.request, err)
 	}

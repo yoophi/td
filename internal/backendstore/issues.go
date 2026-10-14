@@ -20,6 +20,12 @@ type Issue struct {
 	Reviews              json.RawMessage `json:"reviews,omitempty"`
 	ActiveReview         json.RawMessage `json:"active_review,omitempty"`
 	AvailableTransitions []string        `json:"available_transitions,omitempty"`
+	ReviewOptions        *ReviewOptions  `json:"review_options,omitempty"`
+}
+
+type ReviewOptions struct {
+	SelfReviewPrompt      bool `json:"self_review_prompt"`
+	RecordReviewAvailable bool `json:"record_review_available"`
 }
 
 var issueIDPattern = regexp.MustCompile(`^td-[0-9a-f]{16}$`)

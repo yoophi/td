@@ -107,10 +107,13 @@ func (t *backendIssueTransition) ApprovalPlan() (MonitorApprovalPlan, error) {
 	if !slices.Contains(observed.AvailableTransitions, "approve") {
 		return MonitorApprovalPlan{}, fmt.Errorf("approval unavailable for this session; refresh the monitor")
 	}
+	if observed.ReviewOptions == nil {
+		return MonitorApprovalPlan{}, fmt.Errorf("backend approval policy observation unavailable; refresh the monitor")
+	}
 	if len(observed.ActiveReview) > 0 && string(observed.ActiveReview) != "null" {
 		return MonitorApprovalPlan{CloseExisting: true}, nil
 	}
-	return MonitorApprovalPlan{NeedInput: true, SelfReviewPrompt: t.actor() == observed.ImplementerSession}, nil
+	return MonitorApprovalPlan{NeedInput: true, SelfReviewPrompt: observed.ReviewOptions.SelfReviewPrompt}, nil
 }
 
 func (t *backendIssueTransition) RecordPlan() (MonitorApprovalPlan, error) {
@@ -124,10 +127,10 @@ func (t *backendIssueTransition) RecordPlan() (MonitorApprovalPlan, error) {
 	if len(observed.ActiveReview) > 0 && string(observed.ActiveReview) != "null" {
 		return MonitorApprovalPlan{}, fmt.Errorf("review already recorded; close on the existing approval")
 	}
-	if !slices.Contains(observed.AvailableTransitions, "approve") {
+	if !slices.Contains(observed.AvailableTransitions, "approve") || observed.ReviewOptions == nil || !observed.ReviewOptions.RecordReviewAvailable {
 		return MonitorApprovalPlan{}, fmt.Errorf("review unavailable for this session; refresh the monitor")
 	}
-	return MonitorApprovalPlan{NeedInput: true, SelfReviewPrompt: t.actor() == observed.ImplementerSession}, nil
+	return MonitorApprovalPlan{NeedInput: true, SelfReviewPrompt: observed.ReviewOptions.SelfReviewPrompt}, nil
 }
 
 func (t *backendIssueTransition) approvalObservation() (backendstore.Issue, error) {
@@ -153,13 +156,6 @@ func (t *backendIssueTransition) approvalObservation() (backendstore.Issue, erro
 		}
 	}
 	return backendstore.Issue{}, fmt.Errorf("approval observation unavailable")
-}
-
-func (t *backendIssueTransition) actor() string {
-	if c, ok := t.source.reader.(*backendstore.Connection); ok {
-		return c.SessionID
-	}
-	return ""
 }
 
 func (t *backendIssueTransition) Approve(reviewedBy, reason string, self bool) error {
