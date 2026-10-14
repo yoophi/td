@@ -1421,7 +1421,8 @@
         "refresh": "pending",
         "remote": "pending",
         "store": "pending",
-        "work-dir": "pending"
+        "work-dir": "pending",
+        "project-id": "unsupported"
       }
     },
     {
