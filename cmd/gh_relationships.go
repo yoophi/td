@@ -27,7 +27,7 @@ func init() {
 		if err != nil {
 			return err
 		}
-		if kind == config.StoreGitHub {
+		if kind == config.StoreGitHub || kind == config.StoreBackend {
 			return cobra.MinimumNArgs(2)(cmd, args)
 		}
 		return localRemoveArgs(cmd, args)
@@ -44,6 +44,9 @@ func init() {
 				return err
 			}
 			if kind != config.StoreGitHub {
+				if kind == config.StoreBackend {
+					return runBackendRelationship(original, cmd, args)
+				}
 				return local(cmd, args)
 			}
 			cmd.SilenceUsage = true

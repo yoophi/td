@@ -164,6 +164,7 @@ type IssueFile struct {
 
 // IssueDependency represents issue relationships
 type IssueDependency struct {
+	ID           string `json:"dep_id,omitempty"`
 	IssueID      string `json:"issue_id"`
 	DependsOnID  string `json:"depends_on_id"`
 	RelationType string `json:"relation_type"` // blocks, depends_on

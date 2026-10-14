@@ -240,8 +240,9 @@ General `update` fields use observed PATCH and durable request recovery.
 `approve <id>`, and `close` use backend workflow policy and retain Session attribution.
 `approve --record-only` records an `approved` or `changes_requested` review.
 Without an ID, `approve` selects a single monitor candidate; `--all` processes
-all current candidates, reporting earlier successes if one fails. `comment`, `comments add`,
-and `comments` use the shared backend activity and detail APIs. `log`
+all current candidates, reporting earlier successes if one fails. `dep add`
+and `dep rm` use the backend's revision-aware mutation endpoints. `comment`,
+`comments add`, and `comments` use the shared backend activity and detail APIs. `log`
 records typed activity with the calling Session and active Work Session.
 `handoff` saves structured progress and the Git snapshot as passive shared
 activity; `review` remains a separate workflow step. `--append` is supported for one Issue at a time; combined status, comments and
