@@ -67,9 +67,7 @@ func runBackendCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid points %d", points)
 	}
 	blocks, _ := cmd.Flags().GetStringArray("blocks")
-	if len(mergeMultiValueFlag(blocks)) > 0 {
-		return fmt.Errorf("td-backend creation with --blocks is not supported yet; no Issue created")
-	}
+	blocks = mergeMultiValueFlag(blocks)
 	c, e := openBackendCommand(cmd)
 	if e != nil {
 		return e
@@ -78,6 +76,11 @@ func runBackendCreate(cmd *cobra.Command, args []string) error {
 		Issue backendstore.Issue `json:"issue"`
 	}
 	e = c.RunIntent(cmd.Context(), backendInvocation(cmd, args, "create"), func() (backendstore.MutationRequest, error) {
+		if len(blocks) > 0 {
+			if e := c.Client.RequireCapability(cmd.Context(), "create_blocks"); e != nil {
+				return backendstore.MutationRequest{}, e
+			}
+		}
 		project, e := c.Client.GetProject(cmd.Context(), c.ProjectID, c.SessionID)
 		if e != nil {
 			return backendstore.MutationRequest{}, e
@@ -129,7 +132,7 @@ func runBackendCreate(cmd *cobra.Command, args []string) error {
 		}
 		depends, _ := cmd.Flags().GetStringArray("depends-on")
 		depends = mergeMultiValueFlag(depends)
-		if parentRaw != "" || epicRaw != "" || len(depends) > 0 {
+		if parentRaw != "" || epicRaw != "" || len(depends) > 0 || len(blocks) > 0 {
 			e = c.ReadSnapshot(cmd.Context(), func(rows []backendstore.Issue) error {
 				parent, epic := "", ""
 				var e error
@@ -163,6 +166,21 @@ func runBackendCreate(cmd *cobra.Command, args []string) error {
 					resolved = append(resolved, id)
 				}
 				body["depends_on"] = resolved
+				if len(blocks) > 0 {
+					byID := map[string]backendstore.Issue{}
+					for _, row := range rows {
+						byID[row.ID] = row
+					}
+					observed := []map[string]string{}
+					for _, raw := range blocks {
+						id, e := resolveBackendID(rows, raw)
+						if e != nil {
+							return e
+						}
+						observed = append(observed, map[string]string{"issue_id": id, "revision": byID[id].Revision})
+					}
+					body["blocks"] = observed
+				}
 				return nil
 			})
 			if e != nil {

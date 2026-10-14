@@ -31,6 +31,7 @@ func TestBackendCreateRecoversSameRequestAndPreservesFields(t *testing.T) {
 	const dependency = "td-00000000000000b2"
 	created, requests := 0, 0
 	lost := true
+	supportBlocks := true
 	bodies := map[string]string{}
 	replies := map[string]map[string]any{}
 	keys := []string{}
@@ -42,6 +43,12 @@ func TestBackendCreateRecoversSameRequestAndPreservesFields(t *testing.T) {
 		base := "/v1/projects/" + project
 		var data any
 		switch r.URL.Path {
+		case "/v1/capabilities":
+			caps := []string{}
+			if supportBlocks {
+				caps = append(caps, "create_blocks")
+			}
+			data = map[string]any{"api_version": "v1", "capabilities": caps}
 		case base + "/sessions":
 			data = map[string]any{"session": map[string]string{"id": session}}
 		case base:
@@ -137,12 +144,23 @@ func TestBackendCreateRecoversSameRequestAndPreservesFields(t *testing.T) {
 	if _, e = run(append(args, "--json")...); e != nil || created != 2 || keys[2] == keys[1] {
 		t.Fatal("new invocation not fresh", e, keys)
 	}
+	blockOutput, e := run("Remote incoming block fixture", "--blocks="+parent, "--json")
+	if e != nil {
+		t.Fatal(blockOutput, e)
+	}
+	var lastBody map[string]any
+	json.Unmarshal([]byte(bodies[keys[len(keys)-1]]), &lastBody)
+	if observations, ok := lastBody["blocks"].([]any); !ok || len(observations) != 1 || observations[0].(map[string]any)["issue_id"] != parent || observations[0].(map[string]any)["revision"] != "r-1" {
+		t.Fatal(lastBody)
+	}
+	supportBlocks = false
+	blockCount := created
+	if _, e = run("Unsupported backend block fixture", "--blocks="+parent); e == nil || created != blockCount {
+		t.Fatal("unsupported server received create", e, created)
+	}
 	before := requests
 	if _, e = run("Remote invalid type fixture", "--type=invalid"); e == nil || requests != before {
 		t.Fatal("invalid type reached server", e)
-	}
-	if _, e = run("Remote unsupported blocks fixture", "--blocks="+parent); e == nil || requests != before {
-		t.Fatal("unsupported blocks partially created", e)
 	}
 	if _, e = os.Stat(filepath.Join(dir, ".todos", "issues.db")); !os.IsNotExist(e) {
 		t.Fatal("SQLite fallback", e)
