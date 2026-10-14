@@ -42,6 +42,9 @@ func init() {
 				if original == logCmd {
 					return runBackendLog(cmd, args)
 				}
+				if original == handoffCmd {
+					return runBackendHandoff(cmd, args)
+				}
 			}
 			if kind != config.StoreGitHub {
 				return local(cmd, args)

@@ -239,7 +239,9 @@ General `update` fields use observed PATCH and durable request recovery.
 `start`, named `unstart`, `block`, `unblock`, and `reopen` use backend
 workflow policy and retain Session attribution. `comment`, `comments add`,
 and `comments` use the shared backend activity and detail APIs. `log`
-records typed activity with the calling Session and active Work Session. `--append` is supported for one Issue at a time; combined status, comments and
+records typed activity with the calling Session and active Work Session.
+`handoff` saves structured progress and the Git snapshot as passive shared
+activity; `review` remains a separate workflow step. `--append` is supported for one Issue at a time; combined status, comments and
 relation edits are not connected yet and fail before writing. `create` supports core fields, rich text files/stdin, dates, parent/epic and
 outgoing dependencies and incoming `--blocks` with durable request recovery.
 `--blocks` requires the server’s `create_blocks` capability and atomically creates
