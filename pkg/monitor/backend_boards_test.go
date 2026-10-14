@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -15,8 +16,64 @@ type backendBoardFixture struct {
 	cards []backendstore.BoardCard
 }
 
+type backendBoardWriterFixture struct {
+	backendBoardFixture
+	request backendstore.MutationRequest
+	stale   bool
+}
+
+func (f *backendBoardWriterFixture) BoardDetail(ctx context.Context, id string, closed bool) (backendstore.BoardDetail, error) {
+	detail, err := f.backendBoardFixture.BoardDetail(ctx, id, closed)
+	if f.stale {
+		detail.Board.Revision = "r-2"
+	}
+	return detail, err
+}
+func (f *backendBoardWriterFixture) RunIntent(_ context.Context, _ any, prepare func() (backendstore.MutationRequest, error), out any, verify func() error) error {
+	var err error
+	f.request, err = prepare()
+	if err != nil {
+		return err
+	}
+	data, _ := json.Marshal(map[string]any{"board": f.board})
+	if err = json.Unmarshal(data, out); err != nil {
+		return err
+	}
+	return verify()
+}
+
 func (f backendBoardFixture) Boards(context.Context) ([]backendstore.Board, error) {
 	return []backendstore.Board{f.board}, nil
+}
+
+func TestBackendBoardMovePreservesHiddenCardAnchorAndRejectsStaleBoard(t *testing.T) {
+	now := time.Now()
+	fixture := &backendBoardWriterFixture{backendBoardFixture: backendBoardFixture{
+		board: backendstore.Board{ID: "brd-1", Name: "Work", ViewMode: "backlog", Revision: "r-1", CreatedAt: now, UpdatedAt: now},
+		cards: []backendstore.BoardCard{
+			{BoardID: "brd-1", Issue: backendstore.Issue{Issue: models.Issue{ID: "td-aaaaaaaaaaaaaaaa"}, Revision: "r-1"}},
+			{BoardID: "brd-1", Issue: backendstore.Issue{Issue: models.Issue{ID: "td-bbbbbbbbbbbbbbbb"}, Revision: "r-1"}},
+			{BoardID: "brd-1", Issue: backendstore.Issue{Issue: models.Issue{ID: "td-cccccccccccccccc"}, Revision: "r-1"}},
+		},
+	}}
+	source := NewBackendBoardSource(context.Background(), fixture, func(context.Context) error { return nil }, &localMonitorPreferences{ctx: context.Background(), path: filepath.Join(t.TempDir(), "prefs.json")})
+	msg := source.LoadBoard("brd-1", nil)
+	if msg.Error != nil || msg.MoveStore == nil {
+		t.Fatalf("move handle unavailable: %+v", msg)
+	}
+	if err := msg.MoveStore.MoveBefore("td-aaaaaaaaaaaaaaaa", "", []string{"td-aaaaaaaaaaaaaaaa", "td-bbbbbbbbbbbbbbbb"}); err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		BeforeID string `json:"before_id"`
+	}
+	if err := json.Unmarshal(fixture.request.Body, &body); err != nil || body.BeforeID != "td-cccccccccccccccc" || fixture.request.Revision != "r-1" || fixture.request.Resource != "/boards/brd-1/move" {
+		t.Fatalf("hidden card anchor was lost: %+v, %v", fixture.request, err)
+	}
+	fixture.stale = true
+	if err := msg.MoveStore.MoveBefore("td-aaaaaaaaaaaaaaaa", "td-bbbbbbbbbbbbbbbb", []string{"td-aaaaaaaaaaaaaaaa", "td-bbbbbbbbbbbbbbbb"}); err == nil {
+		t.Fatal("stale board move accepted")
+	}
 }
 func (f backendBoardFixture) BoardDetail(_ context.Context, id string, _ bool) (backendstore.BoardDetail, error) {
 	return backendstore.BoardDetail{Board: f.board, Issues: f.cards}, nil

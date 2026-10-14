@@ -2,7 +2,9 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/marcus/td/internal/backendstore"
@@ -12,6 +14,11 @@ import (
 type backendBoardReader interface {
 	Boards(context.Context) ([]backendstore.Board, error)
 	BoardDetail(context.Context, string, bool) (backendstore.BoardDetail, error)
+}
+
+type backendBoardWriter interface {
+	backendBoardReader
+	RunIntent(context.Context, any, func() (backendstore.MutationRequest, error), any, func() error) error
 }
 
 type BackendBoardSource struct {
@@ -88,7 +95,101 @@ func (s *BackendBoardSource) LoadBoard(id string, statuses map[models.Status]boo
 		}
 		issues = append(issues, card.Model())
 	}
-	return BoardIssuesMsg{BoardID: id, Board: board, Issues: issues, ViewStore: &backendBoardView{source: s, observed: detail.Board}}
+	msg := BoardIssuesMsg{BoardID: id, Board: board, Issues: issues, ViewStore: &backendBoardView{source: s, observed: detail.Board}}
+	if writer, ok := s.reader.(backendBoardWriter); ok {
+		msg.MoveStore = &backendBoardMove{source: s, writer: writer, observed: detail}
+	}
+	return msg
+}
+
+type backendBoardMove struct {
+	source   *BackendBoardSource
+	writer   backendBoardWriter
+	observed backendstore.BoardDetail
+}
+
+func (m *backendBoardMove) MoveBefore(id, before string, visible []string) error {
+	anchor, err := backendMoveAnchor(m.observed.Issues, id, before, visible)
+	if err != nil {
+		return err
+	}
+	input := struct {
+		Board, Revision, Issue, Before string
+		Visible                        []string
+	}{m.observed.Board.ID, m.observed.Board.Revision, id, anchor, slices.Clone(visible)}
+	var reply struct {
+		Board backendstore.Board `json:"board"`
+	}
+	return m.writer.RunIntent(m.source.ctx, input, func() (backendstore.MutationRequest, error) {
+		request := backendstore.MutationRequest{}
+		if err := m.source.guard(m.source.ctx); err != nil {
+			return request, err
+		}
+		current, err := m.writer.BoardDetail(m.source.ctx, m.observed.Board.ID, true)
+		if err != nil {
+			return request, err
+		}
+		if err := m.source.guard(m.source.ctx); err != nil {
+			return request, err
+		}
+		if current.Board.Revision != m.observed.Board.Revision || !sameBackendBoardCards(current.Issues, m.observed.Issues) {
+			return request, fmt.Errorf("board changed since it was displayed; refresh before moving a card")
+		}
+		body, err := json.Marshal(map[string]any{"issue_id": id, "before_id": anchor, "include_closed": true})
+		if err != nil {
+			return request, err
+		}
+		return backendstore.MutationRequest{Method: "POST", Resource: "/boards/" + m.observed.Board.ID + "/move", Revision: m.observed.Board.Revision, Body: body}, nil
+	}, &reply, func() error {
+		if err := backendstore.ValidateBoard(reply.Board); err != nil {
+			return err
+		}
+		if reply.Board.ID != m.observed.Board.ID {
+			return fmt.Errorf("backend returned a different board")
+		}
+		return nil
+	})
+}
+
+func sameBackendBoardCards(a, b []backendstore.BoardCard) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Issue.ID != b[i].Issue.ID || a[i].Issue.Revision != b[i].Issue.Revision || a[i].Position != b[i].Position || a[i].HasPosition != b[i].HasPosition {
+			return false
+		}
+	}
+	return true
+}
+
+func backendMoveAnchor(cards []backendstore.BoardCard, id, before string, visible []string) (string, error) {
+	if id == before || len(visible) == 0 || !slices.Contains(visible, id) || before != "" && !slices.Contains(visible, before) {
+		return "", fmt.Errorf("board changed: invalid moved card or anchor")
+	}
+	all := make([]string, 0, len(cards))
+	for _, card := range cards {
+		all = append(all, card.Issue.ID)
+	}
+	seen := map[string]bool{}
+	last := -1
+	for _, key := range visible {
+		index := slices.Index(all, key)
+		if seen[key] || index <= last {
+			return "", fmt.Errorf("board changed: visible cards no longer match the observation")
+		}
+		seen[key] = true
+		last = index
+	}
+	if before != "" {
+		return before, nil
+	}
+	for next := last + 1; next < len(all); next++ {
+		if all[next] != id {
+			return all[next], nil
+		}
+	}
+	return "", nil
 }
 
 func (s *BackendBoardSource) displayBoard(row backendstore.Board) (*models.Board, error) {
