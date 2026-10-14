@@ -75,7 +75,37 @@ func runBackendWSLog(cmd *cobra.Command, args []string) error {
 		targets = []string{id}
 	}
 	if len(targets) == 0 {
-		return fmt.Errorf("work session has no tagged issues; tag an issue or use --only before logging")
+		var reply struct {
+			Log backendLog `json:"log"`
+		}
+		err := c.RunIntent(cmd.Context(), backendInvocation(cmd, args, "ws.log.session"), func() (backendstore.MutationRequest, error) {
+			active, err := c.WorkSession(cmd.Context(), wsID)
+			if err != nil {
+				return backendstore.MutationRequest{}, err
+			}
+			if active.WorkSession.SessionID != c.SessionID || active.WorkSession.EndedAt != nil || len(active.IssueIDs) != 0 {
+				return backendstore.MutationRequest{}, fmt.Errorf("active work session or tags changed; reread before retrying")
+			}
+			body, err := json.Marshal(map[string]string{"message": args[0], "type": string(logType)})
+			if err != nil {
+				return backendstore.MutationRequest{}, err
+			}
+			return backendstore.MutationRequest{Method: "POST", Resource: "/work-sessions/" + wsID + "/logs", Body: body}, nil
+		}, &reply, func() error {
+			row := reply.Log
+			if row.ID == "" || row.IssueID != "" || row.SessionID != c.SessionID || row.WorkSessionID != wsID || row.Message != strings.TrimSpace(args[0]) || row.Type != logType || row.Timestamp.IsZero() {
+				return fmt.Errorf("invalid backend work-session log response")
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if jsonMode(cmd) {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"action": "logged_work_session", "work_session_id": wsID, "issues": []string{}, "logs": []backendLog{reply.Log}})
+		}
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "LOGGED %s [%s] (no issues tagged)\n", wsID, logType)
+		return err
 	}
 	// Validate the entire target set before the first durable mutation.
 	for _, id := range targets {

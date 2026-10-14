@@ -8,6 +8,7 @@ import (
 
 	"github.com/marcus/td/internal/backendstore"
 	"github.com/marcus/td/internal/config"
+	"github.com/marcus/td/internal/models"
 	"github.com/marcus/td/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -116,6 +117,19 @@ func runBackendWSRead(target, cmd *cobra.Command, args []string) error {
 	if e != nil {
 		return e
 	}
+	logs, e := c.WorkSessionLogs(cmd.Context(), id)
+	if e != nil {
+		return e
+	}
+	for _, log := range logs {
+		activities = append(activities, models.Activity{ID: log.ID, Kind: "log", SessionID: log.SessionID, WorkSessionID: log.WorkSessionID, Message: log.Message, LogType: log.Type, CreatedAt: log.Timestamp, UpdatedAt: log.Timestamp, Native: true})
+	}
+	slices.SortFunc(activities, func(a, b models.Activity) int {
+		if order := a.CreatedAt.Compare(b.CreatedAt); order != 0 {
+			return order
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
 	if jsonMode(cmd) {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"work_session": detail.WorkSession, "issues": detail.IssueIDs, "activities": activities})
 	}
@@ -139,7 +153,11 @@ func runBackendWSRead(target, cmd *cobra.Command, args []string) error {
 		if target == wsShowCmd && !full && activity.Kind != "handoff" {
 			continue
 		}
-		if _, e = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s %s [%s] %s\n", activity.CreatedAt.Format("2006-01-02 15:04"), activity.Kind, activity.IssueID, activity.LogType, output.SanitizeIssueText(activity.Message)); e != nil {
+		issueID := activity.IssueID
+		if issueID == "" {
+			issueID = id
+		}
+		if _, e = fmt.Fprintf(cmd.OutOrStdout(), "  [%s] %s %s [%s] %s\n", activity.CreatedAt.Format("2006-01-02 15:04"), activity.Kind, issueID, activity.LogType, output.SanitizeIssueText(activity.Message)); e != nil {
 			return e
 		}
 		if activity.Kind == "handoff" {

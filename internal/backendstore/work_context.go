@@ -109,6 +109,33 @@ func (c *Connection) WorkSessionActivity(ctx context.Context, id string) ([]mode
 	return out.Activity, nil
 }
 
+func (c *Connection) WorkSessionLogs(ctx context.Context, id string) ([]models.Log, error) {
+	path, e := scopedPath(c.ProjectID, c.SessionID)
+	if e != nil {
+		return nil, e
+	}
+	if !workSessionIDPattern.MatchString(id) {
+		return nil, fmt.Errorf("invalid backend work session ID")
+	}
+	var out struct {
+		Logs []models.Log `json:"logs"`
+	}
+	if e = c.Client.request(ctx, "GET", path+"/work-sessions/"+id+"/logs", c.SessionID, "", nil, &out); e != nil {
+		return nil, e
+	}
+	if out.Logs == nil {
+		return nil, fmt.Errorf("invalid backend work session logs")
+	}
+	seen := map[string]bool{}
+	for _, row := range out.Logs {
+		if row.ID == "" || seen[row.ID] || row.IssueID != "" || row.WorkSessionID != id || !validSessionID(row.SessionID) || row.Message == "" || row.Timestamp.IsZero() {
+			return nil, fmt.Errorf("invalid backend work session log")
+		}
+		seen[row.ID] = true
+	}
+	return out.Logs, nil
+}
+
 func (c *Connection) ActiveWorkSessionID(ctx context.Context) (string, error) {
 	rows, e := c.WorkSessions(ctx)
 	if e != nil {
