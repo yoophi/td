@@ -2663,6 +2663,10 @@
         "inherited": true
       },
       {
+        "name": "project-id",
+        "type": "string"
+      },
+      {
         "name": "refresh",
         "type": "bool",
         "inherited": true
