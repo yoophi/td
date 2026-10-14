@@ -28,6 +28,14 @@ func ValidateNote(n Note) error {
 }
 
 func (c *Connection) Notes(ctx context.Context) ([]Note, error) {
+	return c.listNotes(ctx, false)
+}
+
+func (c *Connection) NotesIncludingDeleted(ctx context.Context) ([]Note, error) {
+	return c.listNotes(ctx, true)
+}
+
+func (c *Connection) listNotes(ctx context.Context, includeDeleted bool) ([]Note, error) {
 	path, e := scopedPath(c.ProjectID, c.SessionID)
 	if e != nil {
 		return nil, e
@@ -35,7 +43,11 @@ func (c *Connection) Notes(ctx context.Context) ([]Note, error) {
 	var reply struct {
 		Notes []Note `json:"notes"`
 	}
-	if e = c.Client.request(ctx, "GET", path+"/notes", c.SessionID, "", nil, &reply); e != nil {
+	path += "/notes"
+	if includeDeleted {
+		path += "?include_deleted=true"
+	}
+	if e = c.Client.request(ctx, "GET", path, c.SessionID, "", nil, &reply); e != nil {
 		return nil, e
 	}
 	if reply.Notes == nil {
@@ -43,7 +55,7 @@ func (c *Connection) Notes(ctx context.Context) ([]Note, error) {
 	}
 	seen := map[string]bool{}
 	for _, n := range reply.Notes {
-		if e = ValidateNote(n); e != nil || seen[n.ID] || n.DeletedAt != nil {
+		if e = ValidateNote(n); e != nil || seen[n.ID] || !includeDeleted && n.DeletedAt != nil {
 			return nil, fmt.Errorf("invalid backend note list")
 		}
 		seen[n.ID] = true
@@ -75,6 +87,14 @@ func ResolveNote(rows []Note, raw string) (Note, error) {
 }
 
 func (c *Connection) Note(ctx context.Context, id string) (Note, error) {
+	return c.getNote(ctx, id, false)
+}
+
+func (c *Connection) NoteIncludingDeleted(ctx context.Context, id string) (Note, error) {
+	return c.getNote(ctx, id, true)
+}
+
+func (c *Connection) getNote(ctx context.Context, id string, includeDeleted bool) (Note, error) {
 	path, e := scopedPath(c.ProjectID, c.SessionID)
 	if e != nil {
 		return Note{}, e
@@ -85,10 +105,14 @@ func (c *Connection) Note(ctx context.Context, id string) (Note, error) {
 	var reply struct {
 		Note Note `json:"note"`
 	}
-	if e = c.Client.request(ctx, "GET", path+"/notes/"+url.PathEscape(id), c.SessionID, "", nil, &reply); e != nil {
+	path += "/notes/" + url.PathEscape(id)
+	if includeDeleted {
+		path += "?include_deleted=true"
+	}
+	if e = c.Client.request(ctx, "GET", path, c.SessionID, "", nil, &reply); e != nil {
 		return Note{}, e
 	}
-	if e = ValidateNote(reply.Note); e != nil || reply.Note.ID != id || reply.Note.DeletedAt != nil {
+	if e = ValidateNote(reply.Note); e != nil || reply.Note.ID != id || !includeDeleted && reply.Note.DeletedAt != nil {
 		return Note{}, fmt.Errorf("invalid backend note detail")
 	}
 	return reply.Note, nil

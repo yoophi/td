@@ -39,10 +39,12 @@ func runBackendNoteRead(target, cmd *cobra.Command, args []string) error {
 	}
 	if target == noteShowCmd {
 		includeDeleted, _ := cmd.Flags().GetBool("include-deleted")
+		var rows []backendstore.Note
 		if includeDeleted {
-			return fmt.Errorf("td-backend note show --include-deleted is not available yet")
+			rows, e = c.NotesIncludingDeleted(cmd.Context())
+		} else {
+			rows, e = c.Notes(cmd.Context())
 		}
-		rows, e := c.Notes(cmd.Context())
 		if e != nil {
 			return e
 		}
@@ -50,7 +52,12 @@ func runBackendNoteRead(target, cmd *cobra.Command, args []string) error {
 		if e != nil {
 			return e
 		}
-		n, e := c.Note(cmd.Context(), selected.ID)
+		var n backendstore.Note
+		if includeDeleted {
+			n, e = c.NoteIncludingDeleted(cmd.Context(), selected.ID)
+		} else {
+			n, e = c.Note(cmd.Context(), selected.ID)
+		}
 		if e != nil {
 			return e
 		}
@@ -79,10 +86,12 @@ func runBackendNoteRead(target, cmd *cobra.Command, args []string) error {
 		return e
 	}
 	deleted, _ := cmd.Flags().GetBool("deleted")
+	var rows []backendstore.Note
 	if deleted {
-		return fmt.Errorf("td-backend note list --deleted is not available yet")
+		rows, e = c.NotesIncludingDeleted(cmd.Context())
+	} else {
+		rows, e = c.Notes(cmd.Context())
 	}
-	rows, e := c.Notes(cmd.Context())
 	if e != nil {
 		return e
 	}
@@ -94,7 +103,10 @@ func runBackendNoteRead(target, cmd *cobra.Command, args []string) error {
 	search = strings.ToLower(strings.TrimSpace(search))
 	filtered := []backendstore.Note{}
 	for _, n := range rows {
-		if pinned && !n.Pinned || archived && !n.Archived || !archived && !all && n.Archived {
+		if deleted && n.DeletedAt == nil {
+			continue
+		}
+		if pinned && !n.Pinned || archived && !n.Archived || !deleted && !archived && !all && n.Archived {
 			continue
 		}
 		if search != "" && !strings.Contains(strings.ToLower(n.Title+"\n"+n.Content), search) {

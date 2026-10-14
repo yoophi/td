@@ -13,7 +13,7 @@ import (
 var errBackendNoteUnchanged = errors.New("note already has requested state")
 
 func init() {
-	for _, command := range []*cobra.Command{noteAddCmd, noteEditCmd, noteDeleteCmd, notePinCmd, noteUnpinCmd, noteArchiveCmd, noteUnarchiveCmd} {
+	for _, command := range []*cobra.Command{noteAddCmd, noteEditCmd, noteDeleteCmd, noteRestoreCmd, notePinCmd, noteUnpinCmd, noteArchiveCmd, noteUnarchiveCmd} {
 		local, target := command.RunE, command
 		command.RunE = func(cmd *cobra.Command, args []string) error {
 			cfg, e := config.Load(getBaseDir())
@@ -56,7 +56,12 @@ func runBackendNoteWrite(target, cmd *cobra.Command, args []string) error {
 			}
 			payload = map[string]any{"title": args[0], "content": content, "pinned": false}
 		} else {
-			rows, e := c.Notes(cmd.Context())
+			var rows []backendstore.Note
+			if target == noteRestoreCmd {
+				rows, e = c.NotesIncludingDeleted(cmd.Context())
+			} else {
+				rows, e = c.Notes(cmd.Context())
+			}
 			if e != nil {
 				return request, e
 			}
@@ -69,6 +74,11 @@ func runBackendNoteWrite(target, cmd *cobra.Command, args []string) error {
 			switch target {
 			case noteDeleteCmd:
 				request.Method = "DELETE"
+			case noteRestoreCmd:
+				if selected.DeletedAt == nil {
+					return request, errBackendNoteUnchanged
+				}
+				request.Resource += "/restore"
 			case noteEditCmd:
 				changes := map[string]any{}
 				if cmd.Flags().Changed("title") {
@@ -145,6 +155,8 @@ func runBackendNoteWrite(target, cmd *cobra.Command, args []string) error {
 		verb = "CREATED"
 	case noteDeleteCmd:
 		verb = "DELETED"
+	case noteRestoreCmd:
+		verb = "RESTORED"
 	case notePinCmd:
 		verb = "PINNED"
 	case noteUnpinCmd:

@@ -255,10 +255,10 @@ the current Session are selected. Both commands support `--json`.
 `board list/show/create/edit/delete/move/unposition` use shared backend boards.
 Reads retain the status filter and JSON card output; writes use observed board
 revisions and durable request recovery.
-`note list/show/add/edit/delete/pin/unpin/archive/unarchive` use shared backend
+`note list/show/add/edit/delete/restore/pin/unpin/archive/unarchive` use shared backend
 notes. Reads support search, pinned, archived, limit, and JSON output; writes
-use observed note revisions and durable request recovery. Deleted-note reads
-and restore require a later API extension.
+use observed note revisions and durable request recovery. `list --deleted` and
+`show --include-deleted` use the backend's deleted-note read option.
 `log` records typed activity with the calling Session and active Work Session.
 `handoff` saves structured progress and the Git snapshot as passive shared
 activity; `review` remains a separate workflow step. `--append` is supported for one Issue at a time; combined status, comments and
