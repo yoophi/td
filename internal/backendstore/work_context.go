@@ -24,7 +24,7 @@ type WorkSessionDetail struct {
 	IssueIDs    []string    `json:"issue_ids"`
 }
 
-func validateWorkSession(row WorkSession) error {
+func ValidateWorkSession(row WorkSession) error {
 	if !workSessionIDPattern.MatchString(row.ID) || !validSessionID(row.SessionID) || row.Name == "" || row.StartedAt.IsZero() {
 		return fmt.Errorf("invalid backend work session")
 	}
@@ -47,7 +47,7 @@ func (c *Connection) WorkSessions(ctx context.Context) ([]WorkSession, error) {
 	}
 	seen := map[string]bool{}
 	for _, row := range out.Sessions {
-		if validateWorkSession(row) != nil || seen[row.ID] {
+		if ValidateWorkSession(row) != nil || seen[row.ID] {
 			return nil, fmt.Errorf("invalid backend work session list")
 		}
 		seen[row.ID] = true
@@ -67,7 +67,7 @@ func (c *Connection) WorkSession(ctx context.Context, id string) (WorkSessionDet
 	if e = c.Client.request(ctx, "GET", path+"/work-sessions/"+id, c.SessionID, "", nil, &out); e != nil {
 		return WorkSessionDetail{}, e
 	}
-	if validateWorkSession(out.WorkSession) != nil || out.WorkSession.ID != id || out.IssueIDs == nil {
+	if ValidateWorkSession(out.WorkSession) != nil || out.WorkSession.ID != id || out.IssueIDs == nil {
 		return WorkSessionDetail{}, fmt.Errorf("invalid backend work session detail")
 	}
 	seen := map[string]bool{}

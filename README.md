@@ -259,8 +259,9 @@ revisions and durable request recovery.
 notes. Reads support search, pinned, archived, limit, and JSON output; writes
 use observed note revisions and durable request recovery. `list --deleted` and
 `show --include-deleted` use the backend's deleted-note read option.
-`ws list/show/current` read shared Work Sessions and tagged Issue IDs from the
-backend. The current Work Session is the active one owned by the CLI Session.
+`ws list/show/current/start/end` use shared backend Work Sessions. The current
+Work Session is the active one owned by the CLI Session. Start/end capture the
+checkout's Git commit and use durable request recovery.
 `log` records typed activity with the calling Session and active Work Session.
 `handoff` saves structured progress and the Git snapshot as passive shared
 activity; `review` remains a separate workflow step. `--append` is supported for one Issue at a time; combined status, comments and
