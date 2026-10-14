@@ -25,7 +25,7 @@ func TestBackendQueryPredicateActivityAndScanLimit(t *testing.T) {
 	const second = "td-0000000000000002"
 	rows := []map[string]any{
 		{"id": first, "revision": "r-1", "title": "First fixture", "status": "open", "type": "task", "priority": "P1", "implementer_session": session},
-		{"id": second, "revision": "r-1", "title": "Second fixture", "status": "closed", "type": "bug", "priority": "P2"},
+		{"id": second, "revision": "r-1", "title": "Billing fixture", "status": "closed", "type": "bug", "priority": "P2"},
 	}
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,11 @@ func TestBackendQueryPredicateActivityAndScanLimit(t *testing.T) {
 				row = rows[1]
 				comments = []any{}
 			}
-			data = map[string]any{"issue": row, "comments": comments, "logs": []any{}, "children": []any{}, "files": []any{}, "dependencies": []any{}}
+			logs := []any{}
+			if row["id"] == first {
+				logs = []any{map[string]any{"id": "l1", "issue_id": first, "message": "billing completion", "type": "progress", "timestamp": "2026-10-13T00:00:00Z"}}
+			}
+			data = map[string]any{"issue": row, "comments": comments, "logs": logs, "children": []any{}, "files": []any{}, "dependencies": []any{}}
 		default:
 			w.WriteHeader(404)
 			return
@@ -94,6 +98,38 @@ func TestBackendQueryPredicateActivityAndScanLimit(t *testing.T) {
 	out, warning, e := run("status != blocked", "--max-scan=1", "--output=count")
 	if e != nil || strings.TrimSpace(out) != "1" || !strings.Contains(warning, "first 1") {
 		t.Fatal(out, warning, e)
+	}
+	runSearch := func(text string, flags ...string) (string, error) {
+		var out bytes.Buffer
+		c := &cobra.Command{Use: "search", RunE: searchCmd.RunE, Args: searchCmd.Args, SilenceErrors: true, SilenceUsage: true}
+		for _, name := range []string{"status", "type", "labels"} {
+			c.Flags().StringArray(name, nil, "")
+		}
+		c.Flags().String("priority", "", "")
+		c.Flags().Int("limit", 50, "")
+		c.Flags().Bool("json", false, "")
+		c.Flags().Bool("show-score", false, "")
+		c.SetOut(&out)
+		c.SetArgs(append([]string{text}, flags...))
+		e := c.ExecuteContext(context.Background())
+		return out.String(), e
+	}
+	searchJSON, e := runSearch("billing", "--json")
+	var ranked []struct {
+		Issue      models.Issue `json:"issue"`
+		Score      int          `json:"score"`
+		MatchField string       `json:"MatchField"`
+	}
+	if e != nil || json.Unmarshal([]byte(searchJSON), &ranked) != nil || len(ranked) != 2 || ranked[0].Issue.ID != second || ranked[1].MatchField != "log" {
+		t.Fatal("ranked search", searchJSON, e)
+	}
+	searchJSON, e = runSearch("ready", "--json")
+	if e != nil || strings.TrimSpace(searchJSON) != "[]" {
+		t.Fatal("comments searched as activity", searchJSON, e)
+	}
+	searchText, e := runSearch("billing", "--status=open", "--show-score")
+	if e != nil || !strings.Contains(searchText, first) || strings.Contains(searchText, second) || !strings.Contains(searchText, "score:10 log") {
+		t.Fatal(searchText, e)
 	}
 	before := requests
 	if _, _, e = run("unknown_field = value", "--json"); e == nil || requests != before {

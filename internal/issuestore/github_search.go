@@ -1,6 +1,7 @@
 package issuestore
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/marcus/td/internal/db"
+	"github.com/marcus/td/internal/models"
 )
 
 // SQLiteLIKE implements SQLite's default ASCII case folding and %/_ wildcards.
@@ -42,6 +44,15 @@ func SQLiteLIKE(pattern string) func(string) bool {
 }
 
 func (s *GitHubQuerySnapshot) SearchIssuesRanked(text string, opts db.ListIssuesOptions) ([]db.SearchResult, error) {
+	rows := make([]models.Issue, 0, len(s.records))
+	for _, row := range s.records {
+		rows = append(rows, row.Issue)
+	}
+	return searchIssuesRanked(s.ctx, rows, text, opts, s.searchActivityField)
+}
+
+// searchIssuesRanked keeps ranking/filtering consistent across remote stores.
+func searchIssuesRanked(ctx context.Context, rows []models.Issue, text string, opts db.ListIssuesOptions, activityFieldFor func(string, func(string) bool) (string, error)) ([]db.SearchResult, error) {
 	rest := opts
 	rest.Status = nil
 	rest.Type = nil
@@ -68,8 +79,8 @@ func (s *GitHubQuerySnapshot) SearchIssuesRanked(text string, opts db.ListIssues
 		})
 	}
 	results := []db.SearchResult{}
-	for _, r := range s.records {
-		if err := s.ctx.Err(); err != nil {
+	for _, r := range rows {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if len(opts.Status) > 0 && !slices.Contains(opts.Status, r.Status) {
@@ -96,7 +107,7 @@ func (s *GitHubQuerySnapshot) SearchIssuesRanked(text string, opts db.ListIssues
 		activityField := ""
 		if !ownMatch {
 			var err error
-			activityField, err = s.searchActivityField(r.ID, match)
+			activityField, err = activityFieldFor(r.ID, match)
 			if err != nil {
 				return nil, err
 			}
@@ -104,7 +115,7 @@ func (s *GitHubQuerySnapshot) SearchIssuesRanked(text string, opts db.ListIssues
 				continue
 			}
 		}
-		result := db.SearchResult{Issue: r.Issue, Score: 10, MatchField: activityField}
+		result := db.SearchResult{Issue: r, Score: 10, MatchField: activityField}
 		lower := strings.ToLower(text)
 		switch {
 		case strings.EqualFold(r.ID, text):
@@ -124,7 +135,7 @@ func (s *GitHubQuerySnapshot) SearchIssuesRanked(text string, opts db.ListIssues
 		}
 		if result.Score == 10 && ownMatch {
 			var err error
-			result.MatchField, err = s.searchActivityField(r.ID, match)
+			result.MatchField, err = activityFieldFor(r.ID, match)
 			if err != nil {
 				return nil, err
 			}

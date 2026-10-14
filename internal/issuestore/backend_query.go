@@ -2,6 +2,7 @@ package issuestore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -139,4 +140,36 @@ func (s *BackendQuerySnapshot) GetRejectedInProgressIssueIDs() (map[string]bool,
 }
 func (s *BackendQuerySnapshot) GetIssuesWithOpenDeps() (map[string]bool, error) {
 	return s.policyIDs("has_open_deps()")
+}
+
+func (s *BackendQuerySnapshot) SearchIssuesRanked(text string, opts db.ListIssuesOptions) ([]db.SearchResult, error) {
+	rows, e := s.ListIssues(db.ListIssuesOptions{})
+	if e != nil {
+		return nil, e
+	}
+	return searchIssuesRanked(s.ctx, rows, text, opts, s.searchActivityField)
+}
+func (s *BackendQuerySnapshot) searchActivityField(id string, match func(string) bool) (string, error) {
+	logs, e := s.GetLogs(id, 0)
+	if e != nil {
+		return "", e
+	}
+	for _, log := range logs {
+		if match(log.Message) {
+			return "log", nil
+		}
+	}
+	handoff, e := s.GetLatestHandoff(id)
+	if e != nil {
+		return "", e
+	}
+	if handoff != nil {
+		for _, items := range [][]string{handoff.Done, handoff.Remaining, handoff.Decisions, handoff.Uncertain} {
+			raw, _ := json.Marshal(items)
+			if match(string(raw)) {
+				return "handoff", nil
+			}
+		}
+	}
+	return "", nil
 }
