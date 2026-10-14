@@ -99,5 +99,6 @@ func (s *BackendDataSource) Details(id string) IssueDetailsMsg {
 	for _, issues := range [][]models.Issue{msg.EpicTasks, msg.BlockedBy, msg.Blocks} {
 		sort.Slice(issues, func(i, j int) bool { return issues[i].ID < issues[j].ID })
 	}
+	msg.Transitions = s.backendTransitionHandlesForRows(rows)
 	return msg
 }

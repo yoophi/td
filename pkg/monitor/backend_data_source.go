@@ -61,7 +61,9 @@ func (s *BackendDataSource) Fetch(search string, includeClosed bool, sortMode So
 	if err := s.guard(s.ctx); err != nil {
 		return RefreshDataMsg{Error: err}
 	}
-	return backendRefreshData(snapshot)
+	result = backendRefreshData(snapshot)
+	result.Transitions = s.backendTransitionHandles(snapshot)
+	return result
 }
 
 func (s *BackendDataSource) IsRefreshing() bool { return s.running.Load() }
