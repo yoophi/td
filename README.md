@@ -242,8 +242,9 @@ General `update` fields use observed PATCH and durable request recovery.
 Without an ID, `approve` selects a single monitor candidate; `--all` processes
 all current candidates, reporting earlier successes if one fails. `dep add`
 and `dep rm` use the backend's revision-aware mutation endpoints. `comment`,
-`comments add`, and `comments` use the shared backend activity and detail APIs. `log`
-records typed activity with the calling Session and active Work Session.
+`comments add`, and `comments` use the shared backend activity and detail APIs.
+`dep`, `depends-on`, and `blocked-by` read a consistent remote relationship graph.
+`log` records typed activity with the calling Session and active Work Session.
 `handoff` saves structured progress and the Git snapshot as passive shared
 activity; `review` remains a separate workflow step. `--append` is supported for one Issue at a time; combined status, comments and
 relation edits are not connected yet and fail before writing. `create` supports core fields, rich text files/stdin, dates, parent/epic and
