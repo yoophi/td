@@ -26,7 +26,7 @@ func TestOpenSessionRecoversLostRegistrationAndReusesContext(t *testing.T) {
 	var mu sync.Mutex
 	receipts := map[string]string{}
 	bodies := map[string]string{}
-	registrations, creates := 0, 0
+	registrations, creates, heartbeats := 0, 0, 0
 	lose := true
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -64,6 +64,14 @@ func TestOpenSessionRecoversLostRegistrationAndReusesContext(t *testing.T) {
 				return
 			}
 			json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": map[string]any{"session": map[string]string{"id": receipts[key]}}})
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/heartbeat") {
+			heartbeats++
+			if r.Header.Get("Idempotency-Key") == "" || r.Header.Get("X-TD-Session") == "" {
+				t.Error("web heartbeat missing operation identity")
+			}
+			json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": map[string]string{"session_id": r.Header.Get("X-TD-Session")}})
 			return
 		}
 		if r.URL.Path == "/v1/projects/"+testProject && r.Header.Get("X-TD-Session") != "" {
@@ -130,6 +138,28 @@ func TestOpenSessionRecoversLostRegistrationAndReusesContext(t *testing.T) {
 	other, err := Open(context.Background(), dir, t.TempDir())
 	if err != nil || other.SessionID == concurrentID {
 		t.Fatal("different checkouts shared session", other, err)
+	}
+	web, err := OpenWeb(context.Background(), dir, dir)
+	if err != nil || web.SessionID == concurrentID {
+		t.Fatal("web and CLI sessions shared identity", web, err)
+	}
+	webAgain, err := OpenWeb(context.Background(), dir, dir)
+	if err != nil || webAgain.SessionID != web.SessionID {
+		t.Fatal("web session was not reused", webAgain, err)
+	}
+	if err := web.Heartbeat(context.Background()); err != nil || heartbeats != 1 {
+		t.Fatal("web heartbeat failed", err, heartbeats)
+	}
+	webRegistered := false
+	for _, body := range bodies {
+		var command SessionCommand
+		_ = json.Unmarshal([]byte(body), &command)
+		if command.AgentType == "web" && command.Name == "td-serve-web" {
+			webRegistered = true
+		}
+	}
+	if !webRegistered {
+		t.Fatal("web agent attribution was not registered")
 	}
 	files, _ := filepath.Glob(filepath.Join(root, "*.json"))
 	for _, file := range files {

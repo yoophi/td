@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/marcus/td/internal/backendstore"
 	"github.com/marcus/td/internal/config"
 	"github.com/marcus/td/internal/db"
 	"github.com/marcus/td/internal/ghcontext"
@@ -70,7 +71,37 @@ func runServe(cmd *cobra.Command, args []string) error {
 	var srv *serve.Server
 	var sessionID string
 	storageDescription := filepath.Join(dir, ".todos", "issues.db")
-	if kind == config.StoreGitHub {
+	if kind == config.StoreBackend {
+		contextDir, err := gitHubContextDirectory()
+		if err != nil {
+			return err
+		}
+		conn, err := backendstore.OpenWeb(ctx, dir, contextDir)
+		if err != nil {
+			return fmt.Errorf("bootstrap backend web session: %w", err)
+		}
+		project, err := conn.Client.GetProject(ctx, conn.ProjectID, conn.SessionID)
+		if err != nil {
+			return fmt.Errorf("load backend project: %w", err)
+		}
+		sessionID = conn.SessionID
+		storageDescription = "td-backend: " + conn.ProjectID
+		srv = serve.NewBackendServer(dir, conn, project, serverConfig)
+		go func() {
+			ticker := time.NewTicker(time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := conn.Heartbeat(ctx); err != nil && ctx.Err() == nil {
+						slog.Error("backend web session heartbeat failed", "err", err)
+					}
+				}
+			}
+		}()
+	} else if kind == config.StoreGitHub {
 		if _, err := ghstore.Open(ctx, dir, cfg.GitHub); err != nil {
 			return err
 		}
@@ -189,10 +220,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 	srv.StartBackground(ctx)
 	defer srv.StopBackground()
 
+	writeTimeout := 60 * time.Second
+	if kind == config.StoreBackend {
+		writeTimeout = 0 // SSE relay remains open across backend heartbeats.
+	}
 	httpServer := &http.Server{
 		Handler:      srv.Handler(),
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		WriteTimeout: writeTimeout,
 		IdleTimeout:  120 * time.Second,
 	}
 

@@ -216,7 +216,17 @@ so retrying after a lost response or config write failure avoids duplicate
 projects and sessions. Keep this directory when recovering an interrupted init.
 Git worktrees share the existing project config through normal root resolution.
 
-Backend initialization, `list`, `show`, `query`, `search`, and `info` are available on the integration branch.
+Backend initialization, CLI issue/workflow commands, `td monitor`, and `td serve`
+are available on the integration branch. `td serve` registers a separate web
+Session, retains its local bearer token (`--token`), and forwards the GUI API to
+the configured project with `TD_BACKEND_TOKEN` kept server-side. It relays
+`refresh` and `ping` events from the backend SSE stream. Browser-supplied
+`If-Match` is forwarded unchanged; when the browser omits it, `td serve` reads
+the current aggregate revision immediately before a write. That fallback can
+detect concurrent writes after its read, but cannot detect edits made after a
+browser form was opened and before its request reached `td serve`. A GUI that
+needs draft-age conflict detection must send the revision it originally read.
+
 `show` supports full IDs or unique prefixes, JSON/short/long output, multiple
 issues, `--children`, and `--tree`; without an ID it uses Session focus or a single
 active issue. Work Session identity is device/checkout/branch/agent scoped and

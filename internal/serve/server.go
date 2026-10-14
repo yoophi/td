@@ -25,6 +25,8 @@ type ServeConfig struct {
 
 // Server is the td serve HTTP server.
 type Server struct {
+	backendContext     context.Context
+	backendCancel      context.CancelFunc
 	githubEvents       *githubEventHub
 	githubRequests     *githubRequestLifecycle
 	githubEndpoints    []string
@@ -157,6 +159,9 @@ func (s *Server) StartBackground(ctx context.Context) {
 
 // StopBackground stops long-lived background processes.
 func (s *Server) StopBackground() {
+	if s.backendCancel != nil {
+		s.backendCancel()
+	}
 	if s.githubEvents != nil {
 		s.githubEvents.stop()
 	}

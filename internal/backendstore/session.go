@@ -57,6 +57,16 @@ func (c *Client) RegisterSession(ctx context.Context, project, key string, cmd S
 // agent context. contextDir must be the actual caller checkout (before resolving
 // shared .todos). The registration intent precedes HTTP and survives lost replies.
 func Open(ctx context.Context, projectDir, contextDir string) (*Connection, error) {
+	return open(ctx, projectDir, contextDir, "")
+}
+
+// OpenWeb keeps the td serve browser identity separate from CLI agent sessions.
+// Its registration intent is durable across restarts, just like Open.
+func OpenWeb(ctx context.Context, projectDir, contextDir string) (*Connection, error) {
+	return open(ctx, projectDir, contextDir, "web")
+}
+
+func open(ctx context.Context, projectDir, contextDir, agentType string) (*Connection, error) {
 	if e := ctx.Err(); e != nil {
 		return nil, e
 	}
@@ -92,8 +102,11 @@ func Open(ctx context.Context, projectDir, contextDir string) (*Connection, erro
 		return nil, e
 	}
 	fp := session.GetAgentFingerprint()
+	if agentType == "" {
+		agentType = string(fp.Type)
+	}
 	tokenKey := sha256.Sum256([]byte(client.Token))
-	identity, _ := json.Marshal([]any{client.URL, cfg.Backend.ProjectID, fmt.Sprintf("%x", tokenKey), hostname, info.WorktreeRoot, branch, fp, os.Getenv("TD_CONTEXT_ID"), os.Getenv("TERM_SESSION_ID"), os.Getenv("TMUX_PANE")})
+	identity, _ := json.Marshal([]any{client.URL, cfg.Backend.ProjectID, fmt.Sprintf("%x", tokenKey), hostname, info.WorktreeRoot, branch, agentType, fp, os.Getenv("TD_CONTEXT_ID"), os.Getenv("TERM_SESSION_ID"), os.Getenv("TMUX_PANE")})
 	digest := sha256.Sum256(identity)
 	root, e := backendContextRoot()
 	if e != nil {
@@ -109,7 +122,11 @@ func Open(ctx context.Context, projectDir, contextDir string) (*Connection, erro
 			if e != nil {
 				return e
 			}
-			intent = sessionIntent{Version: 1, Key: key, Command: SessionCommand{Name: "td " + string(fp.Type), Branch: branch, AgentType: string(fp.Type), ContextID: fmt.Sprintf("backend:%x", digest)}}
+			name := "td " + agentType
+			if agentType == "web" {
+				name = "td-serve-web"
+			}
+			intent = sessionIntent{Version: 1, Key: key, Command: SessionCommand{Name: name, Branch: branch, AgentType: agentType, ContextID: fmt.Sprintf("backend:%x", digest)}}
 			return writeSessionIntent(path, intent)
 		}
 		return e
@@ -206,6 +223,27 @@ func writeJSONIntent(path string, intent any) error {
 
 func (c *Connection) Get(ctx context.Context, id string) (Issue, error) {
 	return c.Client.GetIssue(ctx, c.ProjectID, c.SessionID, id)
+}
+
+func (c *Connection) Heartbeat(ctx context.Context) error {
+	path, e := scopedPath(c.ProjectID, c.SessionID)
+	if e != nil {
+		return e
+	}
+	key, e := operationKey()
+	if e != nil {
+		return e
+	}
+	var out struct {
+		SessionID string `json:"session_id"`
+	}
+	if e = c.Client.request(ctx, "POST", path+"/sessions/"+c.SessionID+"/heartbeat", c.SessionID, key, nil, &out); e != nil {
+		return e
+	}
+	if out.SessionID != c.SessionID {
+		return fmt.Errorf("backend heartbeat returned a different session")
+	}
+	return nil
 }
 func (c *Connection) List(ctx context.Context, all bool) ([]Issue, error) {
 	return c.Client.ListIssues(ctx, c.ProjectID, c.SessionID, all)
