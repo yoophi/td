@@ -153,7 +153,7 @@ func queryBackendDependencies(original, cmd *cobra.Command, args []string) error
 func changeBackendDependencies(original, cmd *cobra.Command, args []string) error {
 	adding := original != depRmCmd
 	allowed := " json work-dir help refresh "
-	if original == depAddCmd {
+	if original == depAddCmd || original == linkCmd {
 		allowed += "depends-on "
 	}
 	var invalid error
@@ -169,7 +169,7 @@ func changeBackendDependencies(original, cmd *cobra.Command, args []string) erro
 		return fmt.Errorf("issue ID required")
 	}
 	targets := append([]string{}, args[1:]...)
-	if original == depAddCmd {
+	if original == depAddCmd || original == linkCmd {
 		flag, _ := cmd.Flags().GetString("depends-on")
 		for _, value := range strings.Split(flag, ",") {
 			if value = strings.TrimSpace(value); value != "" {

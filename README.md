@@ -245,6 +245,8 @@ and `dep rm` use the backend's revision-aware mutation endpoints. `comment`,
 `comments add`, and `comments` use the shared backend activity and detail APIs.
 `dep`, `depends-on`, and `blocked-by` read a consistent remote relationship graph.
 `files` reads linked files from the backend and reports local file changes.
+`link` and `unlink` replace the observed remote file list with a durable request;
+`link --depends-on` adds a backend dependency.
 `log` records typed activity with the calling Session and active Work Session.
 `handoff` saves structured progress and the Git snapshot as passive shared
 activity; `review` remains a separate workflow step. `--append` is supported for one Issue at a time; combined status, comments and
