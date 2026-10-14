@@ -32,7 +32,10 @@ type Note struct {
 	Pinned    bool       `json:"pinned"`
 	Archived  bool       `json:"archived"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-	observed  *ghstore.NoteRecord
+	// BackendRevision is the opaque revision shown to a remote monitor. It is
+	// never exported as note content or used by SQLite/GitHub stores.
+	BackendRevision string `json:"-"`
+	observed        *ghstore.NoteRecord
 }
 
 // ListOptions filters List. Limit <= 0 means unlimited.

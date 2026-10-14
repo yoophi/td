@@ -56,6 +56,13 @@ func TestBackendMonitorFactoryUsesRemoteSessionWithoutSQLite(t *testing.T) {
 	if m.DB != nil || m.SessionID != session || m.DataSource == nil || m.RefreshInterval != MinRefreshInterval || m.syncRuntime == nil || m.syncRuntime.service != nil {
 		t.Fatal("backend monitor opened SQLite/sync or lost session")
 	}
+	provider, err := m.NotesFactory(m.NotesContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := provider.(*backendNoteStore); !ok {
+		t.Fatal("backend monitor notes did not use the remote provider")
+	}
 	if err := m.Close(); err != nil {
 		t.Fatal(err)
 	}

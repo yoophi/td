@@ -66,6 +66,12 @@ func NewBackendModelForWorktree(ctx context.Context, baseDir, worktreeDir string
 	m.notesLifetimeCancel()
 	m.notesLifetimeCancel = cancel
 	m.NotesContext = requestCtx
+	m.NotesFactory = func(ctx context.Context) (MonitorNoteStore, error) {
+		if err := guard(ctx); err != nil {
+			return nil, err
+		}
+		return &backendNoteStore{ctx: ctx, conn: connection, guard: guard}, nil
+	}
 	m.preferences = preferences
 	m.PaneHeights = prefs.PaneHeights
 	m.DataSource = NewBackendDataSource(requestCtx, connection, guard)
