@@ -124,3 +124,36 @@ func TestGetIssueMapsNullableFieldsAndRejectsIdentityMismatch(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestDeletedReadsPreserveRevisionAndPaginate(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Query().Get("with_deleted") != "true" || r.Header.Get("X-TD-Session") != sessionID {
+			t.Error("missing deleted option/session")
+		}
+		issue := map[string]any{"id": "td-0000000000000001", "revision": "r-9", "deleted_at": "2026-10-14T00:00:00Z"}
+		var data any
+		if r.URL.Path == "/v1/projects/"+projectID+"/issues/td-0000000000000001" {
+			data = map[string]any{"issue": issue}
+		} else {
+			if r.URL.Query().Get("include_closed") != "true" {
+				t.Error("closed deleted issues excluded")
+			}
+			offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+			issue["id"] = fmt.Sprintf("td-%016x", offset+1)
+			data = map[string]any{"issues": []any{issue}, "offset": offset, "limit": 1, "total": 2, "has_more": offset == 0, "change_token": "stable"}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": data})
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "fixture-token")
+	issue, err := c.GetIssueIncludingDeleted(context.Background(), projectID, sessionID, "td-0000000000000001")
+	if err != nil || issue.DeletedAt == nil || issue.Revision != "r-9" {
+		t.Fatal(issue, err)
+	}
+	rows, err := c.ListIssuesIncludingDeleted(context.Background(), projectID, sessionID)
+	if err != nil || len(rows) != 2 || rows[1].DeletedAt == nil || requests != 3 {
+		t.Fatal(rows, requests, err)
+	}
+}

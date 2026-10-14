@@ -228,7 +228,8 @@ when needed. Ranked `search` uses the existing id/title/description/log/handoff
 scope and scoring; comments remain a TDQ-only search field. Status/type/priority/
 label filters and `--show-score` are supported. `list` supports ordinary and TDQ
 filters, hierarchy, scheduling, review queues, sort/limit and long output. `info`
-reads project statistics and review eligibility from the backend. `create` supports core fields, rich text files/stdin, dates, parent/epic and
+reads project statistics and review eligibility from the backend. `deleted` lists
+soft-deleted issues, including closed issues, with JSON or human output. `create` supports core fields, rich text files/stdin, dates, parent/epic and
 outgoing dependencies and incoming `--blocks` with durable request recovery.
 `--blocks` requires the server’s `create_blocks` capability and atomically creates
 the issue and dependency edges using observed target revisions. Update,

@@ -41,6 +41,14 @@ func ValidateIssue(i Issue) error {
 	return nil
 }
 func (c *Client) GetIssue(ctx context.Context, project, session, id string) (Issue, error) {
+	return c.getIssue(ctx, project, session, id, false)
+}
+
+func (c *Client) GetIssueIncludingDeleted(ctx context.Context, project, session, id string) (Issue, error) {
+	return c.getIssue(ctx, project, session, id, true)
+}
+
+func (c *Client) getIssue(ctx context.Context, project, session, id string, withDeleted bool) (Issue, error) {
 	var out struct {
 		Issue Issue `json:"issue"`
 	}
@@ -51,7 +59,11 @@ func (c *Client) GetIssue(ctx context.Context, project, session, id string) (Iss
 	if !issueIDPattern.MatchString(id) {
 		return out.Issue, fmt.Errorf("invalid backend issue ID")
 	}
-	e = c.request(ctx, "GET", path+"/issues/"+id, session, "", nil, &out)
+	resource := path + "/issues/" + id
+	if withDeleted {
+		resource += "?with_deleted=true"
+	}
+	e = c.request(ctx, "GET", resource, session, "", nil, &out)
 	if e == nil {
 		e = ValidateIssue(out.Issue)
 	}
@@ -65,6 +77,14 @@ func (c *Client) GetIssue(ctx context.Context, project, session, id string) (Iss
 // when a later page observes a different opaque change token. Never return a
 // partial or mixed snapshot as a successful complete Reader result.
 func (c *Client) ListIssues(ctx context.Context, project, session string, all bool) ([]Issue, error) {
+	return c.listIssues(ctx, project, session, all, false)
+}
+
+func (c *Client) ListIssuesIncludingDeleted(ctx context.Context, project, session string) ([]Issue, error) {
+	return c.listIssues(ctx, project, session, true, true)
+}
+
+func (c *Client) listIssues(ctx context.Context, project, session string, all, withDeleted bool) ([]Issue, error) {
 	path, e := scopedPath(project, session)
 	if e != nil {
 		return nil, e
@@ -79,6 +99,9 @@ func (c *Client) ListIssues(ctx context.Context, project, session string, all bo
 				return nil, e
 			}
 			values := url.Values{"limit": {"1000"}, "offset": {strconv.Itoa(offset)}, "include_closed": {strconv.FormatBool(all)}, "sort": {"id"}, "order": {"asc"}}
+			if withDeleted {
+				values.Set("with_deleted", "true")
+			}
 			var page struct {
 				Issues      []Issue `json:"issues"`
 				Total       int     `json:"total"`
