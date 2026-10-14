@@ -154,8 +154,12 @@ func (m Model) handleRemoteFormSaved(msg MonitorFormSavedMsg) (tea.Model, tea.Cm
 	if !m.WorkflowPending || msg.Request != m.WorkflowRequest {
 		return m, nil
 	}
-	// A failed or uncertain write must not be repeated with the same form handle.
-	m.FormEditStore = nil
+	// Backend grouped writes retain the frozen plan and committed step receipts
+	// so the same submission can resume after a partial or uncertain failure.
+	_, backend := m.FormEditStore.(*backendIssueTransition)
+	if msg.Error == nil || !backend {
+		m.FormEditStore = nil
+	}
 	if msg.Error != nil && m.FormOpen && m.FormAutofillRequest == msg.FormRequest {
 		m.FormSaveError = msg.Error
 	}
@@ -166,5 +170,11 @@ func (m Model) handleRemoteFormSaved(msg MonitorFormSavedMsg) (tea.Model, tea.Cm
 	if msg.Created {
 		action = "create"
 	}
-	return m.handleRemoteTransitioned(MonitorTransitionedMsg{IssueID: msg.IssueID, Request: msg.Request, Action: action, Error: msg.Error})
+	updated, cmd := m.handleRemoteTransitioned(MonitorTransitionedMsg{IssueID: msg.IssueID, Request: msg.Request, Action: action, Error: msg.Error})
+	if backend && msg.Error != nil {
+		model := updated.(Model)
+		model.StatusMessage = "Backend form save paused: " + msg.Error.Error() + "; retry the same form submission after a transient error, or refresh after a conflict"
+		return model, cmd
+	}
+	return updated, cmd
 }
