@@ -252,8 +252,9 @@ recent effectful operations and whether each was undone; `undo` reverses the
 latest eligible operation through the server's guarded Undo endpoint. A later
 change to an affected entity can make Undo conflict, and only operations from
 the current Session are selected. Both commands support `--json`.
-`board list` and `board show` read shared board definitions and cards from the
-backend, including the existing status filter and JSON card output.
+`board list/show/create/edit/delete/move/unposition` use shared backend boards.
+Reads retain the status filter and JSON card output; writes use observed board
+revisions and durable request recovery.
 `log` records typed activity with the calling Session and active Work Session.
 `handoff` saves structured progress and the Git snapshot as passive shared
 activity; `review` remains a separate workflow step. `--append` is supported for one Issue at a time; combined status, comments and

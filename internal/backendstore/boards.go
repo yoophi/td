@@ -35,7 +35,7 @@ type BoardDetail struct {
 	Issues []BoardCard `json:"issues"`
 }
 
-func validateBoard(b Board) error {
+func ValidateBoard(b Board) error {
 	if b.ID == "" || strings.ContainsAny(b.ID, "/?#") || b.Name == "" || !revisionPattern.MatchString(b.Revision) || b.CreatedAt.IsZero() || b.UpdatedAt.IsZero() {
 		return fmt.Errorf("invalid backend board")
 	}
@@ -58,7 +58,7 @@ func (c *Connection) Boards(ctx context.Context) ([]Board, error) {
 	}
 	seen := map[string]bool{}
 	for _, b := range reply.Boards {
-		if e = validateBoard(b); e != nil || seen[b.ID] {
+		if e = ValidateBoard(b); e != nil || seen[b.ID] {
 			return nil, fmt.Errorf("invalid backend board list")
 		}
 		seen[b.ID] = true
@@ -105,7 +105,7 @@ func (c *Connection) BoardDetail(ctx context.Context, id string, includeClosed b
 	if e = c.Client.request(ctx, "GET", path, c.SessionID, "", nil, &detail); e != nil {
 		return BoardDetail{}, e
 	}
-	if e = validateBoard(detail.Board); e != nil || detail.Board.ID != id || detail.Issues == nil {
+	if e = ValidateBoard(detail.Board); e != nil || detail.Board.ID != id || detail.Issues == nil {
 		return BoardDetail{}, fmt.Errorf("invalid backend board detail")
 	}
 	for _, card := range detail.Issues {
