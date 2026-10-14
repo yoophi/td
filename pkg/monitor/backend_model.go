@@ -69,6 +69,7 @@ func NewBackendModelForWorktree(ctx context.Context, baseDir, worktreeDir string
 	m.preferences = preferences
 	m.PaneHeights = prefs.PaneHeights
 	m.DataSource = NewBackendDataSource(requestCtx, connection, guard)
+	m.BoardSource = NewBackendBoardSource(requestCtx, connection, guard, preferences)
 	m.syncRuntime = newSyncRuntime(nil, SyncOptions{Disabled: true}, func() error { cancel(); return nil })
 	return m, nil
 }
