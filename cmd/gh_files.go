@@ -33,6 +33,9 @@ func init() {
 				return err
 			}
 			if kind != config.StoreGitHub {
+				if kind == config.StoreBackend {
+					return runBackendFiles(original, cmd, args)
+				}
 				return local(cmd, args)
 			}
 			cmd.SilenceUsage = true
