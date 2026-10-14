@@ -17,6 +17,13 @@ var errBackendTransitionUnchanged = errors.New("issue already has requested work
 
 func runBackendTransition(cmd *cobra.Command, args []string, action string) error {
 	cmd.SilenceUsage = true
+	if action == "unstart" {
+		holder, _ := cmd.Flags().GetString("session")
+		stale, _ := cmd.Flags().GetString("stale")
+		if holder != "" || stale != "" {
+			return runBackendUnstartSweep(cmd, holder, stale)
+		}
+	}
 	if len(args) == 0 && action != "approve" {
 		return fmt.Errorf("%s requires at least one issue ID", action)
 	}
