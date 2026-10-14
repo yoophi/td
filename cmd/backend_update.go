@@ -19,6 +19,9 @@ func runBackendUpdate(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("requires at least one issue ID")
 	}
+	if cmd.Flags().Changed("depends-on") || cmd.Flags().Changed("blocks") || cmd.Flags().Changed("comment") || cmd.Flags().Changed("note") || cmd.Flags().Changed("status") && backendUpdateHasFields(cmd) {
+		return runBackendCompoundUpdate(cmd, args)
+	}
 	if !cmd.Flags().Changed("status") {
 		return runBackendPatch(cmd, args)
 	}

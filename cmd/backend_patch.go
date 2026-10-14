@@ -4,12 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/marcus/td/internal/backendstore"
-	"github.com/marcus/td/internal/dateparse"
-	"github.com/marcus/td/internal/models"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -67,108 +64,11 @@ func runBackendPatch(cmd *cobra.Command, args []string) error {
 					break
 				}
 			}
-			patch := map[string]any{}
-			changed := false
-			put := func(name string, value any, same bool) {
-				patch[name] = value
-				if !same {
-					changed = true
-				}
-			}
-			if cmd.Flags().Changed("title") {
-				v, _ := cmd.Flags().GetString("title")
-				put("title", v, v == observed.Title)
-			}
-			description, provided, stdinUsed, e := resolveRichTextField(cmd, []string{"description", "desc", "body"}, "description-file", false)
+			patch, e := backendCompoundFields(cmd, rows, observed, appendMode)
 			if e != nil {
 				return backendstore.MutationRequest{}, e
-			}
-			if provided {
-				if appendMode && observed.Description != "" && description != "" {
-					description = observed.Description + "\n\n" + description
-				}
-				put("description", description, description == observed.Description)
-			}
-			acceptance, provided, _, e := resolveRichTextField(cmd, []string{"acceptance"}, "acceptance-file", stdinUsed)
-			if e != nil {
-				return backendstore.MutationRequest{}, e
-			}
-			if provided {
-				if appendMode && observed.Acceptance != "" && acceptance != "" {
-					acceptance = observed.Acceptance + "\n\n" + acceptance
-				}
-				put("acceptance", acceptance, acceptance == observed.Acceptance)
-			}
-			if cmd.Flags().Changed("type") {
-				raw, _ := cmd.Flags().GetString("type")
-				v := models.NormalizeType(raw)
-				if !models.IsValidType(v) {
-					return backendstore.MutationRequest{}, fmt.Errorf("invalid type %q", raw)
-				}
-				put("type", v, v == observed.Type)
-			}
-			if cmd.Flags().Changed("priority") {
-				raw, _ := cmd.Flags().GetString("priority")
-				v := models.NormalizePriority(raw)
-				if !models.IsValidPriority(v) {
-					return backendstore.MutationRequest{}, fmt.Errorf("invalid priority %q", raw)
-				}
-				put("priority", v, v == observed.Priority)
-			}
-			if cmd.Flags().Changed("points") {
-				v, _ := cmd.Flags().GetInt("points")
-				if v != 0 && !models.IsValidPoints(v) {
-					return backendstore.MutationRequest{}, fmt.Errorf("invalid points %d", v)
-				}
-				put("points", v, v == observed.Points)
-			}
-			if cmd.Flags().Changed("labels") {
-				raw, _ := cmd.Flags().GetStringArray("labels")
-				labels := mergeMultiValueFlag(raw)
-				slices.Sort(labels)
-				labels = slices.Compact(labels)
-				current := append([]string{}, observed.Labels...)
-				slices.Sort(current)
-				current = slices.Compact(current)
-				put("labels", labels, slices.Equal(labels, current))
-			}
-			if cmd.Flags().Changed("sprint") {
-				v, _ := cmd.Flags().GetString("sprint")
-				put("sprint", v, v == observed.Sprint)
-			}
-			if cmd.Flags().Changed("parent") {
-				v, _ := cmd.Flags().GetString("parent")
-				if v != "" {
-					v, e = resolveBackendID(rows, v)
-					if e != nil {
-						return backendstore.MutationRequest{}, e
-					}
-				}
-				put("parent_id", v, v == observed.ParentID)
-			}
-			for _, flag := range []string{"due", "defer"} {
-				if !cmd.Flags().Changed(flag) {
-					continue
-				}
-				v, _ := cmd.Flags().GetString(flag)
-				if v != "" {
-					v, e = dateparse.ParseDate(v)
-					if e != nil {
-						return backendstore.MutationRequest{}, fmt.Errorf("invalid --%s date: %w", flag, e)
-					}
-				}
-				field, current := "due_date", observed.DueDate
-				if flag == "defer" {
-					field = "defer_until"
-					current = observed.DeferUntil
-				}
-				same := v == "" && current == nil || current != nil && v == *current
-				put(field, v, same)
 			}
 			if len(patch) == 0 {
-				return backendstore.MutationRequest{}, fmt.Errorf("td-backend update has no supported field value")
-			}
-			if !changed {
 				return backendstore.MutationRequest{}, errBackendPatchUnchanged
 			}
 			body, e := json.Marshal(patch)

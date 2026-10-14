@@ -246,6 +246,13 @@ multi-Issue command reports the IDs already completed, and a retry skips
 Issues already in the requested state. `update --status` uses the backend
 workflow endpoint with revision checks; workflow policy can reject a transition.
 General `update` fields use observed PATCH and durable request recovery.
+When fields, status, comments, or dependency replacements are combined, the
+backend store freezes the requested values and original relationships before
+writing. Each step has its own durable idempotency key, so a retry of a partly
+completed command reuses successful writes and reports skipped or failed IDs.
+`unstart --session` and `unstart --stale` preview matching claims by default;
+`--force` releases them only after the backend rechecks the holder, revision,
+activity, liveness, and caller lineage.
 `start`, named `unstart`, `block`, `unblock`, `reopen`, `review`, `reject`,
 `approve <id>`, and `close` use backend workflow policy and retain Session attribution.
 `approve --record-only` records an `approved` or `changes_requested` review.
