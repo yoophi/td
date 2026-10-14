@@ -190,7 +190,9 @@ func TestBackendServeEventsFlushAndShutdown(t *testing.T) {
 			break
 		}
 	}
-	server.StopBackground()
+	if err := server.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	select {

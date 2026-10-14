@@ -100,10 +100,14 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	s.StartBackground(ctx)
 	defer s.StopBackground()
 
+	writeTimeout := 60 * time.Second
+	if s.backendContext != nil {
+		writeTimeout = 0 // Remote SSE relay must outlive normal request deadlines.
+	}
 	s.http = &http.Server{
 		Handler:      s.Handler(),
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		WriteTimeout: writeTimeout,
 		IdleTimeout:  120 * time.Second,
 	}
 
@@ -118,9 +122,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		// Stop SSE hub first (closes client connections)
-		if s.sseHub != nil {
-			s.sseHub.Stop()
-		}
+		s.StopBackground()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return s.http.Shutdown(shutdownCtx)
@@ -132,6 +134,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 // Shutdown gracefully stops the HTTP server. If the server has not been started,
 // this is a no-op.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.backendCancel != nil {
+		s.backendCancel()
+	}
 	if s.githubEvents != nil {
 		s.githubEvents.stop()
 	}
