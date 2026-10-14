@@ -22,11 +22,12 @@ type backendBoardWriter interface {
 }
 
 type BackendBoardSource struct {
-	ctx         context.Context
-	reader      backendBoardReader
-	guard       func(context.Context) error
-	preferences *localMonitorPreferences
-	mu          sync.Mutex
+	ctx           context.Context
+	reader        backendBoardReader
+	guard         func(context.Context) error
+	preferences   *localMonitorPreferences
+	mu            sync.Mutex
+	previewCancel context.CancelFunc
 }
 
 func NewBackendBoardSource(ctx context.Context, reader backendBoardReader, guard func(context.Context) error, preferences *localMonitorPreferences) *BackendBoardSource {
